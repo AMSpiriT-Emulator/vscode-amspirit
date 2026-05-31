@@ -93,4 +93,39 @@ describe("PingService", () => {
     svc.stop()
     expect(clearIntervalSpy).not.toHaveBeenCalled()
   })
+
+  it("coalesces concurrent pingNow calls into a single in-flight request", async () => {
+    let resolvePing: ((ok: boolean) => void) | undefined
+    const ping = vi.fn().mockImplementation(
+      () =>
+        new Promise<boolean>((r) => {
+          resolvePing = r
+        }),
+    )
+    const listener = vi.fn()
+    const svc = new PingService(ping, listener)
+
+    const p1 = svc.pingNow()
+    const p2 = svc.pingNow()
+    const p3 = svc.pingNow()
+    expect(ping).toHaveBeenCalledTimes(1)
+
+    resolvePing?.(true)
+    const [r1, r2, r3] = await Promise.all([p1, p2, p3])
+    expect(r1).toBe("connected")
+    expect(r2).toBe("connected")
+    expect(r3).toBe("connected")
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it("releases the in-flight slot after settling so the next call re-pings", async () => {
+    const ping = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+    const listener = vi.fn()
+    const svc = new PingService(ping, listener)
+    await svc.pingNow()
+    await svc.pingNow()
+    expect(ping).toHaveBeenCalledTimes(2)
+    expect(listener).toHaveBeenNthCalledWith(1, "connected")
+    expect(listener).toHaveBeenNthCalledWith(2, "disconnected")
+  })
 })

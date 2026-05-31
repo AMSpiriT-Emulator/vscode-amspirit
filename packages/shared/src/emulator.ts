@@ -54,6 +54,12 @@ export class EmulatorClient {
 
   private get(path: string, timeoutMs: number): Promise<string> {
     return new Promise((resolve, reject) => {
+      let settled = false
+      const settle = (fn: () => void): void => {
+        if (settled) return
+        settled = true
+        fn()
+      }
       const req = http.get(
         { hostname: this.host, port: this.port, path, timeout: timeoutMs },
         (res) => {
@@ -62,13 +68,13 @@ export class EmulatorClient {
           res.on("data", (chunk: string) => {
             data += chunk
           })
-          res.on("end", () => resolve(data))
+          res.on("end", () => settle(() => resolve(data)))
         },
       )
-      req.on("error", reject)
+      req.on("error", (err) => settle(() => reject(err)))
       req.on("timeout", () => {
         req.destroy()
-        reject(new Error("timeout"))
+        settle(() => reject(new Error("timeout")))
       })
     })
   }
@@ -80,6 +86,12 @@ export class EmulatorClient {
     timeoutMs: number,
   ): Promise<string> {
     return new Promise((resolve, reject) => {
+      let settled = false
+      const settle = (fn: () => void): void => {
+        if (settled) return
+        settled = true
+        fn()
+      }
       const buf = Buffer.from(body, "utf-8")
       const req = http.request(
         {
@@ -99,13 +111,13 @@ export class EmulatorClient {
           res.on("data", (chunk: string) => {
             data += chunk
           })
-          res.on("end", () => resolve(data))
+          res.on("end", () => settle(() => resolve(data)))
         },
       )
-      req.on("error", reject)
+      req.on("error", (err) => settle(() => reject(err)))
       req.on("timeout", () => {
         req.destroy()
-        reject(new Error("timeout"))
+        settle(() => reject(new Error("timeout")))
       })
       req.write(buf)
       req.end()

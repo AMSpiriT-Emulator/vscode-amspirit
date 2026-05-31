@@ -1,63 +1,53 @@
-import { EmulatorClient, spawnEmulator } from "@amspirit/shared"
+import { EmulatorClient, errorMessage, spawnEmulator } from "@amspirit/shared"
 import * as vscode from "vscode"
 
-import { performInject } from "./commands/inject.js"
-import { readSettings } from "./config/Settings.js"
+import { type InjectMode, performInject } from "./commands/inject.js"
+import { readSettingsWithWarnings } from "./config/Settings.js"
+import { vsCodeConfigReader } from "./config/vsCodeConfigReader.js"
 import { PingService } from "./connection/PingService.js"
 import { EmulatorLauncher } from "./lifecycle/EmulatorLauncher.js"
-import { type ConnectionState, buildIndicator } from "./statusBar/ConnectionIndicator.js"
-
-const WARNING_BG = new vscode.ThemeColor("statusBarItem.warningBackground")
+import { StatusBarPresenter } from "./statusBar/StatusBarPresenter.js"
 
 export function activate(context: vscode.ExtensionContext): void {
   const out = vscode.window.createOutputChannel("AMSpiriT")
   context.subscriptions.push(out)
 
-  const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100)
-  statusBar.command = "amspirit.connect"
-  statusBar.show()
-  context.subscriptions.push(statusBar)
+  const reader = vsCodeConfigReader()
+
+  function loadSettings() {
+    const { settings, warnings } = readSettingsWithWarnings(reader)
+    for (const w of warnings) out.appendLine(`[settings] ${w}`)
+    return settings
+  }
+
+  let settings = loadSettings()
+  let client = new EmulatorClient({ port: settings.webPort })
+
+  const presenter = new StatusBarPresenter(client.port)
+  context.subscriptions.push(presenter)
 
   const launcher = new EmulatorLauncher((path, port, args) => spawnEmulator(path, port, args))
   context.subscriptions.push({ dispose: () => launcher.dispose() })
 
-  let state: ConnectionState = "disconnected"
-  let client = buildClient()
-
-  function buildClient(): EmulatorClient {
-    return new EmulatorClient({ port: readSettings(amspiritConfig()).webPort })
-  }
-
-  function amspiritConfig() {
-    const cfg = vscode.workspace.getConfiguration("amspirit")
-    return {
-      get<T>(key: string, defaultValue: T): T {
-        return cfg.get<T>(key, defaultValue)
-      },
-    }
-  }
-
-  function renderStatusBar(): void {
-    const view = buildIndicator(state, client.port)
-    statusBar.text = view.text
-    statusBar.tooltip = view.tooltip
-    statusBar.backgroundColor = view.useWarningBackground ? WARNING_BG : undefined
-  }
-
-  renderStatusBar()
-
+  let connectionState: "connected" | "disconnected" = "disconnected"
   const pinger = new PingService(
     () => client.ping(),
     (s) => {
-      state = s
-      renderStatusBar()
+      connectionState = s
+      presenter.setState(s)
     },
   )
   pinger.start()
   context.subscriptions.push({ dispose: () => pinger.stop() })
 
+  function rebuildClient(): void {
+    settings = loadSettings()
+    client = new EmulatorClient({ port: settings.webPort })
+    presenter.setPort(client.port)
+  }
+
   async function cmdLaunch(): Promise<void> {
-    const settings = readSettings(amspiritConfig())
+    settings = loadSettings()
     let binaryPath = settings.emulatorPath
     if (!binaryPath) {
       const picked = await vscode.window.showOpenDialog({
@@ -77,27 +67,28 @@ export function activate(context: vscode.ExtensionContext): void {
       return
     }
 
-    out.appendLine(
-      `Launching: ${binaryPath} --web-server --web-port ${settings.webPort} ${settings.emulatorArgs.join(" ")}`,
-    )
-
     try {
       launcher.launch(binaryPath, settings.webPort, settings.emulatorArgs, {
         onExit: (code) => {
           out.appendLine(`Emulator exited (code ${code})`)
-          state = "disconnected"
-          renderStatusBar()
+          connectionState = "disconnected"
+          presenter.setState("disconnected")
+        },
+        onError: (err) => {
+          out.appendLine(`Emulator error: ${errorMessage(err)}`)
         },
       })
+      out.appendLine(
+        `Launching: ${binaryPath} --web-server --web-port ${settings.webPort} ${settings.emulatorArgs.join(" ")}`,
+      )
       vscode.window.showInformationMessage(`AMSpiriT launched on port ${settings.webPort}.`)
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e)
-      vscode.window.showErrorMessage(`AMSpiriT: launch failed — ${msg}`)
+      vscode.window.showErrorMessage(`AMSpiriT: launch failed — ${errorMessage(e)}`)
     }
   }
 
   async function cmdConnect(): Promise<void> {
-    client = buildClient()
+    rebuildClient()
     const s = await pinger.pingNow()
     if (s === "connected") {
       vscode.window.showInformationMessage(`AMSpiriT: connected on port ${client.port}.`)
@@ -120,18 +111,16 @@ export function activate(context: vscode.ExtensionContext): void {
     return editor.document.getText()
   }
 
-  async function runInject(mode: Parameters<typeof performInject>[1]): Promise<void> {
+  async function runInject(mode: InjectMode): Promise<void> {
+    const source = activeSource()
+    if (source === undefined) return // user already notified
     const result = await performInject(
-      { client, source: activeSource(), connected: state === "connected" },
+      { client, source, connected: connectionState === "connected" },
       mode,
     )
     switch (result.kind) {
       case "success":
         vscode.window.showInformationMessage(result.message)
-        return
-      case "noEditor":
-        // performInject only returns this when source is undefined; activeSource()
-        // already showed an error above.
         return
       case "notConnected":
         vscode.window.showErrorMessage("AMSpiriT: not connected. Launch or connect first.")
@@ -153,15 +142,18 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
+      if (!e.affectsConfiguration("amspirit")) return
       if (e.affectsConfiguration("amspirit.webPort")) {
-        client = buildClient()
+        rebuildClient()
         void pinger.pingNow()
+      } else {
+        settings = loadSettings()
       }
     }),
   )
 
   void pinger.pingNow().then((s) => {
-    if (s === "disconnected" && readSettings(amspiritConfig()).autoLaunch) {
+    if (s === "disconnected" && settings.autoLaunch) {
       void cmdLaunch()
     }
   })

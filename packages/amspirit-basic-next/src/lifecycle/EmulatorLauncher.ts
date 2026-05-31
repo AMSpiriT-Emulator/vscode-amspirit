@@ -8,6 +8,8 @@ export type SpawnFn = (
 
 export interface LauncherEvents {
   onExit?: (code: number | null) => void
+  /** Fired when the child process emits an "error" event (e.g. ENOENT). */
+  onError?: (err: Error) => void
 }
 
 /**
@@ -32,11 +34,22 @@ export class EmulatorLauncher {
     if (this.isRunning) {
       throw new Error("Emulator is already running")
     }
-    const child = this.spawn(binaryPath, port, extraArgs)
+    let child: ChildProcess
+    try {
+      child = this.spawn(binaryPath, port, extraArgs)
+    } catch (e) {
+      this.proc = undefined
+      throw e
+    }
     this.proc = child
     child.on("exit", (code) => {
       this.proc = undefined
       events.onExit?.(code)
+    })
+    child.on("error", (err) => {
+      this.proc = undefined
+      events.onExit?.(null)
+      events.onError?.(err)
     })
     return child
   }

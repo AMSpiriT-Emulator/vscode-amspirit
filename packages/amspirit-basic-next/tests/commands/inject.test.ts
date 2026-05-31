@@ -17,14 +17,6 @@ describe("performInject", () => {
     return { injectBasic: vi.fn().mockResolvedValue(undefined) }
   }
 
-  it("returns noEditor when source is undefined", async () => {
-    const r = await performInject(
-      { client: makeClient(), source: undefined, connected: true },
-      "inject",
-    )
-    expect(r.kind).toBe("noEditor")
-  })
-
   it("returns notConnected when not connected", async () => {
     const r = await performInject(
       { client: makeClient(), source: "10 END", connected: false },

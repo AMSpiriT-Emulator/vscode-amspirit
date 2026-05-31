@@ -73,4 +73,30 @@ describe("EmulatorLauncher", () => {
     const launcher = new EmulatorLauncher(vi.fn())
     expect(() => launcher.dispose()).not.toThrow()
   })
+
+  it("does not retain state when spawn throws synchronously", () => {
+    const spawn = vi.fn().mockImplementationOnce(() => {
+      throw new Error("ENOENT")
+    })
+    const launcher = new EmulatorLauncher(spawn)
+    expect(() => launcher.launch("/bad/path", 8765, [])).toThrow(/ENOENT/)
+    expect(launcher.isRunning).toBe(false)
+
+    // Subsequent launches must still be possible.
+    spawn.mockReturnValueOnce(fakeChild())
+    expect(() => launcher.launch("/bin/emu", 8765, [])).not.toThrow()
+    expect(launcher.isRunning).toBe(true)
+  })
+
+  it("clears state and notifies onError when the child emits 'error'", () => {
+    const child = fakeChild()
+    const onError = vi.fn()
+    const onExit = vi.fn()
+    const launcher = new EmulatorLauncher(vi.fn().mockReturnValue(child))
+    launcher.launch("/bin/emu", 8765, [], { onError, onExit })
+    ;(child as unknown as EventEmitter).emit("error", new Error("spawn failed"))
+    expect(launcher.isRunning).toBe(false)
+    expect(onError).toHaveBeenCalledWith(expect.any(Error))
+    expect(onExit).toHaveBeenCalledWith(null)
+  })
 })

@@ -12,6 +12,7 @@ const DEFAULT_INTERVAL_MS = 3000
 /**
  * Periodically pings the emulator and notifies listeners only on state transitions.
  * Pure timer-and-callback orchestration; the actual HTTP call is injected.
+ * Concurrent calls to `tick` are coalesced: only one ping is in flight at a time.
  */
 export class PingService {
   private readonly intervalMs: number
@@ -19,6 +20,7 @@ export class PingService {
   private readonly clearIntervalFn: typeof globalThis.clearInterval
   private timer: ReturnType<typeof globalThis.setInterval> | undefined
   private lastState: "connected" | "disconnected" | undefined
+  private inFlight: Promise<"connected" | "disconnected"> | undefined
 
   constructor(
     private readonly ping: Pinger,
@@ -47,13 +49,21 @@ export class PingService {
     return this.tick()
   }
 
-  private async tick(): Promise<"connected" | "disconnected"> {
-    const ok = await this.ping()
-    const state = ok ? "connected" : "disconnected"
-    if (state !== this.lastState) {
-      this.lastState = state
-      this.listener(state)
-    }
-    return state
+  private tick(): Promise<"connected" | "disconnected"> {
+    if (this.inFlight) return this.inFlight
+    this.inFlight = (async () => {
+      try {
+        const ok = await this.ping()
+        const state = ok ? "connected" : "disconnected"
+        if (state !== this.lastState) {
+          this.lastState = state
+          this.listener(state)
+        }
+        return state
+      } finally {
+        this.inFlight = undefined
+      }
+    })()
+    return this.inFlight
   }
 }

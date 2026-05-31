@@ -1,4 +1,4 @@
-import type { EmulatorClient } from "@amspirit/shared"
+import { type EmulatorClient, errorMessage } from "@amspirit/shared"
 
 export type InjectMode = "inject" | "injectAndRun" | "resetAndInject" | "resetAndRun"
 
@@ -9,7 +9,6 @@ export interface InjectFlags {
 
 export type InjectOutcome =
   | { kind: "success"; message: string }
-  | { kind: "noEditor" }
   | { kind: "notConnected" }
   | { kind: "error"; message: string }
 
@@ -36,12 +35,11 @@ function successMessage(flags: InjectFlags): string {
 
 export interface InjectContext {
   client: Pick<EmulatorClient, "injectBasic">
-  source: string | undefined
+  source: string
   connected: boolean
 }
 
 export async function performInject(ctx: InjectContext, mode: InjectMode): Promise<InjectOutcome> {
-  if (ctx.source === undefined) return { kind: "noEditor" }
   if (!ctx.connected) return { kind: "notConnected" }
 
   const flags = flagsFor(mode)
@@ -49,7 +47,6 @@ export async function performInject(ctx: InjectContext, mode: InjectMode): Promi
     await ctx.client.injectBasic(ctx.source, flags.resetFirst, flags.runAfter)
     return { kind: "success", message: successMessage(flags) }
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    return { kind: "error", message }
+    return { kind: "error", message: errorMessage(e) }
   }
 }

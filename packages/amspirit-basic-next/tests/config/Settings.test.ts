@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { type ConfigReader, readSettings } from "../../src/config/Settings.js"
+import {
+  type ConfigReader,
+  readSettings,
+  readSettingsWithWarnings,
+} from "../../src/config/Settings.js"
 
 function makeReader(map: Record<string, unknown>): ConfigReader {
   return {
@@ -54,5 +58,40 @@ describe("readSettings", () => {
       makeReader({ emulatorArgs: "not-an-array" as unknown as readonly string[] }),
     )
     expect(s.emulatorArgs).toEqual([])
+  })
+})
+
+describe("readSettingsWithWarnings", () => {
+  it("returns no warnings for a valid config", () => {
+    const { warnings } = readSettingsWithWarnings(
+      makeReader({ webPort: 9000, emulatorArgs: ["--ok"] }),
+    )
+    expect(warnings).toEqual([])
+  })
+
+  it("warns when the port is out of range", () => {
+    const { settings, warnings } = readSettingsWithWarnings(makeReader({ webPort: 0 }))
+    expect(settings.webPort).toBe(8765)
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toMatch(/webPort/)
+    expect(warnings[0]).toMatch(/8765/)
+  })
+
+  it("warns when emulatorArgs contains non-string entries", () => {
+    const { settings, warnings } = readSettingsWithWarnings(
+      makeReader({ emulatorArgs: ["--ok", 1, null] as unknown as readonly string[] }),
+    )
+    expect(settings.emulatorArgs).toEqual(["--ok"])
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toMatch(/emulatorArgs/)
+  })
+
+  it("warns when emulatorArgs is not an array", () => {
+    const { settings, warnings } = readSettingsWithWarnings(
+      makeReader({ emulatorArgs: "nope" as unknown as readonly string[] }),
+    )
+    expect(settings.emulatorArgs).toEqual([])
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toMatch(/expected an array/)
   })
 })

@@ -10,14 +10,14 @@ export interface IndicatorView {
 export function buildIndicator(state: ConnectionState, port: number): IndicatorView {
   if (state === "connected") {
     return {
-      text: "$(vm-active) AMSpiriT",
+      text: `$(vm-active) AMSpiriT :${port}`,
       tooltip: `Connected to AMSpiriT on port ${port}`,
       useWarningBackground: false,
     }
   }
   return {
-    text: "$(vm) AMSpiriT",
-    tooltip: "Not connected — click to connect or launch the emulator",
+    text: `$(vm) AMSpiriT :${port}`,
+    tooltip: `Not connected on port ${port} — click to connect or launch the emulator`,
     useWarningBackground: true,
   }
 }
