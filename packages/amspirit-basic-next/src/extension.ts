@@ -1,11 +1,12 @@
-import { EmulatorClient, errorMessage, spawnEmulator } from "@amspirit/shared"
 import { basename } from "node:path"
+import { EmulatorClient, errorMessage, spawnEmulator } from "@amspirit/shared"
 import * as vscode from "vscode"
 
 import { type InjectMode, performInject } from "./commands/inject.js"
 import { readSettingsWithWarnings } from "./config/Settings.js"
 import { vsCodeConfigReader } from "./config/vsCodeConfigReader.js"
 import { PingService } from "./connection/PingService.js"
+import type { ConnectionState } from "./connection/PingService.js"
 import { registerBasicDiagnostics } from "./diagnostics/registerBasicDiagnostics.js"
 import { EmulatorLauncher } from "./lifecycle/EmulatorLauncher.js"
 import { StatusBarPresenter } from "./statusBar/StatusBarPresenter.js"
@@ -33,7 +34,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const launcher = new EmulatorLauncher((path, port, args) => spawnEmulator(path, port, args))
   context.subscriptions.push({ dispose: () => launcher.dispose() })
 
-  let connectionState: "connected" | "disconnected" = "disconnected"
+  let connectionState: ConnectionState = "disconnected"
   const pinger = new PingService(
     () => client.ping(),
     (s) => {
@@ -46,9 +47,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
   function syncActiveBasicFile(): void {
     const editor = vscode.window.activeTextEditor
-    const fileName = editor?.document.languageId === "amstrad-basic"
-      ? basename(editor.document.fileName)
-      : undefined
+    const fileName =
+      editor?.document.languageId === "amstrad-basic"
+        ? basename(editor.document.fileName)
+        : undefined
     presenter.setActiveBasicFileName(fileName)
   }
 

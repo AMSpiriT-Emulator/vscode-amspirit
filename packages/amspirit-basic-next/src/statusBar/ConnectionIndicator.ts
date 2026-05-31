@@ -1,4 +1,5 @@
-export type ConnectionState = "connected" | "disconnected"
+export type { ConnectionState } from "../connection/PingService.js"
+import type { ConnectionState } from "../connection/PingService.js"
 
 export interface IndicatorView {
   text: string

@@ -1,5 +1,6 @@
+export type ConnectionState = "connected" | "disconnected"
 export type Pinger = () => Promise<boolean>
-export type StateListener = (state: "connected" | "disconnected") => void
+export type StateListener = (state: ConnectionState) => void
 
 export interface PingServiceOptions {
   intervalMs?: number
@@ -19,8 +20,8 @@ export class PingService {
   private readonly setIntervalFn: typeof globalThis.setInterval
   private readonly clearIntervalFn: typeof globalThis.clearInterval
   private timer: ReturnType<typeof globalThis.setInterval> | undefined
-  private lastState: "connected" | "disconnected" | undefined
-  private inFlight: Promise<"connected" | "disconnected"> | undefined
+  private lastState: ConnectionState | undefined
+  private inFlight: Promise<ConnectionState> | undefined
 
   constructor(
     private readonly ping: Pinger,
@@ -46,16 +47,16 @@ export class PingService {
     this.timer = undefined
   }
 
-  async pingNow(): Promise<"connected" | "disconnected"> {
+  async pingNow(): Promise<ConnectionState> {
     return this.tick()
   }
 
-  private tick(): Promise<"connected" | "disconnected"> {
+  private tick(): Promise<ConnectionState> {
     if (this.inFlight) return this.inFlight
     this.inFlight = (async () => {
       try {
         const ok = await this.ping()
-        const state = ok ? "connected" : "disconnected"
+        const state: ConnectionState = ok ? "connected" : "disconnected"
         if (state !== this.lastState) {
           this.lastState = state
           this.listener(state)
