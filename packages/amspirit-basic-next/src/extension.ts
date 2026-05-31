@@ -108,6 +108,12 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.window.showErrorMessage("AMSpiriT: no active editor.")
       return undefined
     }
+    if (editor.document.languageId !== "amstrad-basic") {
+      vscode.window.showErrorMessage(
+        "AMSpiriT: active file is not Amstrad CPC BASIC (expected .bas).",
+      )
+      return undefined
+    }
     return editor.document.getText()
   }
 

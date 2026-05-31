@@ -103,6 +103,24 @@
           "when": "resourceLangId == amstrad-basic",
           "group": "navigation@3"
         }
+      ],
+      "commandPalette": [
+        {
+          "command": "amspirit.inject",
+          "when": "editorLangId == amstrad-basic"
+        },
+        {
+          "command": "amspirit.injectAndRun",
+          "when": "editorLangId == amstrad-basic"
+        },
+        {
+          "command": "amspirit.resetAndInject",
+          "when": "editorLangId == amstrad-basic"
+        },
+        {
+          "command": "amspirit.resetAndRun",
+          "when": "editorLangId == amstrad-basic"
+        }
       ]
     },
     "configuration": {
