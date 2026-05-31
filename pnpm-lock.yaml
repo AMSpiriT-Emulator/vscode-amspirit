@@ -34,6 +34,28 @@ importers:
         specifier: ^5.6.0
         version: 5.9.3
 
+  packages/amspirit-basic-next:
+    dependencies:
+      '@amspirit/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.41
+      '@types/vscode':
+        specifier: ^1.80.0
+        version: 1.120.0
+      '@vscode/vsce':
+        specifier: ^2.32.0
+        version: 2.32.0
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@20.19.41)
+
   packages/shared:
     devDependencies:
       '@types/node':

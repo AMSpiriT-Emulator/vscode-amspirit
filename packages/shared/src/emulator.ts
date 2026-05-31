@@ -1,11 +1,11 @@
-import * as cp from "node:child_process";
-import * as http from "node:http";
+import * as cp from "node:child_process"
+import * as http from "node:http"
 
 export interface EmulatorClientOptions {
-  port?: number;
-  host?: string;
-  pingTimeoutMs?: number;
-  injectTimeoutMs?: number;
+  port?: number
+  host?: string
+  pingTimeoutMs?: number
+  injectTimeoutMs?: number
 }
 
 const DEFAULTS = {
@@ -13,42 +13,42 @@ const DEFAULTS = {
   host: "127.0.0.1",
   pingTimeoutMs: 2000,
   injectTimeoutMs: 5000,
-} as const;
+} as const
 
 export class EmulatorClient {
-  readonly port: number;
-  readonly host: string;
-  readonly pingTimeoutMs: number;
-  readonly injectTimeoutMs: number;
+  readonly port: number
+  readonly host: string
+  readonly pingTimeoutMs: number
+  readonly injectTimeoutMs: number
 
   constructor(options: EmulatorClientOptions = {}) {
-    this.port = options.port ?? DEFAULTS.port;
-    this.host = options.host ?? DEFAULTS.host;
-    this.pingTimeoutMs = options.pingTimeoutMs ?? DEFAULTS.pingTimeoutMs;
-    this.injectTimeoutMs = options.injectTimeoutMs ?? DEFAULTS.injectTimeoutMs;
+    this.port = options.port ?? DEFAULTS.port
+    this.host = options.host ?? DEFAULTS.host
+    this.pingTimeoutMs = options.pingTimeoutMs ?? DEFAULTS.pingTimeoutMs
+    this.injectTimeoutMs = options.injectTimeoutMs ?? DEFAULTS.injectTimeoutMs
   }
 
   async ping(): Promise<boolean> {
     try {
-      await this.get("/api/state", this.pingTimeoutMs);
-      return true;
+      await this.get("/api/state", this.pingTimeoutMs)
+      return true
     } catch {
-      return false;
+      return false
     }
   }
 
   async injectBasic(source: string, resetFirst: boolean, runAfter: boolean): Promise<void> {
-    const qs = [resetFirst && "reset=1", runAfter && "run=1"].filter(Boolean).join("&");
-    const path = `/api/basic${qs ? `?${qs}` : ""}`;
-    const body = await this.post(path, source, "text/plain; charset=utf-8", this.injectTimeoutMs);
-    let parsed: { ok?: boolean };
+    const qs = [resetFirst && "reset=1", runAfter && "run=1"].filter(Boolean).join("&")
+    const path = `/api/basic${qs ? `?${qs}` : ""}`
+    const body = await this.post(path, source, "text/plain; charset=utf-8", this.injectTimeoutMs)
+    let parsed: { ok?: boolean }
     try {
-      parsed = JSON.parse(body) as { ok?: boolean };
+      parsed = JSON.parse(body) as { ok?: boolean }
     } catch {
-      parsed = {};
+      parsed = {}
     }
     if (!parsed.ok) {
-      throw new Error("Emulator rejected BASIC injection");
+      throw new Error("Emulator rejected BASIC injection")
     }
   }
 
@@ -57,20 +57,20 @@ export class EmulatorClient {
       const req = http.get(
         { hostname: this.host, port: this.port, path, timeout: timeoutMs },
         (res) => {
-          let data = "";
-          res.setEncoding("utf-8");
+          let data = ""
+          res.setEncoding("utf-8")
           res.on("data", (chunk: string) => {
-            data += chunk;
-          });
-          res.on("end", () => resolve(data));
+            data += chunk
+          })
+          res.on("end", () => resolve(data))
         },
-      );
-      req.on("error", reject);
+      )
+      req.on("error", reject)
       req.on("timeout", () => {
-        req.destroy();
-        reject(new Error("timeout"));
-      });
-    });
+        req.destroy()
+        reject(new Error("timeout"))
+      })
+    })
   }
 
   private post(
@@ -80,7 +80,7 @@ export class EmulatorClient {
     timeoutMs: number,
   ): Promise<string> {
     return new Promise((resolve, reject) => {
-      const buf = Buffer.from(body, "utf-8");
+      const buf = Buffer.from(body, "utf-8")
       const req = http.request(
         {
           hostname: this.host,
@@ -94,22 +94,22 @@ export class EmulatorClient {
           },
         },
         (res) => {
-          let data = "";
-          res.setEncoding("utf-8");
+          let data = ""
+          res.setEncoding("utf-8")
           res.on("data", (chunk: string) => {
-            data += chunk;
-          });
-          res.on("end", () => resolve(data));
+            data += chunk
+          })
+          res.on("end", () => resolve(data))
         },
-      );
-      req.on("error", reject);
+      )
+      req.on("error", reject)
       req.on("timeout", () => {
-        req.destroy();
-        reject(new Error("timeout"));
-      });
-      req.write(buf);
-      req.end();
-    });
+        req.destroy()
+        reject(new Error("timeout"))
+      })
+      req.write(buf)
+      req.end()
+    })
   }
 }
 
@@ -118,6 +118,6 @@ export function spawnEmulator(
   port: number,
   extraArgs: readonly string[] = [],
 ): cp.ChildProcess {
-  const args = ["--web-server", "--web-port", String(port), ...extraArgs];
-  return cp.spawn(binaryPath, args, { stdio: "ignore", detached: false });
+  const args = ["--web-server", "--web-port", String(port), ...extraArgs]
+  return cp.spawn(binaryPath, args, { stdio: "ignore", detached: false })
 }

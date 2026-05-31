@@ -1,0 +1,3 @@
+10 MODE 1
+20 PRINT "Hello from BASIC"
+30 FOR i=1 TO 10:PRINT i;:NEXT
