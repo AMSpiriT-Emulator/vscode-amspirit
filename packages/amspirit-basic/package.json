@@ -1,0 +1,143 @@
+{
+  "name": "amspirit-basic",
+  "displayName": "AMSpiriT BASIC",
+  "description": "Amstrad CPC BASIC editor with direct emulator injection for AMSpiriT Lite",
+  "version": "0.1.0",
+  "publisher": "amspirit-emulator",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AMSpiriT-emulator/vscode-amspirit"
+  },
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Programming Languages", "Other"],
+  "activationEvents": ["onLanguage:amstrad-basic"],
+  "main": "./out/packages/amspirit-basic/src/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "amstrad-basic",
+        "aliases": ["Amstrad CPC BASIC", "CPC BASIC"],
+        "extensions": [".bas"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "amstrad-basic",
+        "scopeName": "source.amstrad-basic",
+        "path": "./syntaxes/amstrad-basic.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "amspirit.launch",
+        "title": "Launch Emulator",
+        "category": "AMSpiriT",
+        "icon": "$(play)"
+      },
+      {
+        "command": "amspirit.connect",
+        "title": "Connect to Emulator",
+        "category": "AMSpiriT",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "amspirit.inject",
+        "title": "Inject BASIC (no run)",
+        "category": "AMSpiriT",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "amspirit.injectAndRun",
+        "title": "Inject & Run BASIC",
+        "category": "AMSpiriT",
+        "icon": "$(run)"
+      },
+      {
+        "command": "amspirit.resetAndInject",
+        "title": "Reset & Inject BASIC (no run)",
+        "category": "AMSpiriT",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "amspirit.resetAndRun",
+        "title": "Reset & Run BASIC",
+        "category": "AMSpiriT",
+        "icon": "$(debug-rerun)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "amspirit.injectAndRun",
+        "key": "f6",
+        "when": "resourceLangId == amstrad-basic"
+      },
+      {
+        "command": "amspirit.resetAndRun",
+        "key": "shift+f6",
+        "when": "resourceLangId == amstrad-basic"
+      },
+      {
+        "command": "amspirit.inject",
+        "key": "ctrl+f6",
+        "when": "resourceLangId == amstrad-basic"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "amspirit.injectAndRun",
+          "when": "resourceLangId == amstrad-basic",
+          "group": "navigation@1"
+        },
+        {
+          "command": "amspirit.resetAndRun",
+          "when": "resourceLangId == amstrad-basic",
+          "group": "navigation@2"
+        },
+        {
+          "command": "amspirit.inject",
+          "when": "resourceLangId == amstrad-basic",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AMSpiriT",
+      "properties": {
+        "amspirit.emulatorPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the amspirit-lite-sdl binary"
+        },
+        "amspirit.webPort": {
+          "type": "number",
+          "default": 8765,
+          "description": "Web debug server port (must match --web-port passed to the emulator)"
+        },
+        "amspirit.autoLaunch": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically launch the emulator when the extension activates and no emulator is running"
+        },
+        "amspirit.emulatorArgs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Additional arguments passed to the emulator at launch"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.0.0",
+    "@vscode/vsce": "^2.32.0"
+  }
+}

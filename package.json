@@ -1,0 +1,5 @@
+{
+  "name": "vscode-amspirit",
+  "private": true,
+  "workspaces": ["packages/*"]
+}
