@@ -12,11 +12,11 @@ export class StatusBarPresenter implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem
   private state: ConnectionState = "disconnected"
   private port: number
+  private activeBasicFileName: string | undefined
 
-  constructor(initialPort: number, commandId = "amspirit.connect") {
+  constructor(initialPort: number) {
     this.port = initialPort
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100)
-    this.item.command = commandId
     this.item.show()
     this.render()
   }
@@ -33,10 +33,17 @@ export class StatusBarPresenter implements vscode.Disposable {
     this.render()
   }
 
+  setActiveBasicFileName(activeBasicFileName: string | undefined): void {
+    if (activeBasicFileName === this.activeBasicFileName) return
+    this.activeBasicFileName = activeBasicFileName
+    this.render()
+  }
+
   private render(): void {
-    const view = buildIndicator(this.state, this.port)
+    const view = buildIndicator(this.state, this.port, this.activeBasicFileName)
     this.item.text = view.text
     this.item.tooltip = view.tooltip
+    this.item.command = view.command
     this.item.backgroundColor = view.useWarningBackground ? WARNING_BG : undefined
   }
 

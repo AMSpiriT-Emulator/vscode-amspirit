@@ -1,4 +1,5 @@
 import { EmulatorClient, errorMessage, spawnEmulator } from "@amspirit/shared"
+import { basename } from "node:path"
 import * as vscode from "vscode"
 
 import { type InjectMode, performInject } from "./commands/inject.js"
@@ -42,6 +43,17 @@ export function activate(context: vscode.ExtensionContext): void {
   )
   pinger.start()
   context.subscriptions.push({ dispose: () => pinger.stop() })
+
+  function syncActiveBasicFile(): void {
+    const editor = vscode.window.activeTextEditor
+    const fileName = editor?.document.languageId === "amstrad-basic"
+      ? basename(editor.document.fileName)
+      : undefined
+    presenter.setActiveBasicFileName(fileName)
+  }
+
+  syncActiveBasicFile()
+  context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(() => syncActiveBasicFile()))
 
   function rebuildClient(): void {
     settings = loadSettings()
