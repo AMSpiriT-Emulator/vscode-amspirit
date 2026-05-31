@@ -70,6 +70,12 @@
         "title": "Open Settings",
         "category": "AMSpiriT",
         "icon": "$(gear)"
+      },
+      {
+        "command": "amspirit.openWalkthrough",
+        "title": "Get Started",
+        "category": "AMSpiriT",
+        "icon": "$(book)"
       }
     ],
     "keybindings": [
@@ -122,6 +128,36 @@
         }
       ]
     },
+    "walkthroughs": [
+      {
+        "id": "amspirit.getStarted",
+        "title": "Get started with AMSpiriT BASIC",
+        "description": "Configure the emulator and inject your first Locomotive BASIC program.",
+        "steps": [
+          {
+            "id": "amspirit.setBinary",
+            "title": "Locate the AMSpiriT emulator",
+            "description": "Tell the extension where your ``amspirit-lite-sdl`` binary lives.\n[Open Settings](command:amspirit.openSettings)",
+            "media": { "markdown": "media/walkthrough/binary.md" },
+            "completionEvents": ["onSettingChanged:amspirit.emulatorPath"]
+          },
+          {
+            "id": "amspirit.launchEmulator",
+            "title": "Launch the emulator",
+            "description": "Start AMSpiriT from VS Code. The status bar turns green when the extension can reach it.\n[Launch Emulator](command:amspirit.launch)",
+            "media": { "markdown": "media/walkthrough/launch.md" },
+            "completionEvents": ["onCommand:amspirit.launch"]
+          },
+          {
+            "id": "amspirit.firstInject",
+            "title": "Inject your first BASIC program",
+            "description": "Open a ``.bas`` file and press ``F6`` to inject and run it.\n[Inject & Run (F6)](command:amspirit.injectAndRun)",
+            "media": { "markdown": "media/walkthrough/inject.md" },
+            "completionEvents": ["onCommand:amspirit.injectAndRun"]
+          }
+        ]
+      }
+    ],
     "configuration": {
       "title": "AMSpiriT",
       "properties": {

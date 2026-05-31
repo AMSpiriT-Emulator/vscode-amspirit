@@ -167,6 +167,13 @@ export function activate(context: vscode.ExtensionContext): void {
         "@ext:amspirit-emulator.amspirit-basic-next",
       ),
     ),
+    vscode.commands.registerCommand("amspirit.openWalkthrough", () =>
+      vscode.commands.executeCommand(
+        "workbench.action.openWalkthrough",
+        "amspirit-emulator.amspirit-basic-next#amspirit.getStarted",
+        false,
+      ),
+    ),
   )
 
   context.subscriptions.push(
