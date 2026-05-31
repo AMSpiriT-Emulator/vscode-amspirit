@@ -1,5 +1,25 @@
 {
   "name": "vscode-amspirit",
   "private": true,
-  "workspaces": ["packages/*"]
+  "packageManager": "pnpm@10.11.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present run build",
+    "test": "pnpm -r --if-present run test",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "clean": "pnpm -r --if-present run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "typescript": "^5.6.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@biomejs/biome", "@vscode/vsce-sign", "keytar", "esbuild"]
+  }
 }
