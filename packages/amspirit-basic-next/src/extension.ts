@@ -5,12 +5,15 @@ import { type InjectMode, performInject } from "./commands/inject.js"
 import { readSettingsWithWarnings } from "./config/Settings.js"
 import { vsCodeConfigReader } from "./config/vsCodeConfigReader.js"
 import { PingService } from "./connection/PingService.js"
+import { registerBasicDiagnostics } from "./diagnostics/registerBasicDiagnostics.js"
 import { EmulatorLauncher } from "./lifecycle/EmulatorLauncher.js"
 import { StatusBarPresenter } from "./statusBar/StatusBarPresenter.js"
 
 export function activate(context: vscode.ExtensionContext): void {
   const out = vscode.window.createOutputChannel("AMSpiriT")
   context.subscriptions.push(out)
+
+  registerBasicDiagnostics(context)
 
   const reader = vsCodeConfigReader()
 

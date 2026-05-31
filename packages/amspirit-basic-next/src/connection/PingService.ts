@@ -37,6 +37,7 @@ export class PingService {
     this.timer = this.setIntervalFn(() => {
       void this.tick()
     }, this.intervalMs)
+    void this.tick()
   }
 
   stop(): void {

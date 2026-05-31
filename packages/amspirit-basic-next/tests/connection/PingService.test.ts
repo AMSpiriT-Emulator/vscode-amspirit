@@ -50,8 +50,19 @@ describe("PingService", () => {
     const listener = vi.fn()
     const svc = new PingService(ping, listener, { intervalMs: 100 })
     svc.start()
+    // start() triggers one immediate ping, then 3 timer-driven pings over 350ms.
     await vi.advanceTimersByTimeAsync(350)
-    expect(ping).toHaveBeenCalledTimes(3)
+    expect(ping).toHaveBeenCalledTimes(4)
+    svc.stop()
+  })
+
+  it("start() fires an immediate ping in addition to scheduling the timer", async () => {
+    const ping = vi.fn().mockResolvedValue(true)
+    const listener = vi.fn()
+    const svc = new PingService(ping, listener, { intervalMs: 10_000 })
+    svc.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(ping).toHaveBeenCalledTimes(1)
     svc.stop()
   })
 
