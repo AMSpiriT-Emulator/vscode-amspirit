@@ -6,6 +6,7 @@
     "outDir": "./out",
     "rootDir": "./src",
     "lib": ["ES2022"],
+    "types": ["node", "vscode"],
     "composite": false,
     "declaration": false,
     "declarationMap": false,
