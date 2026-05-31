@@ -65,6 +65,12 @@
         "title": "Reset & Run BASIC",
         "category": "AMSpiriT",
         "icon": "$(debug-rerun)"
+      },
+      {
+        "command": "amspirit.openSettings",
+        "title": "Open Settings",
+        "category": "AMSpiriT",
+        "icon": "$(gear)"
       }
     ],
     "keybindings": [
@@ -105,23 +111,32 @@
         "amspirit.emulatorPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the amspirit-lite-sdl binary"
+          "scope": "machine",
+          "order": 1,
+          "markdownDescription": "Absolute path to the `amspirit-lite-sdl` binary. Leave empty to be prompted on first launch.",
+          "examples": ["/usr/local/bin/amspirit-lite-sdl", "C:\\\\Tools\\\\amspirit-lite-sdl.exe"]
         },
         "amspirit.webPort": {
-          "type": "number",
+          "type": "integer",
           "default": 8765,
-          "description": "Web debug server port (must match --web-port passed to the emulator)"
+          "minimum": 1,
+          "maximum": 65535,
+          "order": 2,
+          "markdownDescription": "TCP port used by the emulator's web debug server. Must match the `--web-port` value passed at launch."
         },
         "amspirit.autoLaunch": {
           "type": "boolean",
           "default": false,
-          "description": "Automatically launch the emulator when the extension activates and no emulator is running"
+          "order": 3,
+          "markdownDescription": "When `true`, automatically launch the emulator at activation if it is not already reachable."
         },
         "amspirit.emulatorArgs": {
           "type": "array",
           "items": { "type": "string" },
           "default": [],
-          "description": "Additional arguments passed to the emulator at launch"
+          "order": 4,
+          "markdownDescription": "Extra command-line arguments appended after `--web-server --web-port <port>` when launching the emulator.",
+          "examples": [["--fullscreen"], ["--scale", "2"]]
         }
       }
     }

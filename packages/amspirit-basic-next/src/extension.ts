@@ -138,6 +138,12 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("amspirit.injectAndRun", () => runInject("injectAndRun")),
     vscode.commands.registerCommand("amspirit.resetAndInject", () => runInject("resetAndInject")),
     vscode.commands.registerCommand("amspirit.resetAndRun", () => runInject("resetAndRun")),
+    vscode.commands.registerCommand("amspirit.openSettings", () =>
+      vscode.commands.executeCommand(
+        "workbench.action.openSettings",
+        "@ext:amspirit-emulator.amspirit-basic-next",
+      ),
+    ),
   )
 
   context.subscriptions.push(
