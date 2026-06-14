@@ -211,6 +211,17 @@
             "completionEvents": [
               "onCommand:amspirit.injectAndRun"
             ]
+          },
+          {
+            "id": "amspirit.readDocs",
+            "title": "Read the documentation",
+            "description": "Explore every command and setting in the full documentation.\n[Open Documentation](command:amspirit.openDocs)",
+            "media": {
+              "markdown": "media/walkthrough/docs.md"
+            },
+            "completionEvents": [
+              "onCommand:amspirit.openDocs"
+            ]
           }
         ]
       }
