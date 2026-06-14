@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from "vitest"
+import { spawnEmulator } from "../src/emulator.js"
 
-const spawnMock = vi.fn()
+const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 
 vi.mock("node:child_process", () => ({
   spawn: spawnMock,
 }))
-
-const { spawnEmulator } = await import("../src/emulator.js")
 
 describe("spawnEmulator", () => {
   it("invokes child_process.spawn with --web-server and --web-port flags", () => {

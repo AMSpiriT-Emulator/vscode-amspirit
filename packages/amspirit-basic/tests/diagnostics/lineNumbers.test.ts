@@ -26,14 +26,14 @@ describe("findLineNumberIssues", () => {
   it("reports the trimmed range, not the leading whitespace", () => {
     const issues = findLineNumberIssues("    PRINT 1   \n")
     expect(issues).toHaveLength(1)
-    expect(issues[0].startColumn).toBe(4)
-    expect(issues[0].endColumn).toBe(11)
+    expect(issues[0]?.startColumn).toBe(4)
+    expect(issues[0]?.endColumn).toBe(11)
   })
 
   it("handles CRLF line endings", () => {
     const issues = findLineNumberIssues("10 CLS\r\nPRINT 1\r\n")
     expect(issues).toHaveLength(1)
-    expect(issues[0].line).toBe(1)
+    expect(issues[0]?.line).toBe(1)
   })
 
   it("accepts any digit prefix as a line number", () => {

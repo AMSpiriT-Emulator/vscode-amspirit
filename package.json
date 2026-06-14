@@ -9,10 +9,13 @@
   "scripts": {
     "build": "pnpm -r --if-present run build",
     "test": "pnpm -r --if-present run test",
+    "typecheck": "pnpm -r --if-present run typecheck",
     "lint": "biome lint .",
     "format": "biome format --write .",
     "check": "biome check .",
     "check:fix": "biome check --write .",
+    "precommit": "biome check . && pnpm -r --if-present run typecheck && pnpm -r --if-present run test",
+    "prepare": "git config core.hooksPath .githooks || true",
     "clean": "pnpm -r --if-present run clean && rm -rf node_modules"
   },
   "devDependencies": {

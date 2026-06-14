@@ -208,6 +208,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "watch": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "package": "vsce package --no-dependencies",
