@@ -6,6 +6,7 @@ export interface EmulatorClientOptions {
   host?: string
   pingTimeoutMs?: number
   injectTimeoutMs?: number
+  exportTimeoutMs?: number
 }
 
 const DEFAULTS = {
@@ -13,6 +14,7 @@ const DEFAULTS = {
   host: "127.0.0.1",
   pingTimeoutMs: 2000,
   injectTimeoutMs: 5000,
+  exportTimeoutMs: 5000,
 } as const
 
 export class EmulatorClient {
@@ -20,12 +22,14 @@ export class EmulatorClient {
   readonly host: string
   readonly pingTimeoutMs: number
   readonly injectTimeoutMs: number
+  readonly exportTimeoutMs: number
 
   constructor(options: EmulatorClientOptions = {}) {
     this.port = options.port ?? DEFAULTS.port
     this.host = options.host ?? DEFAULTS.host
     this.pingTimeoutMs = options.pingTimeoutMs ?? DEFAULTS.pingTimeoutMs
     this.injectTimeoutMs = options.injectTimeoutMs ?? DEFAULTS.injectTimeoutMs
+    this.exportTimeoutMs = options.exportTimeoutMs ?? DEFAULTS.exportTimeoutMs
   }
 
   async ping(): Promise<boolean> {
@@ -52,6 +56,16 @@ export class EmulatorClient {
     }
   }
 
+  /**
+   * Retrieve the BASIC program currently in the emulator's memory,
+   * detokenized to ASCII source. With `verbose`, the emulator appends
+   * hex-dump comment lines after each statement.
+   */
+  async exportBasic(verbose = false): Promise<string> {
+    const path = `/api/basic_export${verbose ? "?verbose=1" : ""}`
+    return this.get(path, this.exportTimeoutMs)
+  }
+
   private get(path: string, timeoutMs: number): Promise<string> {
     return new Promise((resolve, reject) => {
       let settled = false
@@ -68,7 +82,14 @@ export class EmulatorClient {
           res.on("data", (chunk: string) => {
             data += chunk
           })
-          res.on("end", () => settle(() => resolve(data)))
+          res.on("end", () => {
+            const status = res.statusCode ?? 0
+            if (status < 200 || status >= 300) {
+              settle(() => reject(new Error(`HTTP ${status}`)))
+              return
+            }
+            settle(() => resolve(data))
+          })
         },
       )
       req.on("error", (err) => settle(() => reject(err)))

@@ -48,6 +48,12 @@
         "icon": "$(arrow-right)"
       },
       {
+        "command": "amspirit.pull",
+        "title": "Pull BASIC from Emulator",
+        "category": "AMSpiriT",
+        "icon": "$(arrow-down)"
+      },
+      {
         "command": "amspirit.injectAndRun",
         "title": "Inject & Run BASIC",
         "category": "AMSpiriT",
@@ -107,6 +113,11 @@
           "command": "amspirit.inject",
           "when": "resourceLangId == amstrad-basic",
           "group": "navigation@3"
+        },
+        {
+          "command": "amspirit.pull",
+          "when": "resourceLangId == amstrad-basic",
+          "group": "navigation@4"
         }
       ],
       "commandPalette": [

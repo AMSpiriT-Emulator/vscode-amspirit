@@ -78,10 +78,16 @@ describe("EmulatorClient", () => {
       const c = new EmulatorClient()
       expect(c.pingTimeoutMs).toBe(2000)
       expect(c.injectTimeoutMs).toBe(5000)
+      expect(c.exportTimeoutMs).toBe(5000)
 
-      const custom = new EmulatorClient({ pingTimeoutMs: 500, injectTimeoutMs: 1000 })
+      const custom = new EmulatorClient({
+        pingTimeoutMs: 500,
+        injectTimeoutMs: 1000,
+        exportTimeoutMs: 1500,
+      })
       expect(custom.pingTimeoutMs).toBe(500)
       expect(custom.injectTimeoutMs).toBe(1000)
+      expect(custom.exportTimeoutMs).toBe(1500)
     })
   })
 
@@ -170,6 +176,44 @@ describe("EmulatorClient", () => {
       }
       const client = new EmulatorClient({ port: fake.port, injectTimeoutMs: 50 })
       await expect(client.injectBasic("10 END", false, false)).rejects.toThrow(/timeout/)
+    })
+  })
+
+  describe("exportBasic", () => {
+    it("GETs /api/basic_export and returns the detokenized source", async () => {
+      fake.responder = (_req, res) => {
+        res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" })
+        res.end('10 PRINT "HELLO"\n20 GOTO 10\n')
+      }
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.exportBasic()).resolves.toBe('10 PRINT "HELLO"\n20 GOTO 10\n')
+
+      const rec = fake.recorded.at(0)
+      expect(rec?.method).toBe("GET")
+      expect(rec?.url).toBe("/api/basic_export")
+    })
+
+    it("adds ?verbose=1 when verbose is true", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.exportBasic(true)
+      expect(fake.recorded.at(0)?.url).toBe("/api/basic_export?verbose=1")
+    })
+
+    it("rejects when the emulator returns a non-2xx status", async () => {
+      fake.responder = (_req, res) => {
+        res.writeHead(503, { "Content-Type": "text/plain" })
+        res.end("")
+      }
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.exportBasic()).rejects.toThrow(/HTTP 503/)
+    })
+
+    it("rejects on timeout", async () => {
+      fake.responder = () => {
+        // Never respond.
+      }
+      const client = new EmulatorClient({ port: fake.port, exportTimeoutMs: 50 })
+      await expect(client.exportBasic()).rejects.toThrow(/timeout/)
     })
   })
 })

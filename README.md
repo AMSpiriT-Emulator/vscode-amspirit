@@ -65,6 +65,7 @@ pnpm --filter amspirit-basic         package    # produit le .vsix
 - Injection du fichier courant dans un émulateur en cours d'exécution
 - Hard-reset puis injection après boot
 - Auto-exécution (`RUN`) après injection
+- Récupération du programme BASIC en mémoire vers un nouvel éditeur (pull)
 - Lancement de l'émulateur depuis VS Code
 - Indicateur de connexion dans la barre d'état
 
@@ -95,6 +96,7 @@ pnpm --filter amspirit-basic         package    # produit le .vsix
 | `AMSpiriT: Reset & Run BASIC` | Hard-reset puis injecte + exécute |
 | `AMSpiriT: Inject BASIC (no run)` | Injecte sans exécuter |
 | `AMSpiriT: Reset & Inject BASIC (no run)` | Hard-reset puis injecte sans exécuter |
+| `AMSpiriT: Pull BASIC from Emulator` | Récupère le programme en mémoire dans un nouvel éditeur `.bas` |
 
 ### Démarrer l'émulateur côté CLI
 

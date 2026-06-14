@@ -3,6 +3,7 @@ import { EmulatorClient, errorMessage, spawnEmulator } from "@amspirit/shared"
 import * as vscode from "vscode"
 
 import { type InjectMode, performInject } from "./commands/inject.js"
+import { performPull } from "./commands/pull.js"
 import { readSettingsWithWarnings } from "./config/Settings.js"
 import { vsCodeConfigReader } from "./config/vsCodeConfigReader.js"
 import { PingService } from "./connection/PingService.js"
@@ -154,9 +155,33 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }
 
+  async function cmdPull(): Promise<void> {
+    const result = await performPull({ client, connected: connectionState === "connected" })
+    switch (result.kind) {
+      case "success": {
+        const doc = await vscode.workspace.openTextDocument({
+          language: "amstrad-basic",
+          content: result.source,
+        })
+        await vscode.window.showTextDocument(doc)
+        return
+      }
+      case "empty":
+        vscode.window.showInformationMessage("AMSpiriT: no BASIC program in memory.")
+        return
+      case "notConnected":
+        vscode.window.showErrorMessage("AMSpiriT: not connected. Launch or connect first.")
+        return
+      case "error":
+        vscode.window.showErrorMessage(`AMSpiriT: pull failed — ${result.message}`)
+        return
+    }
+  }
+
   context.subscriptions.push(
     vscode.commands.registerCommand("amspirit.launch", cmdLaunch),
     vscode.commands.registerCommand("amspirit.connect", cmdConnect),
+    vscode.commands.registerCommand("amspirit.pull", cmdPull),
     vscode.commands.registerCommand("amspirit.inject", () => runInject("inject")),
     vscode.commands.registerCommand("amspirit.injectAndRun", () => runInject("injectAndRun")),
     vscode.commands.registerCommand("amspirit.resetAndInject", () => runInject("resetAndInject")),
