@@ -29,9 +29,12 @@ vscode-amspirit/
 
 - **pnpm workspaces** (≥ 10)
 - **TypeScript** strict avec `noUncheckedIndexedAccess` et `exactOptionalPropertyTypes`
-- **Biome** pour lint + format (zéro ESLint/Prettier)
-- **Vitest** pour les tests unitaires
-- **CI GitHub Actions** (`check` + `test` + `build` sur Node 20)
+- **Biome 2** pour lint + format (zéro ESLint/Prettier)
+- **Vitest** + couverture v8 (seuils imposés)
+- **esbuild** pour bundler chaque extension en un fichier autonome
+- **Changesets** pour le versioning + CHANGELOG
+- **knip** (dead-code / deps) + `pnpm audit` (dépendances)
+- **CI GitHub Actions** : `check` + `typecheck` + `test:coverage` + `knip` + `audit` + `build` ; release publiée sur tag
 
 ## Prérequis
 
@@ -54,10 +57,19 @@ Commandes par package (filtre `pnpm --filter <nom>`) :
 
 ```bash
 pnpm --filter @amspirit/shared       test
-pnpm --filter amspirit-basic         build
+pnpm --filter amspirit-basic         build      # bundle esbuild de production
 pnpm --filter amspirit-basic         test:watch
-pnpm --filter amspirit-basic         package    # produit le .vsix
+pnpm --filter amspirit-basic         package    # produit le .vsix (bundle autonome)
 ```
+
+## Packaging & release
+
+Chaque extension est bundlée par **esbuild** en un seul `out/extension.js`
+(la lib `@amspirit/shared` est inlinée — le `.vsix` n'embarque pas de
+`node_modules`). Versioning via **Changesets**, publication sur **VS
+Marketplace** + **Open VSX** déclenchée par un tag `amspirit-basic@<version>`.
+
+Procédure complète (secrets, comptes publisher, étapes) : [doc/release.md](doc/release.md).
 
 ## Fonctionnalités de l'extension `amspirit-basic`
 

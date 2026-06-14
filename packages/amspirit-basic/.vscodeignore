@@ -1,13 +1,18 @@
+# The extension ships as a single bundled file (out/extension.js) plus
+# marketplace assets. Exclude sources, tests, tooling and dependencies.
 .vscode/**
 .vscode-test/**
 src/**
 tests/**
+coverage/**
+node_modules/**
 **/*.ts
 **/*.map
 **/*.tsbuildinfo
 tsconfig.json
+tsconfig.typecheck.json
 vitest.config.ts
+esbuild.mjs
 .gitignore
 .eslintrc*
 .editorconfig
-node_modules/.cache/**

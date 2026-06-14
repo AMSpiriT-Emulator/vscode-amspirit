@@ -4,10 +4,10 @@
     {
       "label": "build:amspirit-basic",
       "type": "shell",
-      "command": "pnpm --filter amspirit-basic build",
+      "command": "pnpm --filter amspirit-basic compile",
       "group": "build",
       "presentation": { "reveal": "silent", "panel": "dedicated" },
-      "problemMatcher": ["$tsc"]
+      "problemMatcher": []
     }
   ]
 }

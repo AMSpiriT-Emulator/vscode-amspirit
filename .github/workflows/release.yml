@@ -1,0 +1,62 @@
+name: Release
+
+# Triggered by the tag that `changeset tag` produces, e.g. amspirit-basic@0.3.0.
+on:
+  push:
+    tags:
+      - "amspirit-basic@*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/amspirit-basic
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+
+      # Same quality gate as CI before anything ships.
+      - name: Quality gate
+        working-directory: .
+        run: |
+          pnpm check
+          pnpm typecheck
+          pnpm test:coverage
+          pnpm knip
+          pnpm audit:prod
+          pnpm build
+
+      - name: Package VSIX
+        working-directory: packages/amspirit-basic
+        run: pnpm run package
+
+      - name: Publish to VS Marketplace
+        working-directory: packages/amspirit-basic
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: pnpm run publish:vsce "$(ls *.vsix)"
+
+      - name: Publish to Open VSX
+        working-directory: packages/amspirit-basic
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: pnpm run publish:ovsx "$(ls *.vsix)"
+
+      - name: Attach VSIX to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: packages/amspirit-basic/*.vsix

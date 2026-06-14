@@ -5,16 +5,30 @@
   "version": "0.2.0",
   "publisher": "amspirit-emulator",
   "private": true,
+  "license": "MIT",
+  "icon": "icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/AMSpiriT-emulator/vscode-amspirit"
   },
+  "bugs": {
+    "url": "https://github.com/AMSpiriT-emulator/vscode-amspirit/issues"
+  },
+  "homepage": "https://github.com/AMSpiriT-emulator/vscode-amspirit#readme",
   "engines": {
     "vscode": "^1.80.0"
   },
   "categories": [
     "Programming Languages",
     "Other"
+  ],
+  "keywords": [
+    "amstrad",
+    "cpc",
+    "basic",
+    "locomotive basic",
+    "emulator",
+    "z80"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -245,12 +259,16 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "watch": "tsc -p tsconfig.json --watch",
+    "build": "node esbuild.mjs --production",
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "vscode:prepublish": "pnpm build",
     "package": "vsce package --no-dependencies",
+    "publish:vsce": "vsce publish --no-dependencies --packagePath",
+    "publish:ovsx": "ovsx publish",
     "clean": "rm -rf out *.tsbuildinfo",
     "test:coverage": "vitest run --coverage"
   },
@@ -261,7 +279,9 @@
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.80.0",
     "@vitest/coverage-v8": "^4.1.8",
-    "@vscode/vsce": "^2.32.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.1",
+    "ovsx": "^1.0.1",
     "typescript": "^5.6.0",
     "vite": "^7.3.5",
     "vitest": "^4.1.8"
