@@ -20,7 +20,7 @@
     "changeset": "changeset",
     "version": "changeset version",
     "tag": "changeset tag",
-    "precommit": "biome check . && pnpm typecheck && pnpm test:coverage && pnpm knip",
+    "precommit": "pnpm build && biome check . && pnpm typecheck && pnpm test:coverage && pnpm knip",
     "prepare": "git config core.hooksPath .githooks || true",
     "clean": "pnpm -r --if-present run clean && rm -rf node_modules"
   },

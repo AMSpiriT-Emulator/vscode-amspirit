@@ -24,6 +24,9 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      # Build first so @amspirit/shared's dist exists for typecheck/test/knip.
+      - name: Build
+        run: pnpm build
       - name: Lint & format (Biome)
         run: pnpm check
       - name: Type-check (incl. tests)
@@ -34,5 +37,3 @@ jobs:
         run: pnpm knip
       - name: Audit production dependencies
         run: pnpm audit:prod
-      - name: Build
-        run: pnpm build

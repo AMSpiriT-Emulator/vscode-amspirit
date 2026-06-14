@@ -29,16 +29,17 @@ jobs:
         working-directory: .
         run: pnpm install --frozen-lockfile
 
-      # Same quality gate as CI before anything ships.
+      # Same quality gate as CI before anything ships. Build first so
+      # @amspirit/shared's dist exists for typecheck/test/knip.
       - name: Quality gate
         working-directory: .
         run: |
+          pnpm build
           pnpm check
           pnpm typecheck
           pnpm test:coverage
           pnpm knip
           pnpm audit:prod
-          pnpm build
 
       - name: Package VSIX
         working-directory: packages/amspirit-basic

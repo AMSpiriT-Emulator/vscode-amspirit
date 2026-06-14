@@ -10,7 +10,7 @@
     "composite": false,
     "declaration": false,
     "declarationMap": false,
-    "tsBuildInfoFile": "./.tsbuildinfo"
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
   },
   "references": [{ "path": "../shared" }],
   "include": ["src/**/*"],
