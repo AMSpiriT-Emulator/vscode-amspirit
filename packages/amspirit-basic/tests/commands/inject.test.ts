@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { type InjectMode, flagsFor, performInject } from "../../src/commands/inject.js"
+import { flagsFor, type InjectMode, performInject } from "../../src/commands/inject.js"
 
 describe("flagsFor", () => {
   it.each<[InjectMode, boolean, boolean]>([

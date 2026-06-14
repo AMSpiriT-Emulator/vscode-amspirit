@@ -7,7 +7,20 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],
-      exclude: ["src/extension.ts"],
+      // Thin VS Code API adapters (imperative shell): not unit-testable
+      // without an integration harness. The testable core is covered below.
+      exclude: [
+        "src/extension.ts",
+        "src/config/vsCodeConfigReader.ts",
+        "src/diagnostics/registerBasicDiagnostics.ts",
+        "src/statusBar/StatusBarPresenter.ts",
+      ],
+      thresholds: {
+        lines: 90,
+        functions: 90,
+        statements: 90,
+        branches: 80,
+      },
     },
   },
 })

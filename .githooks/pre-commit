@@ -1,16 +1,12 @@
 #!/bin/sh
-# Pre-commit gate: lint/format, type-check (incl. tests) and unit tests.
-# Wired via `git config core.hooksPath .githooks` (run automatically by the
-# root `prepare` script on `pnpm install`).
+# Pre-commit gate. Wired via `git config core.hooksPath .githooks` (run
+# automatically by the root `prepare` script on `pnpm install`).
+#
+# Runs the same quality checks as CI, minus the network audit (kept in CI
+# so the hook stays fast and works offline):
+#   biome check -> typecheck (incl. tests) -> tests + coverage -> knip
 set -e
 
-echo "› pre-commit: biome check"
-pnpm biome check .
-
-echo "› pre-commit: typecheck (src + tests)"
-pnpm -r --if-present run typecheck
-
-echo "› pre-commit: tests"
-pnpm -r --if-present run test
+pnpm precommit
 
 echo "✓ pre-commit passed"
