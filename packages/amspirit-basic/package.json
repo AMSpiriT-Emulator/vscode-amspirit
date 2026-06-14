@@ -2,8 +2,9 @@
   "name": "amspirit-basic",
   "displayName": "AMSpiriT BASIC",
   "description": "Amstrad CPC BASIC editor with direct emulator injection for AMSpiriT Lite",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "amspirit-emulator",
+  "private": true,
   "repository": {
     "type": "git",
     "url": "https://github.com/AMSpiriT-emulator/vscode-amspirit"
@@ -63,6 +64,18 @@
         "title": "Reset & Run BASIC",
         "category": "AMSpiriT",
         "icon": "$(debug-rerun)"
+      },
+      {
+        "command": "amspirit.openSettings",
+        "title": "Open Settings",
+        "category": "AMSpiriT",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "amspirit.openWalkthrough",
+        "title": "Get Started",
+        "category": "AMSpiriT",
+        "icon": "$(book)"
       }
     ],
     "keybindings": [
@@ -76,11 +89,7 @@
         "key": "shift+f6",
         "when": "resourceLangId == amstrad-basic"
       },
-      {
-        "command": "amspirit.inject",
-        "key": "ctrl+f6",
-        "when": "resourceLangId == amstrad-basic"
-      }
+      { "command": "amspirit.inject", "key": "ctrl+f6", "when": "resourceLangId == amstrad-basic" }
     ],
     "menus": {
       "editor/title/run": [
@@ -99,39 +108,97 @@
           "when": "resourceLangId == amstrad-basic",
           "group": "navigation@3"
         }
+      ],
+      "commandPalette": [
+        {
+          "command": "amspirit.inject",
+          "when": "editorLangId == amstrad-basic"
+        },
+        {
+          "command": "amspirit.injectAndRun",
+          "when": "editorLangId == amstrad-basic"
+        },
+        {
+          "command": "amspirit.resetAndInject",
+          "when": "editorLangId == amstrad-basic"
+        },
+        {
+          "command": "amspirit.resetAndRun",
+          "when": "editorLangId == amstrad-basic"
+        }
       ]
     },
+    "walkthroughs": [
+      {
+        "id": "amspirit.getStarted",
+        "title": "Get started with AMSpiriT BASIC",
+        "description": "Configure the emulator and inject your first Locomotive BASIC program.",
+        "steps": [
+          {
+            "id": "amspirit.setBinary",
+            "title": "Locate the AMSpiriT emulator",
+            "description": "Tell the extension where your ``amspirit-lite-sdl`` binary lives.\n[Open Settings](command:amspirit.openSettings)",
+            "media": { "markdown": "media/walkthrough/binary.md" },
+            "completionEvents": ["onSettingChanged:amspirit.emulatorPath"]
+          },
+          {
+            "id": "amspirit.launchEmulator",
+            "title": "Launch the emulator",
+            "description": "Start AMSpiriT from VS Code. The status bar turns green when the extension can reach it.\n[Launch Emulator](command:amspirit.launch)",
+            "media": { "markdown": "media/walkthrough/launch.md" },
+            "completionEvents": ["onCommand:amspirit.launch"]
+          },
+          {
+            "id": "amspirit.firstInject",
+            "title": "Inject your first BASIC program",
+            "description": "Open a ``.bas`` file and press ``F6`` to inject and run it.\n[Inject & Run (F6)](command:amspirit.injectAndRun)",
+            "media": { "markdown": "media/walkthrough/inject.md" },
+            "completionEvents": ["onCommand:amspirit.injectAndRun"]
+          }
+        ]
+      }
+    ],
     "configuration": {
       "title": "AMSpiriT",
       "properties": {
         "amspirit.emulatorPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the amspirit-lite-sdl binary"
+          "scope": "machine",
+          "order": 1,
+          "markdownDescription": "Absolute path to the `amspirit-lite-sdl` binary. Leave empty to be prompted on first launch.",
+          "examples": ["/usr/local/bin/amspirit-lite-sdl", "C:\\\\Tools\\\\amspirit-lite-sdl.exe"]
         },
         "amspirit.webPort": {
-          "type": "number",
+          "type": "integer",
           "default": 8765,
-          "description": "Web debug server port (must match --web-port passed to the emulator)"
+          "minimum": 1,
+          "maximum": 65535,
+          "order": 2,
+          "markdownDescription": "TCP port used by the emulator's web debug server. Must match the `--web-port` value passed at launch."
         },
         "amspirit.autoLaunch": {
           "type": "boolean",
           "default": false,
-          "description": "Automatically launch the emulator when the extension activates and no emulator is running"
+          "order": 3,
+          "markdownDescription": "When `true`, automatically launch the emulator at activation if it is not already reachable."
         },
         "amspirit.emulatorArgs": {
           "type": "array",
           "items": { "type": "string" },
           "default": [],
-          "description": "Additional arguments passed to the emulator at launch"
+          "order": 4,
+          "markdownDescription": "Extra command-line arguments appended after `--web-server --web-port <port>` when launching the emulator.",
+          "examples": [["--fullscreen"], ["--scale", "2"]]
         }
       }
     }
   },
   "scripts": {
-    "build": "tsc -p ./",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "package": "vsce package --no-dependencies",
     "clean": "rm -rf out *.tsbuildinfo"
   },
@@ -141,7 +208,8 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.80.0",
+    "@vscode/vsce": "^2.32.0",
     "typescript": "^5.6.0",
-    "@vscode/vsce": "^2.32.0"
+    "vitest": "^2.1.0"
   }
 }

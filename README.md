@@ -12,8 +12,7 @@ extensions VS Code de l'écosystème AMSpiriT.
 vscode-amspirit/
 ├── packages/
 │   ├── shared/                  # @amspirit/shared — client HTTP émulateur réutilisable
-│   ├── amspirit-basic/          # Extension actuelle publiée (legacy stable)
-│   └── amspirit-basic-next/     # Réimplémentation propre, parité fonctionnelle, TDD
+│   └── amspirit-basic/          # Extension VS Code (architecture TDD, modules testables, DI)
 ├── biome.json                   # Lint + format (Biome)
 ├── tsconfig.base.json           # TS strict partagé
 ├── pnpm-workspace.yaml
@@ -23,9 +22,8 @@ vscode-amspirit/
 
 | Package | Rôle | Statut |
 |---|---|---|
-| [`@amspirit/shared`](packages/shared/) | `EmulatorClient` + `spawnEmulator` | Stable, 15 tests Vitest |
-| [`amspirit-basic`](packages/amspirit-basic/) | Extension VS Code historique | Actif, c'est ce qui est packagé |
-| [`amspirit-basic-next`](packages/amspirit-basic-next/) | Même UX, architecture refactorée (modules testables, DI) | En validation, 32 tests Vitest |
+| [`@amspirit/shared`](packages/shared/) | `EmulatorClient` + `spawnEmulator` | Stable, 20 tests Vitest |
+| [`amspirit-basic`](packages/amspirit-basic/) | Extension VS Code (BASIC + injection), architecture TDD (modules testables, DI) | Actif, c'est ce qui est packagé — 48 tests Vitest |
 
 ## Stack outillage
 
@@ -57,8 +55,8 @@ Commandes par package (filtre `pnpm --filter <nom>`) :
 ```bash
 pnpm --filter @amspirit/shared       test
 pnpm --filter amspirit-basic         build
-pnpm --filter amspirit-basic-next    test:watch
-pnpm --filter amspirit-basic-next    package    # produit le .vsix
+pnpm --filter amspirit-basic         test:watch
+pnpm --filter amspirit-basic         package    # produit le .vsix
 ```
 
 ## Fonctionnalités de l'extension `amspirit-basic`
@@ -122,9 +120,9 @@ Ouvre le dossier dans VS Code, presse **F5** pour lancer un Extension
 Development Host avec l'extension chargée. Recharge la fenêtre hôte
 (`Developer: Reload Window`) après modification.
 
-### Workflow TDD pour `amspirit-basic-next`
+### Workflow TDD pour `amspirit-basic`
 
-L'architecture refactorée isole la logique métier de l'API VS Code :
+L'architecture isole la logique métier de l'API VS Code :
 
 - `src/config/Settings.ts` — lecture/validation des settings (testable sans VS Code)
 - `src/connection/PingService.ts` — boucle de ping + transitions d'état
@@ -134,14 +132,16 @@ L'architecture refactorée isole la logique métier de l'API VS Code :
 - `src/extension.ts` — fine couche d'adaptation VS Code (non testée)
 
 Tous les modules métier sont couverts par des tests Vitest dans
-`packages/amspirit-basic-next/tests/`.
+`packages/amspirit-basic/tests/`.
 
 ## Roadmap
 
 - [x] Migration pnpm + Biome + TS strict
 - [x] Extraction `@amspirit/shared` avec tests
-- [x] Réimplémentation TDD de `amspirit-basic` (`-next`)
-- [ ] Validation manuelle de la parité, puis remplacement du package legacy
+- [x] Réimplémentation TDD de `amspirit-basic` (modules testables, DI)
+- [x] Remplacement du package legacy par la version TDD
+- [ ] Validation manuelle de bout en bout contre l'émulateur réel
+- [ ] Commande « Pull BASIC from Emulator » (`GET /api/basic_export`)
 - [ ] Extension `amspirit-debugger` (DAP) — voir [doc/debugger-plan.md](doc/debugger-plan.md)
 
 ## License

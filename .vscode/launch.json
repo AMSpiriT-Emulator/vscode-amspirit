@@ -2,18 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run amspirit-basic-next",
-      "type": "extensionHost",
-      "request": "launch",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/packages/amspirit-basic-next",
-        "${workspaceFolder}/sandbox"
-      ],
-      "outFiles": ["${workspaceFolder}/packages/amspirit-basic-next/out/**/*.js"],
-      "preLaunchTask": "build:amspirit-basic-next"
-    },
-    {
-      "name": "Run amspirit-basic (legacy)",
+      "name": "Run amspirit-basic",
       "type": "extensionHost",
       "request": "launch",
       "args": [

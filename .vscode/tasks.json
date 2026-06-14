@@ -2,14 +2,6 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "build:amspirit-basic-next",
-      "type": "shell",
-      "command": "pnpm --filter amspirit-basic-next build",
-      "group": "build",
-      "presentation": { "reveal": "silent", "panel": "dedicated" },
-      "problemMatcher": ["$tsc"]
-    },
-    {
       "label": "build:amspirit-basic",
       "type": "shell",
       "command": "pnpm --filter amspirit-basic build",
