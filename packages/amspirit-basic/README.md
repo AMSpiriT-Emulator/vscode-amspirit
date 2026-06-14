@@ -40,6 +40,7 @@ Point the extension at the binary via `amspirit.emulatorPath`, or run
 | AMSpiriT: Pull BASIC from Emulator | — | Read memory into a new `.bas` editor |
 | AMSpiriT: Launch Emulator | — | Start `amspirit-lite-sdl --web-server` |
 | AMSpiriT: Connect to Emulator | — | Ping and update the status bar |
+| AMSpiriT: Open Documentation | — | Open the online documentation in your browser |
 
 ## Settings
 

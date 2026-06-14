@@ -2,6 +2,7 @@ import { basename } from "node:path"
 import { EmulatorClient, errorMessage, spawnEmulator } from "@amspirit/shared"
 import * as vscode from "vscode"
 
+import { resolveDocsUrl } from "./commands/docs.js"
 import { type InjectMode, performInject } from "./commands/inject.js"
 import { performPull } from "./commands/pull.js"
 import { readSettingsWithWarnings } from "./config/Settings.js"
@@ -186,6 +187,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("amspirit.injectAndRun", () => runInject("injectAndRun")),
     vscode.commands.registerCommand("amspirit.resetAndInject", () => runInject("resetAndInject")),
     vscode.commands.registerCommand("amspirit.resetAndRun", () => runInject("resetAndRun")),
+    vscode.commands.registerCommand("amspirit.openDocs", () =>
+      vscode.env.openExternal(vscode.Uri.parse(resolveDocsUrl(context.extension.packageJSON))),
+    ),
     vscode.commands.registerCommand("amspirit.openSettings", () =>
       vscode.commands.executeCommand(
         "workbench.action.openSettings",

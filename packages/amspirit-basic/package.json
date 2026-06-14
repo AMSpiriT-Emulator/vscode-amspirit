@@ -96,6 +96,12 @@
         "icon": "$(debug-rerun)"
       },
       {
+        "command": "amspirit.openDocs",
+        "title": "Open Documentation",
+        "category": "AMSpiriT",
+        "icon": "$(book)"
+      },
+      {
         "command": "amspirit.openSettings",
         "title": "Open Settings",
         "category": "AMSpiriT",
