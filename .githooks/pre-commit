@@ -1,0 +1,12 @@
+#!/bin/sh
+# Pre-commit gate. Wired via `git config core.hooksPath .githooks` (run
+# automatically by the root `prepare` script on `pnpm install`).
+#
+# Runs the same quality checks as CI, minus the network audit (kept in CI
+# so the hook stays fast and works offline):
+#   biome check -> typecheck (incl. tests) -> tests + coverage -> knip
+set -e
+
+pnpm precommit
+
+echo "✓ pre-commit passed"

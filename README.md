@@ -1,112 +1,169 @@
-# AMSpiriT Lite — VS Code Extension
+# AMSpiriT — VS Code Extensions (monorepo)
 
-Edit Amstrad CPC BASIC in VS Code and send it directly to the [AMSpiriT Lite](https://github.com/AMSpiriT/amspirit-lite) emulator with one keystroke.
+Édition Amstrad CPC BASIC dans VS Code, avec injection directe dans l'émulateur
+[AMSpiriT Lite](https://github.com/AMSpiriT/amspirit-lite) en une touche.
 
-## Features
+Ce dépôt est un **monorepo pnpm** qui héberge la couche partagée et toutes les
+extensions VS Code de l'écosystème AMSpiriT.
 
-- Syntax highlighting for Amstrad CPC BASIC (`.bas` files)
-- Inject the current file into a running emulator
-- Hard-reset the emulator then inject after boot
-- Auto-execute (`RUN`) after injection
-- Launch the emulator from VS Code
-- Status bar indicator showing the connection state
-
-## Requirements
-
-- AMSpiriT Lite built with `--web-server` support (SDL2 frontend: `amspirit-lite-sdl`)
-- VS Code 1.80+ or VSCodium 1.80+
-
-## Installation
-
-### From VSIX (recommended)
-
-Download the latest `amspirit-lite-x.y.z.vsix` from the [releases page](../../releases), then:
+## Structure du dépôt
 
 ```
-Ctrl+Shift+P → Extensions: Install from VSIX → select the .vsix file
+vscode-amspirit/
+├── packages/
+│   ├── shared/                  # @amspirit/shared — client HTTP émulateur réutilisable
+│   └── amspirit-basic/          # Extension VS Code (architecture TDD, modules testables, DI)
+├── biome.json                   # Lint + format (Biome)
+├── tsconfig.base.json           # TS strict partagé
+├── pnpm-workspace.yaml
+└── doc/
+    └── debugger-plan.md         # Plan d'évolution future (debugger DAP)
 ```
 
-### Build from source
+| Package | Rôle | Statut |
+|---|---|---|
+| [`@amspirit/shared`](packages/shared/) | `EmulatorClient` + `spawnEmulator` | Stable, couvert par tests Vitest |
+| [`amspirit-basic`](packages/amspirit-basic/) | Extension VS Code (BASIC + injection), architecture TDD (modules testables, DI) | Actif, c'est ce qui est packagé |
 
-Requires Node.js 18+ and npm.
+## Stack outillage
+
+- **pnpm workspaces** (≥ 10)
+- **TypeScript** strict avec `noUncheckedIndexedAccess` et `exactOptionalPropertyTypes`
+- **Biome 2** pour lint + format (zéro ESLint/Prettier)
+- **Vitest** + couverture v8 (seuils imposés)
+- **esbuild** pour bundler chaque extension en un fichier autonome
+- **Changesets** pour le versioning + CHANGELOG
+- **knip** (dead-code / deps) + `pnpm audit` (dépendances)
+- **CI GitHub Actions** : `check` + `typecheck` + `test:coverage` + `knip` + `audit` + `build` ; release publiée sur tag
+
+## Prérequis
+
+- Node.js ≥ 20
+- pnpm ≥ 10 (`corepack enable` ou `npm i -g pnpm`)
+- [AMSpiriT Lite](https://github.com/AMSpiriT/amspirit-lite) compilé avec `--web-server`
+- VS Code (ou VSCodium) 1.80+
+
+## Build & test
 
 ```bash
-git clone <this-repo>
-cd amspirit-lite-vscode
-npm install
-npm run compile
-npm run package          # produces amspirit-lite-x.y.z.vsix
+pnpm install              # installe tous les packages
+pnpm build                # tsc -p sur chaque package
+pnpm test                 # vitest run sur chaque package
+pnpm check                # biome check (lint + format)
+pnpm check:fix            # auto-fix Biome
 ```
 
-Then install the generated `.vsix` as above.
+Commandes par package (filtre `pnpm --filter <nom>`) :
 
-## Configuration
+```bash
+pnpm --filter @amspirit/shared       test
+pnpm --filter amspirit-basic         build      # bundle esbuild de production
+pnpm --filter amspirit-basic         test:watch
+pnpm --filter amspirit-basic         package    # produit le .vsix (bundle autonome)
+```
 
-Open **Settings** (`Ctrl+,`) and search for `amspirit`.
+## Packaging & release
 
-| Setting | Default | Description |
+Chaque extension est bundlée par **esbuild** en un seul `out/extension.js`
+(la lib `@amspirit/shared` est inlinée — le `.vsix` n'embarque pas de
+`node_modules`). Versioning via **Changesets**, publication sur **VS
+Marketplace** + **Open VSX** déclenchée par un tag `amspirit-basic@<version>`.
+
+Procédure complète (secrets, comptes publisher, étapes) : [doc/release.md](doc/release.md).
+
+## Fonctionnalités de l'extension `amspirit-basic`
+
+- Coloration syntaxique Amstrad CPC BASIC (`.bas`)
+- Injection du fichier courant dans un émulateur en cours d'exécution
+- Hard-reset puis injection après boot
+- Auto-exécution (`RUN`) après injection
+- Récupération du programme BASIC en mémoire vers un nouvel éditeur (pull)
+- Lancement de l'émulateur depuis VS Code
+- Indicateur de connexion dans la barre d'état
+- Diagnostics de numéros de ligne manquants
+- Walkthrough de prise en main + commande « Open Documentation »
+
+### Configuration (`Ctrl+,` → chercher `amspirit`)
+
+| Paramètre | Défaut | Description |
 |---|---|---|
-| `amspirit.emulatorPath` | _(empty)_ | Full path to `amspirit-lite-sdl`. If empty, a file picker appears on first launch. |
-| `amspirit.webPort` | `8765` | Port of the emulator's web debug server (`--web-port`). |
-| `amspirit.autoLaunch` | `false` | Launch the emulator automatically when VS Code starts and no emulator is reachable. |
-| `amspirit.emulatorArgs` | `[]` | Extra arguments appended to the emulator command line (e.g. `["--cpc", "6128"]`). |
+| `amspirit.emulatorPath` | _(vide)_ | Chemin complet de `amspirit-lite-sdl`. Un sélecteur de fichier s'ouvre si vide. |
+| `amspirit.webPort` | `8765` | Port du serveur HTTP de debug de l'émulateur (`--web-port`). |
+| `amspirit.autoLaunch` | `false` | Lance automatiquement l'émulateur au démarrage si aucun n'est joignable. |
+| `amspirit.emulatorArgs` | `[]` | Arguments supplémentaires (ex. `["--cpc", "6128"]`). |
 
-## Usage
+### Raccourcis (fichiers `.bas` actifs)
 
-### Starting the emulator
+| Action | Raccourci | Description |
+|---|---|---|
+| **Inject & Run** | `F6` | Tokenise + injecte le fichier, puis `RUN`. |
+| **Reset & Run** | `Shift+F6` | Hard-reset, injection après boot (~3 s), puis `RUN`. |
+| **Inject only** | `Ctrl+F6` | Injection sans exécution (utile pour `LIST`). |
 
-The emulator must be started with the `--web-server` flag to expose the HTTP API used by this extension:
+### Commandes (`Ctrl+Shift+P`)
+
+| Commande | Description |
+|---|---|
+| `AMSpiriT: Launch Emulator` | Démarre `amspirit-lite-sdl --web-server` |
+| `AMSpiriT: Connect to Emulator` | Ping l'émulateur, met à jour la barre d'état |
+| `AMSpiriT: Inject & Run BASIC` | Injecte + exécute |
+| `AMSpiriT: Reset & Run BASIC` | Hard-reset puis injecte + exécute |
+| `AMSpiriT: Inject BASIC (no run)` | Injecte sans exécuter |
+| `AMSpiriT: Reset & Inject BASIC (no run)` | Hard-reset puis injecte sans exécuter |
+| `AMSpiriT: Pull BASIC from Emulator` | Récupère le programme en mémoire dans un nouvel éditeur `.bas` |
+| `AMSpiriT: Open Documentation` | Ouvre la documentation en ligne dans le navigateur |
+| `AMSpiriT: Open Settings` | Ouvre les réglages de l'extension |
+| `AMSpiriT: Get Started` | Ouvre le walkthrough de prise en main |
+
+### Démarrer l'émulateur côté CLI
+
+L'émulateur doit être lancé avec `--web-server` :
 
 ```bash
 amspirit-lite-sdl --web-server
-# custom port:
-amspirit-lite-sdl --web-server --web-port 9000
+amspirit-lite-sdl --web-server --web-port 9000   # port custom
 ```
 
-Or use the **AMSpiriT: Launch Emulator** command from VS Code — it starts the emulator with `--web-server` automatically.
+Ou via la commande `AMSpiriT: Launch Emulator` (les flags sont ajoutés automatiquement).
 
-### Sending BASIC to the emulator
-
-Open a `.bas` file. Three actions are available via the editor title bar buttons, the Command Palette (`Ctrl+Shift+P`), or keyboard shortcuts:
-
-| Action | Shortcut | Title bar | Description |
-|---|---|---|---|
-| **Inject & Run** | **F6** | ▶ | Tokenize and inject the current file, then type `RUN`. |
-| **Reset & Run** | **Shift+F6** | ↺ | Hard-reset the CPC, inject after boot (~3 s), then `RUN`. |
-| **Inject only** | **Ctrl+F6** | → | Inject without executing (useful for `LIST` or stepping). |
-
-> **Tip:** Use **Reset & Run** (`Shift+F6`) for a clean start — it guarantees the CPC BASIC ROM has fully initialised before the program is loaded.
-
-Keyboard shortcuts are active only when a `.bas` file is the active editor, so they do not interfere with other file types.
-
-### Status bar
-
-The **AMSpiriT** item in the bottom status bar shows the connection state:
-
-- Normal background → emulator reachable on the configured port
-- Orange background → not connected
-
-Click it to attempt reconnection or launch the emulator.
-
-## Commands (Command Palette)
-
-| Command | Description |
-|---|---|
-| `AMSpiriT: Launch Emulator` | Start `amspirit-lite-sdl --web-server` as a child process |
-| `AMSpiriT: Connect to Emulator` | Ping the emulator and refresh the status bar |
-| `AMSpiriT: Inject & Run BASIC` | Inject current file and execute it |
-| `AMSpiriT: Reset & Run BASIC` | Hard-reset then inject and execute |
-| `AMSpiriT: Inject BASIC (no run)` | Inject without executing |
-| `AMSpiriT: Reset & Inject BASIC (no run)` | Hard-reset then inject without executing |
-
-## Development
+## Développement
 
 ```bash
-npm install
-npm run watch       # recompile on save
+git clone <ce-repo>
+cd vscode-amspirit
+pnpm install
+pnpm --filter amspirit-basic watch
 ```
 
-Then open this folder in VS Code and press **F5** to launch an Extension Development Host window with the extension loaded. After editing a source file, press `Ctrl+Shift+P → Developer: Reload Window` in the host window to pick up the changes.
+Ouvre le dossier dans VS Code, presse **F5** pour lancer un Extension
+Development Host avec l'extension chargée. Recharge la fenêtre hôte
+(`Developer: Reload Window`) après modification.
+
+### Workflow TDD pour `amspirit-basic`
+
+L'architecture isole la logique métier de l'API VS Code :
+
+- `src/config/Settings.ts` — lecture/validation des settings (testable sans VS Code)
+- `src/connection/PingService.ts` — boucle de ping + transitions d'état
+- `src/lifecycle/EmulatorLauncher.ts` — gestion du process enfant
+- `src/statusBar/ConnectionIndicator.ts` — view-model pur de la barre d'état
+- `src/commands/inject.ts` — réducteur d'outcome pour les 4 modes d'injection
+- `src/extension.ts` — fine couche d'adaptation VS Code (non testée)
+
+Tous les modules métier sont couverts par des tests Vitest dans
+`packages/amspirit-basic/tests/`.
+
+## Roadmap
+
+- [x] Migration pnpm + Biome + TS strict
+- [x] Extraction `@amspirit/shared` avec tests
+- [x] Réimplémentation TDD de `amspirit-basic` (modules testables, DI)
+- [x] Remplacement du package legacy par la version TDD
+- [x] Commande « Pull BASIC from Emulator » (`GET /api/basic_export`)
+- [x] Commande « Open Documentation » + étape walkthrough
+- [x] Bundling esbuild + pipeline de release (Changesets, VS Marketplace + Open VSX)
+- [ ] Validation manuelle de bout en bout contre l'émulateur réel
+- [ ] Extension `amspirit-debugger` (DAP) — voir [doc/debugger-plan.md](doc/debugger-plan.md)
 
 ## License
 

@@ -1,191 +1,229 @@
-import * as vscode from 'vscode';
-import * as cp from 'child_process';
-import { EmulatorClient, spawnEmulator } from '../../../shared/src/emulator';
+import { basename } from "node:path"
+import { EmulatorClient, errorMessage, spawnEmulator } from "@amspirit/shared"
+import * as vscode from "vscode"
 
-let statusBar: vscode.StatusBarItem;
-let client: EmulatorClient;
-let emulatorProc: cp.ChildProcess | undefined;
-let pingTimer: ReturnType<typeof setInterval> | undefined;
-let connected = false;
-let out: vscode.OutputChannel;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function cfg() {
-    return vscode.workspace.getConfiguration('amspirit');
-}
-
-function buildClient(): EmulatorClient {
-    return new EmulatorClient(cfg().get<number>('webPort', 8765));
-}
-
-function setConnected(state: boolean): void {
-    connected = state;
-    if (state) {
-        statusBar.text = '$(vm-active) AMSpiriT';
-        statusBar.tooltip = `Connected to AMSpiriT on port ${client.port}`;
-        statusBar.backgroundColor = undefined;
-        statusBar.color = undefined;
-    } else {
-        statusBar.text = '$(vm) AMSpiriT';
-        statusBar.tooltip = 'Not connected — click to connect or launch the emulator';
-        statusBar.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-    }
-}
-
-async function ping(): Promise<void> {
-    const ok = await client.ping();
-    if (ok !== connected) setConnected(ok);
-}
-
-function startPing(): void {
-    pingTimer = setInterval(ping, 3000);
-}
-
-function stopPing(): void {
-    if (pingTimer) {
-        clearInterval(pingTimer);
-        pingTimer = undefined;
-    }
-}
-
-function getSource(): string | undefined {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-        vscode.window.showErrorMessage('AMSpiriT: no active editor.');
-        return undefined;
-    }
-    return editor.document.getText();
-}
-
-// ---------------------------------------------------------------------------
-// Commands
-// ---------------------------------------------------------------------------
-
-async function cmdLaunch(): Promise<void> {
-    const config = cfg();
-    let binaryPath = config.get<string>('emulatorPath', '');
-
-    if (!binaryPath) {
-        const picked = await vscode.window.showOpenDialog({
-            canSelectFiles: true,
-            canSelectFolders: false,
-            openLabel: 'Select amspirit-lite-sdl binary',
-        });
-        if (!picked?.[0]) return;
-        binaryPath = picked[0].fsPath;
-        await config.update('emulatorPath', binaryPath, vscode.ConfigurationTarget.Global);
-    }
-
-    if (emulatorProc && !emulatorProc.killed) {
-        vscode.window.showWarningMessage('AMSpiriT: emulator is already running.');
-        return;
-    }
-
-    const port = config.get<number>('webPort', 8765);
-    const extra = config.get<string[]>('emulatorArgs', []);
-    out.appendLine(`Launching: ${binaryPath} --web-ui --web-port ${port} ${extra.join(' ')}`);
-
-    emulatorProc = spawnEmulator(binaryPath, port, extra);
-    emulatorProc.on('exit', (code) => {
-        out.appendLine(`Emulator exited (code ${code})`);
-        emulatorProc = undefined;
-        setConnected(false);
-    });
-    vscode.window.showInformationMessage(`AMSpiriT launched on port ${port}.`);
-}
-
-async function cmdConnect(): Promise<void> {
-    client = buildClient();
-    const ok = await client.ping();
-    setConnected(ok);
-    if (ok) {
-        vscode.window.showInformationMessage(`AMSpiriT: connected on port ${client.port}.`);
-    } else {
-        const choice = await vscode.window.showWarningMessage(
-            `AMSpiriT: cannot reach emulator on port ${client.port}.`,
-            'Launch Emulator',
-            'Cancel'
-        );
-        if (choice === 'Launch Emulator') await cmdLaunch();
-    }
-}
-
-async function doInject(resetFirst: boolean, runAfter: boolean): Promise<void> {
-    const src = getSource();
-    if (src === undefined) return;
-    if (!connected) {
-        vscode.window.showErrorMessage('AMSpiriT: not connected. Launch or connect first.');
-        return;
-    }
-    try {
-        await client.injectBasic(src, resetFirst, runAfter);
-        if (resetFirst) {
-            vscode.window.showInformationMessage(
-                `AMSpiriT: hard reset — BASIC will inject after boot (~3 s)${runAfter ? ', then RUN' : ''}.`
-            );
-        } else {
-            vscode.window.showInformationMessage(
-                runAfter ? 'AMSpiriT: BASIC injected — running…' : 'AMSpiriT: BASIC injected — type RUN.'
-            );
-        }
-    } catch (e: unknown) {
-        vscode.window.showErrorMessage(`AMSpiriT: inject failed — ${(e as Error).message}`);
-    }
-}
-
-const cmdInject          = () => doInject(false, false);
-const cmdInjectAndRun    = () => doInject(false, true);
-const cmdResetAndInject  = () => doInject(true,  false);
-const cmdResetAndRun     = () => doInject(true,  true);
-
-// ---------------------------------------------------------------------------
-// Lifecycle
-// ---------------------------------------------------------------------------
+import { resolveDocsUrl } from "./commands/docs.js"
+import { type InjectMode, performInject } from "./commands/inject.js"
+import { performPull } from "./commands/pull.js"
+import { readSettingsWithWarnings } from "./config/Settings.js"
+import { vsCodeConfigReader } from "./config/vsCodeConfigReader.js"
+import type { ConnectionState } from "./connection/PingService.js"
+import { PingService } from "./connection/PingService.js"
+import { registerBasicDiagnostics } from "./diagnostics/registerBasicDiagnostics.js"
+import { EmulatorLauncher } from "./lifecycle/EmulatorLauncher.js"
+import { StatusBarPresenter } from "./statusBar/StatusBarPresenter.js"
 
 export function activate(context: vscode.ExtensionContext): void {
-    out = vscode.window.createOutputChannel('AMSpiriT');
-    context.subscriptions.push(out);
+  const out = vscode.window.createOutputChannel("AMSpiriT")
+  context.subscriptions.push(out)
 
-    statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-    statusBar.command = 'amspirit.connect';
-    context.subscriptions.push(statusBar);
-    statusBar.show();
+  registerBasicDiagnostics(context)
 
-    client = buildClient();
-    setConnected(false);
+  const reader = vsCodeConfigReader()
 
-    context.subscriptions.push(
-        vscode.commands.registerCommand('amspirit.launch', cmdLaunch),
-        vscode.commands.registerCommand('amspirit.connect', cmdConnect),
-        vscode.commands.registerCommand('amspirit.inject', cmdInject),
-        vscode.commands.registerCommand('amspirit.injectAndRun', cmdInjectAndRun),
-        vscode.commands.registerCommand('amspirit.resetAndInject', cmdResetAndInject),
-        vscode.commands.registerCommand('amspirit.resetAndRun', cmdResetAndRun),
-    );
+  function loadSettings() {
+    const { settings, warnings } = readSettingsWithWarnings(reader)
+    for (const w of warnings) out.appendLine(`[settings] ${w}`)
+    return settings
+  }
 
-    // Rebuild client if port changes
-    context.subscriptions.push(
-        vscode.workspace.onDidChangeConfiguration((e) => {
-            if (e.affectsConfiguration('amspirit.webPort')) {
-                client = buildClient();
-                ping();
-            }
+  let settings = loadSettings()
+  let client = new EmulatorClient({ port: settings.webPort })
+
+  const presenter = new StatusBarPresenter(client.port)
+  context.subscriptions.push(presenter)
+
+  const launcher = new EmulatorLauncher((path, port, args) => spawnEmulator(path, port, args))
+  context.subscriptions.push({ dispose: () => launcher.dispose() })
+
+  let connectionState: ConnectionState = "disconnected"
+  const pinger = new PingService(
+    () => client.ping(),
+    (s) => {
+      connectionState = s
+      presenter.setState(s)
+    },
+  )
+  pinger.start()
+  context.subscriptions.push({ dispose: () => pinger.stop() })
+
+  function syncActiveBasicFile(): void {
+    const editor = vscode.window.activeTextEditor
+    const fileName =
+      editor?.document.languageId === "amstrad-basic"
+        ? basename(editor.document.fileName)
+        : undefined
+    presenter.setActiveBasicFileName(fileName)
+  }
+
+  syncActiveBasicFile()
+  context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(() => syncActiveBasicFile()))
+
+  function rebuildClient(): void {
+    settings = loadSettings()
+    client = new EmulatorClient({ port: settings.webPort })
+    presenter.setPort(client.port)
+  }
+
+  async function cmdLaunch(): Promise<void> {
+    settings = loadSettings()
+    let binaryPath = settings.emulatorPath
+    if (!binaryPath) {
+      const picked = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        openLabel: "Select amspirit-lite-sdl binary",
+      })
+      if (!picked?.[0]) return
+      binaryPath = picked[0].fsPath
+      await vscode.workspace
+        .getConfiguration("amspirit")
+        .update("emulatorPath", binaryPath, vscode.ConfigurationTarget.Global)
+    }
+
+    if (launcher.isRunning) {
+      vscode.window.showWarningMessage("AMSpiriT: emulator is already running.")
+      return
+    }
+
+    try {
+      launcher.launch(binaryPath, settings.webPort, settings.emulatorArgs, {
+        onExit: (code) => {
+          out.appendLine(`Emulator exited (code ${code})`)
+          connectionState = "disconnected"
+          presenter.setState("disconnected")
+        },
+        onError: (err) => {
+          out.appendLine(`Emulator error: ${errorMessage(err)}`)
+        },
+      })
+      out.appendLine(
+        `Launching: ${binaryPath} --web-server --web-port ${settings.webPort} ${settings.emulatorArgs.join(" ")}`,
+      )
+      vscode.window.showInformationMessage(`AMSpiriT launched on port ${settings.webPort}.`)
+    } catch (e: unknown) {
+      vscode.window.showErrorMessage(`AMSpiriT: launch failed — ${errorMessage(e)}`)
+    }
+  }
+
+  async function cmdConnect(): Promise<void> {
+    rebuildClient()
+    const s = await pinger.pingNow()
+    if (s === "connected") {
+      vscode.window.showInformationMessage(`AMSpiriT: connected on port ${client.port}.`)
+      return
+    }
+    const choice = await vscode.window.showWarningMessage(
+      `AMSpiriT: cannot reach emulator on port ${client.port}.`,
+      "Launch Emulator",
+      "Cancel",
+    )
+    if (choice === "Launch Emulator") await cmdLaunch()
+  }
+
+  function activeSource(): string | undefined {
+    const editor = vscode.window.activeTextEditor
+    if (!editor) {
+      vscode.window.showErrorMessage("AMSpiriT: no active editor.")
+      return undefined
+    }
+    if (editor.document.languageId !== "amstrad-basic") {
+      vscode.window.showErrorMessage(
+        "AMSpiriT: active file is not Amstrad CPC BASIC (expected .bas).",
+      )
+      return undefined
+    }
+    return editor.document.getText()
+  }
+
+  async function runInject(mode: InjectMode): Promise<void> {
+    const source = activeSource()
+    if (source === undefined) return // user already notified
+    const result = await performInject(
+      { client, source, connected: connectionState === "connected" },
+      mode,
+    )
+    switch (result.kind) {
+      case "success":
+        vscode.window.showInformationMessage(result.message)
+        return
+      case "notConnected":
+        vscode.window.showErrorMessage("AMSpiriT: not connected. Launch or connect first.")
+        return
+      case "error":
+        vscode.window.showErrorMessage(`AMSpiriT: inject failed — ${result.message}`)
+        return
+    }
+  }
+
+  async function cmdPull(): Promise<void> {
+    const result = await performPull({ client, connected: connectionState === "connected" })
+    switch (result.kind) {
+      case "success": {
+        const doc = await vscode.workspace.openTextDocument({
+          language: "amstrad-basic",
+          content: result.source,
         })
-    );
+        await vscode.window.showTextDocument(doc)
+        return
+      }
+      case "empty":
+        vscode.window.showInformationMessage("AMSpiriT: no BASIC program in memory.")
+        return
+      case "notConnected":
+        vscode.window.showErrorMessage("AMSpiriT: not connected. Launch or connect first.")
+        return
+      case "error":
+        vscode.window.showErrorMessage(`AMSpiriT: pull failed — ${result.message}`)
+        return
+    }
+  }
 
-    // Initial ping + optional auto-launch
-    ping().then(() => {
-        if (!connected && cfg().get<boolean>('autoLaunch', false)) {
-            cmdLaunch();
-        }
-    });
-    startPing();
+  context.subscriptions.push(
+    vscode.commands.registerCommand("amspirit.launch", cmdLaunch),
+    vscode.commands.registerCommand("amspirit.connect", cmdConnect),
+    vscode.commands.registerCommand("amspirit.pull", cmdPull),
+    vscode.commands.registerCommand("amspirit.inject", () => runInject("inject")),
+    vscode.commands.registerCommand("amspirit.injectAndRun", () => runInject("injectAndRun")),
+    vscode.commands.registerCommand("amspirit.resetAndInject", () => runInject("resetAndInject")),
+    vscode.commands.registerCommand("amspirit.resetAndRun", () => runInject("resetAndRun")),
+    vscode.commands.registerCommand("amspirit.openDocs", () =>
+      vscode.env.openExternal(vscode.Uri.parse(resolveDocsUrl(context.extension.packageJSON))),
+    ),
+    vscode.commands.registerCommand("amspirit.openSettings", () =>
+      vscode.commands.executeCommand(
+        "workbench.action.openSettings",
+        "@ext:amspirit-emulator.amspirit-basic",
+      ),
+    ),
+    vscode.commands.registerCommand("amspirit.openWalkthrough", () =>
+      vscode.commands.executeCommand(
+        "workbench.action.openWalkthrough",
+        "amspirit-emulator.amspirit-basic#amspirit.getStarted",
+        false,
+      ),
+    ),
+  )
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (!e.affectsConfiguration("amspirit")) return
+      if (e.affectsConfiguration("amspirit.webPort")) {
+        rebuildClient()
+        void pinger.pingNow()
+      } else {
+        settings = loadSettings()
+      }
+    }),
+  )
+
+  void pinger.pingNow().then((s) => {
+    if (s === "disconnected" && settings.autoLaunch) {
+      void cmdLaunch()
+    }
+  })
 }
 
 export function deactivate(): void {
-    stopPing();
-    if (emulatorProc && !emulatorProc.killed) emulatorProc.kill();
+  // Subscriptions registered via context.subscriptions handle teardown.
 }

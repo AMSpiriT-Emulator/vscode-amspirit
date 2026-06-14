@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      # Build first so @amspirit/shared's dist exists for typecheck/test/knip.
+      - name: Build
+        run: pnpm build
+      - name: Lint & format (Biome)
+        run: pnpm check
+      - name: Type-check (incl. tests)
+        run: pnpm typecheck
+      - name: Tests + coverage thresholds
+        run: pnpm test:coverage
+      - name: Dead code & dependency hygiene (knip)
+        run: pnpm knip
+      - name: Audit production dependencies
+        run: pnpm audit:prod

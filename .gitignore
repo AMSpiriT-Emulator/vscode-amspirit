@@ -1,4 +1,11 @@
 node_modules/
 out/
+dist/
 *.vsix
 .claude/
+.vite/
+coverage/
+*.tsbuildinfo
+.DS_Store
+.vscode/settings.json
+sandbox/.vscode/settings.json

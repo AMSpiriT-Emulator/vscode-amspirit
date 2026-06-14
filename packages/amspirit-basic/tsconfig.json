@@ -1,16 +1,18 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "module": "commonjs",
-    "target": "ES2020",
-    "outDir": "out",
-    "rootDir": "../..",
-    "lib": ["ES2020"],
-    "sourceMap": true,
-    "strict": true
+    "module": "node16",
+    "moduleResolution": "node16",
+    "outDir": "./out",
+    "rootDir": "./src",
+    "lib": ["ES2022"],
+    "types": ["node", "vscode"],
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
   },
-  "include": [
-    "src/**/*",
-    "../../shared/src/**/*"
-  ],
-  "exclude": ["node_modules", ".vscode-test"]
+  "references": [{ "path": "../shared" }],
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "out", "tests"]
 }
