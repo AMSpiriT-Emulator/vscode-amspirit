@@ -42,6 +42,23 @@ gate, packages the `.vsix`, publishes to both marketplaces, and attaches the
 > If `changeset tag` skips the package (it is `private`), tag manually:
 > `git tag amspirit-basic@<version> && git push --tags`.
 
+## Beta builds for testers (no marketplace)
+
+To share a build with testers before publishing, run the **Beta** workflow
+manually: Actions → **Beta** → *Run workflow*. It runs the quality gate,
+packages the `.vsix`, and publishes it as a GitHub **pre-release** tagged
+`v<version>-beta.<run-number>` — nothing is sent to any marketplace.
+
+Testers install it from the pre-release page:
+
+```bash
+code --install-extension amspirit-basic-<version>.vsix
+# or: Extensions view -> ... -> Install from VSIX...
+```
+
+> Pre-release visibility follows the repository: collaborators only for a
+> private repo, anyone with the link for a public one.
+
 ## Local checks before tagging
 
 ```bash

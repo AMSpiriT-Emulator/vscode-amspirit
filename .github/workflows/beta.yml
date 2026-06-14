@@ -1,0 +1,56 @@
+name: Beta
+
+# Manual button (Actions tab -> Beta -> Run workflow). Builds a .vsix and
+# publishes it as a GitHub *pre-release* for testers — never to a marketplace.
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "Notes shown to testers on the pre-release"
+        required: false
+        default: "Beta build for testers."
+
+permissions:
+  contents: write
+
+jobs:
+  beta:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Build first so @amspirit/shared's dist exists for typecheck/test/knip.
+      - name: Quality gate
+        run: |
+          pnpm build
+          pnpm check
+          pnpm typecheck
+          pnpm test:coverage
+          pnpm knip
+          pnpm audit:prod
+
+      - name: Package VSIX
+        working-directory: packages/amspirit-basic
+        run: pnpm run package
+
+      - name: Resolve pre-release tag
+        id: meta
+        run: echo "tag=v$(node -p "require('./packages/amspirit-basic/package.json').version")-beta.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish pre-release with VSIX
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          prerelease: true
+          body: ${{ inputs.notes }}
+          files: packages/amspirit-basic/*.vsix
