@@ -41,6 +41,8 @@ Point the extension at the binary via `amspirit.emulatorPath`, or run
 | AMSpiriT: Launch Emulator | — | Start `amspirit-lite-sdl --web-server` |
 | AMSpiriT: Connect to Emulator | — | Ping and update the status bar |
 | AMSpiriT: Open Documentation | — | Open the online documentation in your browser |
+| AMSpiriT: Open Settings | — | Jump to the extension settings |
+| AMSpiriT: Get Started | — | Open the Get Started walkthrough |
 
 ## Settings
 

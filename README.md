@@ -22,8 +22,8 @@ vscode-amspirit/
 
 | Package | Rôle | Statut |
 |---|---|---|
-| [`@amspirit/shared`](packages/shared/) | `EmulatorClient` + `spawnEmulator` | Stable, 20 tests Vitest |
-| [`amspirit-basic`](packages/amspirit-basic/) | Extension VS Code (BASIC + injection), architecture TDD (modules testables, DI) | Actif, c'est ce qui est packagé — 48 tests Vitest |
+| [`@amspirit/shared`](packages/shared/) | `EmulatorClient` + `spawnEmulator` | Stable, couvert par tests Vitest |
+| [`amspirit-basic`](packages/amspirit-basic/) | Extension VS Code (BASIC + injection), architecture TDD (modules testables, DI) | Actif, c'est ce qui est packagé |
 
 ## Stack outillage
 
@@ -80,6 +80,8 @@ Procédure complète (secrets, comptes publisher, étapes) : [doc/release.md](do
 - Récupération du programme BASIC en mémoire vers un nouvel éditeur (pull)
 - Lancement de l'émulateur depuis VS Code
 - Indicateur de connexion dans la barre d'état
+- Diagnostics de numéros de ligne manquants
+- Walkthrough de prise en main + commande « Open Documentation »
 
 ### Configuration (`Ctrl+,` → chercher `amspirit`)
 
@@ -109,6 +111,9 @@ Procédure complète (secrets, comptes publisher, étapes) : [doc/release.md](do
 | `AMSpiriT: Inject BASIC (no run)` | Injecte sans exécuter |
 | `AMSpiriT: Reset & Inject BASIC (no run)` | Hard-reset puis injecte sans exécuter |
 | `AMSpiriT: Pull BASIC from Emulator` | Récupère le programme en mémoire dans un nouvel éditeur `.bas` |
+| `AMSpiriT: Open Documentation` | Ouvre la documentation en ligne dans le navigateur |
+| `AMSpiriT: Open Settings` | Ouvre les réglages de l'extension |
+| `AMSpiriT: Get Started` | Ouvre le walkthrough de prise en main |
 
 ### Démarrer l'émulateur côté CLI
 
@@ -154,8 +159,10 @@ Tous les modules métier sont couverts par des tests Vitest dans
 - [x] Extraction `@amspirit/shared` avec tests
 - [x] Réimplémentation TDD de `amspirit-basic` (modules testables, DI)
 - [x] Remplacement du package legacy par la version TDD
+- [x] Commande « Pull BASIC from Emulator » (`GET /api/basic_export`)
+- [x] Commande « Open Documentation » + étape walkthrough
+- [x] Bundling esbuild + pipeline de release (Changesets, VS Marketplace + Open VSX)
 - [ ] Validation manuelle de bout en bout contre l'émulateur réel
-- [ ] Commande « Pull BASIC from Emulator » (`GET /api/basic_export`)
 - [ ] Extension `amspirit-debugger` (DAP) — voir [doc/debugger-plan.md](doc/debugger-plan.md)
 
 ## License
