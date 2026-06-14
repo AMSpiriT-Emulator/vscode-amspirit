@@ -20,10 +20,12 @@ the emulator's memory.
 ## Requirements
 
 The [AMSpiriT Lite](https://amspirit.fr) emulator, started with its web debug
-server enabled:
+server enabled. The extension talks to the emulator purely over HTTP, so **any
+build that exposes the web debug server works** — currently the **SDL**
+(`amspirit-lite-sdl`) and **Qt** (`amspirit-lite-qt`) desktop builds:
 
 ```bash
-amspirit-lite-sdl --web-server --web-port 8765
+amspirit-lite-sdl --web-server --web-port 8765   # or: amspirit-lite-qt --web-server
 ```
 
 Point the extension at the binary via `amspirit.emulatorPath`, or run

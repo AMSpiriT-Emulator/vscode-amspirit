@@ -182,7 +182,7 @@
           {
             "id": "amspirit.setBinary",
             "title": "Locate the AMSpiriT emulator",
-            "description": "Tell the extension where your ``amspirit-lite-sdl`` binary lives.\n[Open Settings](command:amspirit.openSettings)",
+            "description": "Tell the extension where your ``amspirit-lite`` binary lives — any build that exposes the web debug server works (SDL or Qt today).\n[Open Settings](command:amspirit.openSettings)",
             "media": {
               "markdown": "media/walkthrough/binary.md"
             },
@@ -234,9 +234,10 @@
           "default": "",
           "scope": "machine",
           "order": 1,
-          "markdownDescription": "Absolute path to the `amspirit-lite-sdl` binary. Leave empty to be prompted on first launch.",
+          "markdownDescription": "Absolute path to the AMSpiriT Lite binary. Any build that exposes the web debug server works — currently the SDL (`amspirit-lite-sdl`) and Qt (`amspirit-lite-qt`) desktop builds. Leave empty to be prompted on first launch.",
           "examples": [
             "/usr/local/bin/amspirit-lite-sdl",
+            "/Applications/amspirit-lite-qt.app/Contents/MacOS/amspirit-lite-qt",
             "C:\\\\Tools\\\\amspirit-lite-sdl.exe"
           ]
         },
