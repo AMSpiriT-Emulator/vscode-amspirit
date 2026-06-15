@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "amspirit-basic",
+      "request": "attach",
+      "name": "Attach to AMSpiriT",
+      "port": 8765,
+      "stopOnEntry": false
+    },
+    {
+      "type": "amspirit-basic",
+      "request": "launch",
+      "name": "Launch current BASIC",
+      "program": "${file}",
+      "stopOnEntry": true
+    }
+  ]
+}

@@ -28,6 +28,12 @@ const VARS_REF = 1
 const STATE_REF = 2
 /** Cap on the variable zone read, mirroring the web debugger. */
 const MAX_VAR_BYTES = 8192
+/**
+ * After issuing a resume/step, ignore the emulator's `paused` flag for this long
+ * so we don't read the stale pre-resume freeze (the emulator applies pending
+ * actions on its frame thread, ~1-2 frames later).
+ */
+const STOP_SETTLE_MS = 150
 
 interface BasicDebugConfig {
   program?: string
@@ -51,6 +57,8 @@ export class BasicDebugSession extends LoggingDebugSession {
   private client: EmulatorClient | undefined
   private programPath: string | undefined
   private poller: StopPoller | undefined
+  private disposed = false
+  private stopOnEntry = false
 
   constructor(
     private readonly createClient: (host: string, port: number) => EmulatorClient,
@@ -98,8 +106,9 @@ export class BasicDebugSession extends LoggingDebugSession {
     const host = args.host ?? "127.0.0.1"
     const port = args.port ?? 8765
     this.client = this.createClient(host, port)
+    this.stopOnEntry = args.stopOnEntry === true
     if (args.program) this.programPath = args.program
-    if (args.stopOnEntry && this.client) {
+    if (this.stopOnEntry && this.client) {
       try {
         await this.client.setPaused(true)
       } catch {
@@ -138,6 +147,9 @@ export class BasicDebugSession extends LoggingDebugSession {
     args: DebugProtocol.ConfigurationDoneArguments,
   ): void {
     super.configurationDoneRequest(response, args)
+    // When we didn't stop on entry the program is free-running; watch for the
+    // first breakpoint hit (the emulator freezes itself, we only detect it).
+    if (!this.stopOnEntry) this.monitorStop("breakpoint", 0)
   }
 
   protected override threadsRequest(response: DebugProtocol.ThreadsResponse): void {
@@ -228,8 +240,16 @@ export class BasicDebugSession extends LoggingDebugSession {
   protected override async continueRequest(
     response: DebugProtocol.ContinueResponse,
   ): Promise<void> {
+    if (this.client) {
+      try {
+        await this.client.setPaused(false)
+      } catch {
+        // best effort
+      }
+      this.sendEvent(new ContinuedEvent(THREAD_ID))
+    }
     this.sendResponse(response)
-    await this.resumeAndWait("breakpoint")
+    this.monitorStop("breakpoint", STOP_SETTLE_MS)
   }
 
   protected override async pauseRequest(response: DebugProtocol.PauseResponse): Promise<void> {
@@ -260,6 +280,7 @@ export class BasicDebugSession extends LoggingDebugSession {
   protected override async disconnectRequest(
     response: DebugProtocol.DisconnectResponse,
   ): Promise<void> {
+    this.disposed = true
     this.poller?.cancel()
     if (this.client) {
       try {
@@ -274,6 +295,7 @@ export class BasicDebugSession extends LoggingDebugSession {
   protected override async terminateRequest(
     response: DebugProtocol.TerminateResponse,
   ): Promise<void> {
+    this.disposed = true
     this.poller?.cancel()
     if (this.client) {
       try {
@@ -288,37 +310,39 @@ export class BasicDebugSession extends LoggingDebugSession {
   }
 
   private async step(response: DebugProtocol.Response, request: StepRequest): Promise<void> {
+    if (this.client) {
+      try {
+        await this.client.basicStep(stepByLine(request))
+      } catch {
+        // ignore; the monitor will still report a stop
+      }
+    }
     this.sendResponse(response)
-    if (!this.client) {
-      this.sendEvent(new StoppedEvent("step", THREAD_ID))
-      return
-    }
-    try {
-      await this.client.basicStep(stepByLine(request))
-    } catch {
-      // ignore; still report a stop so the UI stays consistent
-    }
-    const result = await this.waitForPause()
-    if (result !== "cancelled") this.sendEvent(new StoppedEvent("step", THREAD_ID))
+    // A step always re-pauses within a frame or two; settle past the stale read.
+    this.monitorStop("step", STOP_SETTLE_MS)
   }
 
-  private async resumeAndWait(reason: string): Promise<void> {
-    if (!this.client) return
+  /**
+   * Watch the emulator until it freezes (breakpoint, step or run-to completion)
+   * and emit a single `stopped` event. The emulator pauses *itself*; we only
+   * detect the transition by polling `ping.paused`. `settleMs` skips the window
+   * right after a resume where that flag is still the stale pre-resume value.
+   */
+  private monitorStop(reason: string, settleMs: number): void {
     this.poller?.cancel()
-    try {
-      await this.client.setPaused(false)
-    } catch {
-      return
-    }
-    this.sendEvent(new ContinuedEvent(THREAD_ID))
-    const result = await this.waitForPause()
-    if (result === "stopped") this.sendEvent(new StoppedEvent(reason, THREAD_ID))
-  }
-
-  private async waitForPause(): Promise<"stopped" | "cancelled"> {
     const client = this.client
-    if (!client) return "cancelled"
-    this.poller = new StopPoller(async () => (await client.pingState()).paused)
-    return this.poller.start()
+    if (!client) return
+    const poller = new StopPoller(async () => (await client.pingState()).paused)
+    this.poller = poller
+    const begin = (): void => {
+      if (this.disposed || this.poller !== poller) return
+      void poller.start().then((result) => {
+        if (result === "stopped" && this.poller === poller && !this.disposed) {
+          this.sendEvent(new StoppedEvent(reason, THREAD_ID))
+        }
+      })
+    }
+    if (settleMs > 0) setTimeout(begin, settleMs)
+    else begin()
   }
 }
