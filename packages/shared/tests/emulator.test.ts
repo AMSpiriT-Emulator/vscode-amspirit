@@ -321,6 +321,21 @@ describe("EmulatorClient", () => {
     })
   })
 
+  describe("readRam", () => {
+    it("GETs /api/ram with addr+len and decodes the hex into bytes", async () => {
+      fake.responder = jsonResponder({ addr: 880, len: 3, hex: "00ff80" })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.readRam(880, 3)).resolves.toEqual([0x00, 0xff, 0x80])
+      expect(fake.recorded.at(0)?.url).toBe("/api/ram?addr=880&len=3")
+    })
+
+    it("throws when the emulator reports an error", async () => {
+      fake.responder = jsonResponder({ error: "ram unavailable" })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.readRam(0, 16)).rejects.toThrow(/ram unavailable/)
+    })
+  })
+
   describe("pingState", () => {
     it("reads ok + emu.paused from /api/ping", async () => {
       fake.responder = jsonResponder({ ok: true, emu: { paused: true, fps: 50 } })

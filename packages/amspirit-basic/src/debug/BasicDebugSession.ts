@@ -13,6 +13,7 @@ import {
   Thread,
 } from "@vscode/debugadapter"
 import type { DebugProtocol } from "@vscode/debugprotocol"
+import { type BasicVar, decodeCpcString, parseBasicVars } from "./BasicVarParser.js"
 import { breakpointAddresses, resolveBreakpoints } from "./BreakpointMapper.js"
 import {
   buildStackFrame,
@@ -23,7 +24,10 @@ import {
 import { StopPoller } from "./StopPoller.js"
 
 const THREAD_ID = 1
-const STATE_REF = 1
+const VARS_REF = 1
+const STATE_REF = 2
+/** Cap on the variable zone read, mirroring the web debugger. */
+const MAX_VAR_BYTES = 8192
 
 interface BasicDebugConfig {
   program?: string
@@ -163,7 +167,9 @@ export class BasicDebugSession extends LoggingDebugSession {
   }
 
   protected override scopesRequest(response: DebugProtocol.ScopesResponse): void {
-    response.body = { scopes: [new Scope("State", STATE_REF, false)] }
+    response.body = {
+      scopes: [new Scope("Variables", VARS_REF, false), new Scope("State", STATE_REF, false)],
+    }
     this.sendResponse(response)
   }
 
@@ -171,19 +177,52 @@ export class BasicDebugSession extends LoggingDebugSession {
     response: DebugProtocol.VariablesResponse,
     args: DebugProtocol.VariablesArguments,
   ): Promise<void> {
-    const variables: DebugProtocol.Variable[] = []
+    let variables: DebugProtocol.Variable[] = []
     if (this.client && args.variablesReference === STATE_REF) {
       try {
         const state = await this.client.getBasicState()
-        for (const v of buildStateVariables(state)) {
-          variables.push({ name: v.name, value: v.value, variablesReference: 0 })
-        }
+        variables = buildStateVariables(state).map((v) => ({
+          name: v.name,
+          value: v.value,
+          variablesReference: 0,
+        }))
+      } catch {
+        // empty
+      }
+    } else if (this.client && args.variablesReference === VARS_REF) {
+      try {
+        variables = await this.readBasicVariables()
       } catch {
         // empty
       }
     }
     response.body = { variables }
     this.sendResponse(response)
+  }
+
+  /** Read + decode the Locomotive BASIC variable chains, resolving string contents. */
+  private async readBasicVariables(): Promise<DebugProtocol.Variable[]> {
+    const client = this.client
+    if (!client) return []
+    const state = await client.getBasicState()
+    const [chainBytes, varBytes] = await Promise.all([
+      client.readRam(state.chain_heads_addr, 54),
+      client.readRam(state.txttop, Math.min(state.var_size, MAX_VAR_BYTES)),
+    ])
+    const parsed = parseBasicVars(chainBytes, varBytes)
+    return Promise.all(parsed.map((v) => this.toVariable(client, v)))
+  }
+
+  private async toVariable(client: EmulatorClient, v: BasicVar): Promise<DebugProtocol.Variable> {
+    let value = v.value
+    if (v.type === "string" && v.strLen > 0) {
+      try {
+        value = `"${decodeCpcString(await client.readRam(v.strAddr, v.strLen))}"`
+      } catch {
+        // keep the "(len N)" placeholder on read failure
+      }
+    }
+    return { name: v.name, value, variablesReference: 0 }
   }
 
   protected override async continueRequest(

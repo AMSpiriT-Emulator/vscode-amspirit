@@ -179,6 +179,18 @@ export class EmulatorClient {
     }
   }
 
+  /** Read `len` bytes of central RAM from `addr` via `/api/ram`. */
+  async readRam(addr: number, len: number): Promise<number[]> {
+    const res = await this.getJson<{ hex?: string; error?: string }>(
+      `/api/ram?addr=${addr}&len=${len}`,
+      this.debugTimeoutMs,
+    )
+    if (res.error !== undefined || res.hex === undefined) {
+      throw new Error(res.error ?? "RAM read failed")
+    }
+    return hexToBytes(res.hex)
+  }
+
   private async getJson<T>(path: string, timeoutMs: number): Promise<T> {
     const body = await this.get(path, timeoutMs)
     return JSON.parse(body) as T
@@ -262,6 +274,16 @@ export class EmulatorClient {
       req.end()
     })
   }
+}
+
+/** Decode a hex string (2 chars per byte) into a byte array. */
+function hexToBytes(hex: string): number[] {
+  const n = hex.length >> 1
+  const bytes = new Array<number>(n)
+  for (let i = 0; i < n; i++) {
+    bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+  }
+  return bytes
 }
 
 export function spawnEmulator(

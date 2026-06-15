@@ -35,7 +35,8 @@
 | Debug HTTP methods on `EmulatorClient` (+ tests) | ✅ | basic_state/listing/step/bp/runto/config/pingState |
 | Pure debug modules (BreakpointMapper / StopPoller / dapHandlers) | ✅ | line↔addr mapping, paused polling, DAP responses |
 | `BasicDebugSession` (DAP) + manifest contributes | ✅ | breakpoints + debuggers + activation (inline adapter) |
-| Phase 2: Webview (Z80 regs / disasm) + BASIC variables | ⬜ | React/TSX only; Vite; pure variable-chain parser |
+| Phase 2a: Locomotive BASIC variable inspection (DAP Variables) | ✅ | pure `BasicVarParser` + `readRam`; strings resolved |
+| Phase 2b: React/TSX webview (Z80 regs / disasm) | ⬜ | React only; Vite; CSP nonce; typed postMessage |
 | End-to-end manual validation vs real emulator | ⬜ | launch `--web-server`, set BP, observe |
 
 ## Guardrail baseline
