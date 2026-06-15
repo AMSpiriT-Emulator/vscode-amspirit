@@ -1,3 +1,5 @@
+export type { DisasmInstruction } from "./disassembler.js"
+export { decodeInstruction, disassemble } from "./disassembler.js"
 export type {
   BasicLine,
   BasicListing,

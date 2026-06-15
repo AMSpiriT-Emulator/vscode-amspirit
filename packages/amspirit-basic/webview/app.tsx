@@ -1,13 +1,13 @@
-import { Registers } from "./components/registers.js"
+import { BasicVariables } from "./components/basic-variables.js"
 import { useExtMessage } from "./hooks/use-vscode-api.js"
 
 export function App() {
   const message = useExtMessage()
-  const view = message?.type === "registers" ? message.view : null
+  const snapshot = message?.type === "snapshot" ? message.snapshot : null
   return (
     <main>
-      <h1>Z80 Registers</h1>
-      <Registers view={view} />
+      <h1>BASIC Variables</h1>
+      <BasicVariables view={snapshot?.variables ?? null} />
     </main>
   )
 }

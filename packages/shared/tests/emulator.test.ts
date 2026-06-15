@@ -329,6 +329,13 @@ describe("EmulatorClient", () => {
       expect(fake.recorded.at(0)?.url).toBe("/api/ram?addr=880&len=3")
     })
 
+    it("requests the CPU-visible view (ROM/RAM mapping) when asked", async () => {
+      fake.responder = jsonResponder({ addr: 0, len: 2, view: "cpu", hex: "00c3" })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.readRam(0, 2, { cpuView: true })).resolves.toEqual([0x00, 0xc3])
+      expect(fake.recorded.at(0)?.url).toBe("/api/ram?addr=0&len=2&view=cpu")
+    })
+
     it("throws when the emulator reports an error", async () => {
       fake.responder = jsonResponder({ error: "ram unavailable" })
       const client = new EmulatorClient({ port: fake.port })

@@ -14,28 +14,93 @@ h1 {
   margin: 0 0 0.5rem;
 }
 
-.registers table {
-  border-collapse: collapse;
-  margin-bottom: 0.5rem;
-}
-
-.registers th {
-  text-align: left;
-  padding-right: 1rem;
-  color: var(--vscode-descriptionForeground);
-  font-weight: 600;
-}
-
-.registers td {
-  font-variant-numeric: tabular-nums;
-}
-
-.flags span {
-  font-family: monospace;
-  letter-spacing: 0.15em;
-}
-
 .placeholder {
   color: var(--vscode-descriptionForeground);
   font-style: italic;
+}
+
+/* ── BASIC Variables card — styled after the amspirit-lite web debugger ── */
+.basic-vars {
+  font-family: var(--vscode-editor-font-family, "Courier New", monospace);
+}
+
+.sysvars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 14px;
+  font-size: 0.82em;
+  color: #789;
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--vscode-panel-border, #2a2a2a);
+}
+
+.sysvars .sysvar-label {
+  color: var(--vscode-descriptionForeground);
+}
+
+.sysvars b {
+  color: #9ab;
+  font-weight: 600;
+}
+
+.vars-table {
+  table-layout: fixed;
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9em;
+}
+
+.vars-table thead tr {
+  color: #89b;
+  border-bottom: 1px solid var(--vscode-panel-border, #383838);
+}
+
+.vars-table th {
+  text-align: left;
+  font-weight: normal;
+  padding: 2px 12px 4px 0;
+}
+
+.vars-table tbody .var-name {
+  color: #fda;
+  font-weight: 700;
+  width: 11em;
+  word-break: break-all;
+  padding: 1px 12px 1px 0;
+}
+
+.vars-table .var-type {
+  color: #89b;
+  width: 5em;
+  padding: 1px 12px 1px 0;
+}
+
+.vars-table .var-value {
+  color: #ce8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 1px 4px;
+}
+
+.vars-msg {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+  margin-top: 6px;
+}
+
+/* Flash a value that changed since the previous refresh. */
+@keyframes valflash {
+  from {
+    background: #6a6a1a;
+    color: #fff;
+  }
+  to {
+    background: transparent;
+  }
+}
+
+.valflash {
+  animation: valflash 1.1s ease-out;
 }

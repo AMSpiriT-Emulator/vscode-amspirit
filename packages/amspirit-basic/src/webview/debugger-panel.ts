@@ -2,14 +2,19 @@ import { randomBytes } from "node:crypto"
 import type { EmulatorClient } from "@amspirit/shared"
 import * as vscode from "vscode"
 import type { ExtToWebview } from "../../webview/messaging.js"
-import { buildRegisterView } from "../debug/register-view.js"
+import { decodeCpcString, parseBasicVars } from "../debug/basic-var-parser.js"
+import { type BasicVarsView, buildBasicVarsView } from "../debug/basic-vars-view.js"
 import { buildWebviewHtml } from "./html.js"
 
 const POLL_INTERVAL_MS = 500
+/** Cap the variable-zone read (matches the amspirit-lite web debugger). */
+const MAX_VAR_BYTES = 8192
+const CHAIN_HEADS_BYTES = 54
 
 /**
- * Singleton webview panel showing the Z80 registers (React). Thin shell: it
- * polls the emulator and posts register snapshots; the React app only renders.
+ * Singleton webview panel showing the live Locomotive BASIC variables (React),
+ * styled after the amspirit-lite web debugger. Thin shell: it polls the
+ * emulator each tick and posts a snapshot; the React app only renders.
  */
 export class DebuggerPanel {
   private static current: DebuggerPanel | undefined
@@ -66,17 +71,38 @@ export class DebuggerPanel {
   private startPolling(): void {
     if (this.timer) return
     const tick = async (): Promise<void> => {
-      let payload: ExtToWebview
-      try {
-        const z = await this.makeClient().getZ80()
-        payload = { type: "registers", view: buildRegisterView(z) }
-      } catch {
-        payload = { type: "registers", view: null }
-      }
+      const variables = await this.readVariables(this.makeClient())
+      const payload: ExtToWebview = { type: "snapshot", snapshot: { variables } }
       void this.panel.webview.postMessage(payload)
     }
     void tick()
     this.timer = setInterval(() => void tick(), POLL_INTERVAL_MS)
+  }
+
+  /** Read + decode the Locomotive BASIC variables (mirrors the DAP Variables scope). */
+  private async readVariables(client: EmulatorClient): Promise<BasicVarsView | null> {
+    try {
+      const state = await client.getBasicState()
+      const [chainBytes, varBytes] = await Promise.all([
+        client.readRam(state.chain_heads_addr, CHAIN_HEADS_BYTES),
+        client.readRam(state.txttop, Math.min(state.var_size, MAX_VAR_BYTES)),
+      ])
+      const parsed = parseBasicVars(chainBytes, varBytes)
+      await Promise.all(
+        parsed.map(async (v) => {
+          if (v.type === "string" && v.strLen > 0) {
+            try {
+              v.value = `"${decodeCpcString(await client.readRam(v.strAddr, v.strLen))}"`
+            } catch {
+              // keep the "(len N)" placeholder on read failure
+            }
+          }
+        }),
+      )
+      return buildBasicVarsView(state, parsed)
+    } catch {
+      return null
+    }
   }
 
   private dispose(): void {

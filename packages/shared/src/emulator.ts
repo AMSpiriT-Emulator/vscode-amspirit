@@ -205,10 +205,15 @@ export class EmulatorClient {
     return this.getJson<Z80Registers>("/api/z80", this.debugTimeoutMs)
   }
 
-  /** Read `len` bytes of central RAM from `addr` via `/api/ram`. */
-  async readRam(addr: number, len: number): Promise<number[]> {
+  /**
+   * Read `len` bytes from `addr` via `/api/ram`. By default reads raw central
+   * RAM; with `cpuView`, reads memory as the Z80 sees it (ROM/RAM mapping
+   * applied) — use this to disassemble around PC, which often points into ROM.
+   */
+  async readRam(addr: number, len: number, opts: { cpuView?: boolean } = {}): Promise<number[]> {
+    const view = opts.cpuView ? "&view=cpu" : ""
     const res = await this.getJson<{ hex?: string; error?: string }>(
-      `/api/ram?addr=${addr}&len=${len}`,
+      `/api/ram?addr=${addr}&len=${len}${view}`,
       this.debugTimeoutMs,
     )
     if (res.error !== undefined || res.hex === undefined) {
