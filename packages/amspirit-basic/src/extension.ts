@@ -9,6 +9,7 @@ import { readSettingsWithWarnings } from "./config/Settings.js"
 import { vsCodeConfigReader } from "./config/vsCodeConfigReader.js"
 import type { ConnectionState } from "./connection/PingService.js"
 import { PingService } from "./connection/PingService.js"
+import { BasicDebugSession } from "./debug/BasicDebugSession.js"
 import { registerBasicDiagnostics } from "./diagnostics/registerBasicDiagnostics.js"
 import { EmulatorLauncher } from "./lifecycle/EmulatorLauncher.js"
 import { StatusBarPresenter } from "./statusBar/StatusBarPresenter.js"
@@ -203,6 +204,35 @@ export function activate(context: vscode.ExtensionContext): void {
         false,
       ),
     ),
+  )
+
+  const debugFactory: vscode.DebugAdapterDescriptorFactory = {
+    createDebugAdapterDescriptor() {
+      return new vscode.DebugAdapterInlineImplementation(
+        new BasicDebugSession((host, port) => new EmulatorClient({ host, port })),
+      )
+    },
+  }
+  const debugConfigProvider: vscode.DebugConfigurationProvider = {
+    resolveDebugConfiguration(_folder, config) {
+      // No launch.json (or empty): synthesize an attach for the active .bas.
+      if (!config.type && !config.request && !config.name) {
+        const editor = vscode.window.activeTextEditor
+        if (editor?.document.languageId === "amstrad-basic") {
+          config.type = "amspirit-basic"
+          config.name = "Attach to AMSpiriT"
+          config.request = "attach"
+        }
+      }
+      if (config.type === "amspirit-basic" && config.port === undefined) {
+        config.port = loadSettings().webPort
+      }
+      return config
+    },
+  }
+  context.subscriptions.push(
+    vscode.debug.registerDebugAdapterDescriptorFactory("amspirit-basic", debugFactory),
+    vscode.debug.registerDebugConfigurationProvider("amspirit-basic", debugConfigProvider),
   )
 
   context.subscriptions.push(

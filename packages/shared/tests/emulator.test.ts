@@ -216,4 +216,131 @@ describe("EmulatorClient", () => {
       await expect(client.exportBasic()).rejects.toThrow(/timeout/)
     })
   })
+
+  const jsonResponder =
+    (payload: unknown): Responder =>
+    (_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(JSON.stringify(payload))
+    }
+
+  describe("getBasicState", () => {
+    it("GETs /api/basic_state and parses the JSON", async () => {
+      fake.responder = jsonResponder({ cur_linenum: 30, stmt_addr: 44573, basic_ver: 11 })
+      const client = new EmulatorClient({ port: fake.port })
+      const state = await client.getBasicState()
+      expect(state.cur_linenum).toBe(30)
+      expect(state.stmt_addr).toBe(44573)
+      expect(fake.recorded.at(0)?.method).toBe("GET")
+      expect(fake.recorded.at(0)?.url).toBe("/api/basic_state")
+    })
+  })
+
+  describe("getBasicListing", () => {
+    it("GETs /api/basic_listing and parses lines/statements", async () => {
+      fake.responder = jsonResponder({
+        lines: [
+          {
+            addr: 368,
+            num: 10,
+            stmts: [{ addr: 371, end: 378, colon: false, text: "A=1", vars: ["A"] }],
+          },
+        ],
+      })
+      const client = new EmulatorClient({ port: fake.port })
+      const listing = await client.getBasicListing()
+      expect(fake.recorded.at(0)?.url).toBe("/api/basic_listing")
+      expect(listing.lines.at(0)?.num).toBe(10)
+      expect(listing.lines.at(0)?.stmts.at(0)?.addr).toBe(371)
+    })
+  })
+
+  describe("basicStep", () => {
+    it("POSTs /api/basic_step with an empty body for statement stepping", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.basicStep(false)
+      const rec = fake.recorded.at(0)
+      expect(rec?.method).toBe("POST")
+      expect(rec?.url).toBe("/api/basic_step")
+      expect(rec?.body).toBe("")
+    })
+
+    it("adds ?mode=line for line stepping", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.basicStep(true)
+      expect(fake.recorded.at(0)?.url).toBe("/api/basic_step?mode=line")
+    })
+  })
+
+  describe("setBasicBreakpoints", () => {
+    it("POSTs comma-separated statement addresses to /api/basic_bp", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.setBasicBreakpoints([371, 880, 44573])
+      const rec = fake.recorded.at(0)
+      expect(rec?.method).toBe("POST")
+      expect(rec?.url).toBe("/api/basic_bp")
+      expect(rec?.body).toBe("371,880,44573")
+    })
+
+    it("sends an empty body to clear all breakpoints", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.setBasicBreakpoints([])
+      expect(fake.recorded.at(0)?.body).toBe("")
+    })
+  })
+
+  describe("basicRunTo", () => {
+    it("POSTs ?line=N when given a line", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.basicRunTo({ line: 40 })
+      expect(fake.recorded.at(0)?.url).toBe("/api/basic_runto?line=40")
+    })
+
+    it("POSTs ?addr=N when given an address", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.basicRunTo({ addr: 44573 })
+      expect(fake.recorded.at(0)?.url).toBe("/api/basic_runto?addr=44573")
+    })
+  })
+
+  describe("setPaused", () => {
+    it("POSTs {paused:true} as JSON to /api/config", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.setPaused(true)
+      const rec = fake.recorded.at(0)
+      expect(rec?.method).toBe("POST")
+      expect(rec?.url).toBe("/api/config")
+      expect(rec?.headers["content-type"]).toMatch(/application\/json/)
+      expect(JSON.parse(rec?.body ?? "{}")).toEqual({ paused: true })
+    })
+
+    it("POSTs {paused:false} to resume", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.setPaused(false)
+      expect(JSON.parse(fake.recorded.at(0)?.body ?? "{}")).toEqual({ paused: false })
+    })
+  })
+
+  describe("pingState", () => {
+    it("reads ok + emu.paused from /api/ping", async () => {
+      fake.responder = jsonResponder({ ok: true, emu: { paused: true, fps: 50 } })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.pingState()).resolves.toEqual({ ok: true, paused: true })
+      expect(fake.recorded.at(0)?.url).toBe("/api/ping")
+    })
+
+    it("reports paused:false when emu is running", async () => {
+      fake.responder = jsonResponder({ ok: true, emu: { paused: false } })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.pingState()).resolves.toEqual({ ok: true, paused: false })
+    })
+
+    it("returns {ok:false, paused:false} when unreachable", async () => {
+      await fake.stop()
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.pingState()).resolves.toEqual({ ok: false, paused: false })
+      fake = new FakeEmulator()
+      await fake.start()
+    })
+  })
 })

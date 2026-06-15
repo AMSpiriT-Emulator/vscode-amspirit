@@ -19,9 +19,10 @@
   `/api/basic_step`, `/api/basic_bp`, `/api/basic_runto`, `/api/config`).
   `doc/debugger-plan.md` predates this and is stale on its core assumption
   ("no breakpoints/step") — to be updated as part of the work.
-- **Next step:** extend `@amspirit/shared` `EmulatorClient` with the debug HTTP
-  methods (+ Vitest), then the pure debug modules (`BreakpointMapper`,
-  `StopPoller`, `dapHandlers`), then the `BasicDebugSession` adapter + manifest.
+- **Next step:** Phase 1 (DAP execution control) is implemented and unit-tested;
+  remaining is **end-to-end manual validation** against the real emulator
+  (set a breakpoint, continue, step, run-to-cursor), then Phase 2 (React/TSX
+  webview: Z80 registers / disassembly + Locomotive BASIC variable inspection).
 
 ## Roadmap
 
@@ -31,10 +32,10 @@
 | `@amspirit/shared` (`EmulatorClient`, `spawnEmulator`) + tests | ✅ | |
 | `amspirit-basic` TDD (inject/pull/ping/launch/diagnostics) | ✅ | |
 | esbuild bundling + Changesets release pipeline | ✅ | |
-| Debug HTTP methods on `EmulatorClient` (+ tests) | ⬜ | basic_state/listing/step/bp/runto/config/pingState |
-| Pure debug modules (BreakpointMapper / StopPoller / dapHandlers) | ⬜ | line↔addr mapping, paused polling, DAP responses |
-| `BasicDebugSession` (DAP) + manifest contributes | ⬜ | breakpoints + debuggers + activation |
-| Phase 2: Webview (Z80 regs / disasm) + BASIC variables | ⬜ | reuse Vite; pure variable-chain parser |
+| Debug HTTP methods on `EmulatorClient` (+ tests) | ✅ | basic_state/listing/step/bp/runto/config/pingState |
+| Pure debug modules (BreakpointMapper / StopPoller / dapHandlers) | ✅ | line↔addr mapping, paused polling, DAP responses |
+| `BasicDebugSession` (DAP) + manifest contributes | ✅ | breakpoints + debuggers + activation (inline adapter) |
+| Phase 2: Webview (Z80 regs / disasm) + BASIC variables | ⬜ | React/TSX only; Vite; pure variable-chain parser |
 | End-to-end manual validation vs real emulator | ⬜ | launch `--web-server`, set BP, observe |
 
 ## Guardrail baseline

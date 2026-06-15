@@ -14,6 +14,7 @@ export default defineConfig({
         "src/config/vsCodeConfigReader.ts",
         "src/diagnostics/registerBasicDiagnostics.ts",
         "src/statusBar/StatusBarPresenter.ts",
+        "src/debug/BasicDebugSession.ts",
       ],
       thresholds: {
         lines: 90,

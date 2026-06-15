@@ -31,6 +31,9 @@
     "z80"
   ],
   "main": "./out/extension.js",
+  "activationEvents": [
+    "onDebugResolve:amspirit-basic"
+  ],
   "contributes": {
     "languages": [
       {
@@ -50,6 +53,96 @@
         "language": "amstrad-basic",
         "scopeName": "source.amstrad-basic",
         "path": "./syntaxes/amstrad-basic.tmLanguage.json"
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "amstrad-basic"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "amspirit-basic",
+        "label": "AMSpiriT BASIC",
+        "languages": [
+          "amstrad-basic"
+        ],
+        "configurationAttributes": {
+          "attach": {
+            "properties": {
+              "host": {
+                "type": "string",
+                "description": "Host of the emulator web debug server.",
+                "default": "127.0.0.1"
+              },
+              "port": {
+                "type": "number",
+                "description": "Port of the emulator web debug server (matches amspirit.webPort).",
+                "default": 8765
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Pause the emulator as soon as the debugger attaches.",
+                "default": false
+              }
+            }
+          },
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Path to the .bas file to inject before debugging.",
+                "default": "${file}"
+              },
+              "host": {
+                "type": "string",
+                "default": "127.0.0.1"
+              },
+              "port": {
+                "type": "number",
+                "default": 8765
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "default": true
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "amspirit-basic",
+            "request": "attach",
+            "name": "Attach to AMSpiriT",
+            "port": 8765
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "AMSpiriT BASIC: Attach",
+            "description": "Debug a BASIC program in a running AMSpiriT emulator.",
+            "body": {
+              "type": "amspirit-basic",
+              "request": "attach",
+              "name": "Attach to AMSpiriT",
+              "port": 8765
+            }
+          },
+          {
+            "label": "AMSpiriT BASIC: Launch (inject current file)",
+            "description": "Inject the current .bas, run it, and attach the debugger.",
+            "body": {
+              "type": "amspirit-basic",
+              "request": "launch",
+              "name": "Launch current BASIC",
+              "program": "^\"\\${file}\"",
+              "stopOnEntry": true
+            }
+          }
+        ]
       }
     ],
     "commands": [
@@ -291,7 +384,9 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@amspirit/shared": "workspace:*"
+    "@amspirit/shared": "workspace:*",
+    "@vscode/debugadapter": "^1.68.0",
+    "@vscode/debugprotocol": "^1.68.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

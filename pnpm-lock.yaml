@@ -29,6 +29,12 @@ importers:
       '@amspirit/shared':
         specifier: workspace:*
         version: link:../shared
+      '@vscode/debugadapter':
+        specifier: ^1.68.0
+        version: 1.68.0
+      '@vscode/debugprotocol':
+        specifier: ^1.68.0
+        version: 1.68.0
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -1040,6 +1046,13 @@ packages:
 
   '@vitest/utils@4.1.8':
     resolution: {integrity: sha512-uOJamYALNhfJ6iolExyQM40yIQwDqYnkKtQ5VCiSe17E33H0aQ/u+1GlRuz4LZBk6Mm3sg90G9hEbmEt37C1Zg==}
+
+  '@vscode/debugadapter@1.68.0':
+    resolution: {integrity: sha512-D6gk5Fw2y4FV8oYmltoXpj+VAZexxJFopN/mcZ6YcgzQE9dgq2L45Aj3GLxScJOD6GeLILcxJIaA8l3v11esGg==}
+    engines: {node: '>=14'}
+
+  '@vscode/debugprotocol@1.68.0':
+    resolution: {integrity: sha512-2J27dysaXmvnfuhFGhfeuxfHRXunqNPxtBoR3koiTOA9rdxWNDTa1zIFLCFMSHJ9MPTPKFcBeblsyaCJCIlQxg==}
 
   '@vscode/vsce-sign-alpine-arm64@2.0.6':
     resolution: {integrity: sha512-wKkJBsvKF+f0GfsUuGT0tSW0kZL87QggEiqNqK6/8hvqsXvpx8OsTEc3mnE1kejkh5r+qUyQ7PtF8jZYN0mo8Q==}
@@ -3383,6 +3396,12 @@ snapshots:
       '@vitest/pretty-format': 4.1.8
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
+
+  '@vscode/debugadapter@1.68.0':
+    dependencies:
+      '@vscode/debugprotocol': 1.68.0
+
+  '@vscode/debugprotocol@1.68.0': {}
 
   '@vscode/vsce-sign-alpine-arm64@2.0.6':
     optional: true
