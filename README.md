@@ -87,7 +87,7 @@ Procédure complète (secrets, comptes publisher, étapes) : [doc/release.md](do
 
 | Paramètre | Défaut | Description |
 |---|---|---|
-| `amspirit.emulatorPath` | _(vide)_ | Chemin complet de `amspirit-lite-sdl`. Un sélecteur de fichier s'ouvre si vide. |
+| `amspirit.emulatorPath` | _(vide)_ | Chemin complet du binaire AMSpiriT Lite. Tout build exposant le serveur web de debug fonctionne (builds **SDL** et **Qt** aujourd'hui). Un sélecteur de fichier s'ouvre si vide. |
 | `amspirit.webPort` | `8765` | Port du serveur HTTP de debug de l'émulateur (`--web-port`). |
 | `amspirit.autoLaunch` | `false` | Lance automatiquement l'émulateur au démarrage si aucun n'est joignable. |
 | `amspirit.emulatorArgs` | `[]` | Arguments supplémentaires (ex. `["--cpc", "6128"]`). |

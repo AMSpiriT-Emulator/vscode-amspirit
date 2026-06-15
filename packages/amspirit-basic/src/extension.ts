@@ -72,7 +72,7 @@ export function activate(context: vscode.ExtensionContext): void {
       const picked = await vscode.window.showOpenDialog({
         canSelectFiles: true,
         canSelectFolders: false,
-        openLabel: "Select amspirit-lite-sdl binary",
+        openLabel: "Select the AMSpiriT Lite binary",
       })
       if (!picked?.[0]) return
       binaryPath = picked[0].fsPath
