@@ -33,6 +33,22 @@ const STATE_REF = 2
  */
 const STOP_SETTLE_MS = 150
 
+/**
+ * A one-shot promise gate. `wait()` blocks until someone calls `open()`; once
+ * open it stays open so later `wait()`s resolve immediately. Used to sequence
+ * the DAP launch handshake (tokenize -> set breakpoints -> run).
+ */
+class Gate {
+  private resolveFn: (() => void) | undefined
+  readonly promise: Promise<void> = new Promise<void>((resolve) => {
+    this.resolveFn = resolve
+  })
+  open(): void {
+    this.resolveFn?.()
+    this.resolveFn = undefined
+  }
+}
+
 interface BasicDebugConfig {
   program?: string
   host?: string
@@ -65,6 +81,14 @@ export class BasicDebugSession extends LoggingDebugSession {
   private entryAddr: number | undefined
   /** Last user breakpoint addresses, so the entry bp can be merged then dropped. */
   private userBpAddrs: number[] = []
+  /**
+   * Opens once the program is tokenized and `getBasicListing` will return it, so
+   * `setBreakPointsRequest` can resolve editor lines to addresses. (Opened
+   * immediately on attach: the program is already in memory.)
+   */
+  private tokenized = new Gate()
+  /** Opens when VS Code sends `configurationDone`, gating the program's RUN. */
+  private configured = new Gate()
 
   constructor(
     private readonly createClient: (host: string, port: number) => EmulatorClient,
@@ -88,6 +112,8 @@ export class BasicDebugSession extends LoggingDebugSession {
     args: DebugProtocol.AttachRequestArguments & BasicDebugConfig,
   ): Promise<void> {
     this.connect(args)
+    // The program is already tokenized in memory, so breakpoints can resolve now.
+    this.tokenized.open()
     if (this.stopOnEntry && this.client) {
       // Attach freezes whatever the program is doing right now.
       try {
@@ -108,26 +134,40 @@ export class BasicDebugSession extends LoggingDebugSession {
   ): Promise<void> {
     this.connect(args)
     const client = this.client
-    if (client && args.program) {
-      this.programPath = args.program
-      const source = this.readLines(args.program).join("\n")
-      try {
-        if (this.stopOnEntry) {
-          // Tokenize first (no run) so we can resolve the entry line and ARM the
-          // entry breakpoint *before* RUN — otherwise line 1 executes before the
-          // breakpoint is set and we sail past it.
-          await client.injectBasic(source, false, false)
-          this.entryAddr = await this.resolveEntryAddr(client)
-          this.firstStopReason = "entry"
-          if (this.entryAddr !== undefined) {
-            await client.setBasicBreakpoints([this.entryAddr])
-          }
-        }
-        await client.injectBasic(source, false, true)
-        this.running = true
-      } catch {
-        // Surface nothing fatal; the user can still attach to current memory.
+    if (!client || !args.program) {
+      // Nothing to load; unblock any pending setBreakPointsRequest.
+      this.tokenized.open()
+      this.sendResponse(response)
+      return
+    }
+    this.programPath = args.program
+    const source = this.readLines(args.program).join("\n")
+    try {
+      // Tokenize WITHOUT running so `getBasicListing` can resolve addresses and
+      // every breakpoint is armed before the program starts — otherwise line 1
+      // executes before the breakpoints are set and we sail past them.
+      await client.injectBasic(source, false, false)
+      if (this.stopOnEntry) {
+        this.entryAddr = await this.resolveEntryAddr(client)
+        this.firstStopReason = "entry"
       }
+    } catch {
+      // Surface nothing fatal; the user can still attach to current memory.
+    } finally {
+      // Let setBreakPointsRequest proceed even if tokenizing failed.
+      this.tokenized.open()
+    }
+    try {
+      // Wait until VS Code has sent all breakpoints (setBreakPointsRequest, which
+      // posts them) plus configurationDone — only then is it safe to RUN.
+      await this.configured.promise
+      await client.setBasicBreakpoints(this.bpAddrsToPost())
+      await client.injectBasic(source, false, true)
+      this.running = true
+      // The program is now running; watch for the first freeze (entry/user bp).
+      this.monitorStop(this.firstStopReason, 0)
+    } catch {
+      // best effort; the session stays attached to current memory
     }
     this.sendResponse(response)
   }
@@ -169,6 +209,9 @@ export class BasicDebugSession extends LoggingDebugSession {
 
     if (this.client && path) {
       try {
+        // Wait until the program is tokenized, else the listing is empty and no
+        // breakpoint resolves (the race that made pre-run breakpoints vanish).
+        await this.tokenized.promise
         const listing = await this.client.getBasicListing()
         const resolved = resolveBreakpoints(requested, this.readLines(path), listing)
         this.userBpAddrs = breakpointAddresses(resolved)
@@ -196,8 +239,10 @@ export class BasicDebugSession extends LoggingDebugSession {
     args: DebugProtocol.ConfigurationDoneArguments,
   ): void {
     super.configurationDoneRequest(response, args)
-    // Once the program is running, watch for the first freeze (entry bp or a
-    // user breakpoint). The emulator freezes itself; we only detect it.
+    // Release launchRequest to RUN now that all breakpoints have been sent.
+    this.configured.open()
+    // On attach the program is already running; start watching for the first
+    // freeze. (Launch arms its own monitor once it actually RUNs the program.)
     if (this.running) this.monitorStop(this.firstStopReason, 0)
   }
 
