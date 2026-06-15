@@ -1,5 +1,5 @@
 import * as vscode from "vscode"
-import type { ConfigReader } from "./Settings.js"
+import type { ConfigReader } from "./settings.js"
 
 /**
  * Adapter that exposes VS Code's `WorkspaceConfiguration` through the

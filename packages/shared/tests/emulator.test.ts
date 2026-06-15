@@ -336,6 +336,31 @@ describe("EmulatorClient", () => {
     })
   })
 
+  describe("getZ80", () => {
+    it("GETs /api/z80 and returns the register snapshot", async () => {
+      fake.responder = jsonResponder({
+        PC: 0x1234,
+        SP: 0x4000,
+        A: 0xff,
+        F: 0x40,
+        IX: 0x1000,
+        IY: 0x2000,
+        I: 0x10,
+        R: 0x7f,
+        IFF1: 1,
+        IFF2: 1,
+        IM: 1,
+      })
+      const client = new EmulatorClient({ port: fake.port })
+      const z = await client.getZ80()
+      expect(z.PC).toBe(0x1234)
+      expect(z.IM).toBe(1)
+      expect(z.IX).toBe(0x1000)
+      expect(fake.recorded.at(0)?.method).toBe("GET")
+      expect(fake.recorded.at(0)?.url).toBe("/api/z80")
+    })
+  })
+
   describe("pingState", () => {
     it("reads ok + emu.paused from /api/ping", async () => {
       fake.responder = jsonResponder({ ok: true, emu: { paused: true, fps: 50 } })

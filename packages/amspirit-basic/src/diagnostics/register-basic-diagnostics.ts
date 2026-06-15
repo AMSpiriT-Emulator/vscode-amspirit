@@ -1,5 +1,5 @@
 import * as vscode from "vscode"
-import { findLineNumberIssues } from "./lineNumbers.js"
+import { findLineNumberIssues } from "./line-numbers.js"
 
 const LANGUAGE_ID = "amstrad-basic"
 

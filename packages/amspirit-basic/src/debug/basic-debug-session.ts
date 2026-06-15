@@ -13,15 +13,15 @@ import {
   Thread,
 } from "@vscode/debugadapter"
 import type { DebugProtocol } from "@vscode/debugprotocol"
-import { type BasicVar, decodeCpcString, parseBasicVars } from "./BasicVarParser.js"
-import { breakpointAddresses, resolveBreakpoints } from "./BreakpointMapper.js"
+import { type BasicVar, decodeCpcString, parseBasicVars } from "./basic-var-parser.js"
+import { breakpointAddresses, resolveBreakpoints } from "./breakpoint-mapper.js"
 import {
   buildStackFrame,
   buildStateVariables,
   type StepRequest,
   stepByLine,
-} from "./dapHandlers.js"
-import { StopPoller } from "./StopPoller.js"
+} from "./dap-handlers.js"
+import { StopPoller } from "./stop-poller.js"
 
 const THREAD_ID = 1
 const VARS_REF = 1

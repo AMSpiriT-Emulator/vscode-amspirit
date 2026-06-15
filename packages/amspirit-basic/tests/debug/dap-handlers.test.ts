@@ -1,6 +1,6 @@
 import type { BasicState } from "@amspirit/shared"
 import { describe, expect, it } from "vitest"
-import { buildStackFrame, buildStateVariables, stepByLine } from "../../src/debug/dapHandlers.js"
+import { buildStackFrame, buildStateVariables, stepByLine } from "../../src/debug/dap-handlers.js"
 
 const state = (over: Partial<BasicState> = {}): BasicState => ({
   cur_linenum: 20,

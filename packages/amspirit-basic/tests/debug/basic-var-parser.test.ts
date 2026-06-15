@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { decodeCpcFloat, decodeCpcString, parseBasicVars } from "../../src/debug/BasicVarParser.js"
+import {
+  decodeCpcFloat,
+  decodeCpcString,
+  parseBasicVars,
+} from "../../src/debug/basic-var-parser.js"
 
 /** 54-byte chain-head table with one chain (0-based letter index) pointing at ptr. */
 function chainHeads(letterIndex: number, ptr: number): number[] {

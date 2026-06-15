@@ -1,17 +1,20 @@
-# The extension ships as a single bundled file (out/extension.js) plus
-# marketplace assets. Exclude sources, tests, tooling and dependencies.
+# The extension ships the bundled host (out/extension.js) and the built
+# webview (out/webview/*.js|css) plus marketplace assets. Exclude all sources,
+# tests, tooling and dependencies.
 .vscode/**
 .vscode-test/**
 src/**
 tests/**
+webview/**
 coverage/**
 node_modules/**
 **/*.ts
+**/*.tsx
 **/*.map
 **/*.tsbuildinfo
-tsconfig.json
-tsconfig.typecheck.json
-vitest.config.ts
+tsconfig*.json
+vitest.config.*
+vite.config.ts
 esbuild.mjs
 .gitignore
 .eslintrc*

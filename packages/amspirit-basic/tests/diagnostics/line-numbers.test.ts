@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { findLineNumberIssues } from "../../src/diagnostics/lineNumbers.js"
+import { findLineNumberIssues } from "../../src/diagnostics/line-numbers.js"
 
 describe("findLineNumberIssues", () => {
   it("returns no issues for properly numbered BASIC", () => {

@@ -1,5 +1,5 @@
 import { type BasicState, DIRECT_MODE_LINE } from "@amspirit/shared"
-import { editorLineForBasicLine } from "./BreakpointMapper.js"
+import { editorLineForBasicLine } from "./breakpoint-mapper.js"
 
 /**
  * Pure helpers turning emulator state into the data the Debug Adapter reports.

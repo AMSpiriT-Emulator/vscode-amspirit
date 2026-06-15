@@ -1,0 +1,41 @@
+:root {
+  font-family: var(--vscode-font-family, monospace);
+  color: var(--vscode-foreground);
+  font-size: var(--vscode-font-size, 13px);
+}
+
+body {
+  margin: 0;
+  padding: 0.75rem;
+}
+
+h1 {
+  font-size: 1.1em;
+  margin: 0 0 0.5rem;
+}
+
+.registers table {
+  border-collapse: collapse;
+  margin-bottom: 0.5rem;
+}
+
+.registers th {
+  text-align: left;
+  padding-right: 1rem;
+  color: var(--vscode-descriptionForeground);
+  font-weight: 600;
+}
+
+.registers td {
+  font-variant-numeric: tabular-nums;
+}
+
+.flags span {
+  font-family: monospace;
+  letter-spacing: 0.15em;
+}
+
+.placeholder {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}

@@ -5,14 +5,15 @@ import * as vscode from "vscode"
 import { resolveDocsUrl } from "./commands/docs.js"
 import { type InjectMode, performInject } from "./commands/inject.js"
 import { performPull } from "./commands/pull.js"
-import { readSettingsWithWarnings } from "./config/Settings.js"
-import { vsCodeConfigReader } from "./config/vsCodeConfigReader.js"
-import type { ConnectionState } from "./connection/PingService.js"
-import { PingService } from "./connection/PingService.js"
-import { BasicDebugSession } from "./debug/BasicDebugSession.js"
-import { registerBasicDiagnostics } from "./diagnostics/registerBasicDiagnostics.js"
-import { EmulatorLauncher } from "./lifecycle/EmulatorLauncher.js"
-import { StatusBarPresenter } from "./statusBar/StatusBarPresenter.js"
+import { readSettingsWithWarnings } from "./config/settings.js"
+import { vsCodeConfigReader } from "./config/vs-code-config-reader.js"
+import type { ConnectionState } from "./connection/ping-service.js"
+import { PingService } from "./connection/ping-service.js"
+import { BasicDebugSession } from "./debug/basic-debug-session.js"
+import { registerBasicDiagnostics } from "./diagnostics/register-basic-diagnostics.js"
+import { EmulatorLauncher } from "./lifecycle/emulator-launcher.js"
+import { StatusBarPresenter } from "./status-bar/status-bar-presenter.js"
+import { DebuggerPanel } from "./webview/debugger-panel.js"
 
 export function activate(context: vscode.ExtensionContext): void {
   const out = vscode.window.createOutputChannel("AMSpiriT")
@@ -202,6 +203,12 @@ export function activate(context: vscode.ExtensionContext): void {
         "workbench.action.openWalkthrough",
         "amspirit-emulator.amspirit-basic#amspirit.getStarted",
         false,
+      ),
+    ),
+    vscode.commands.registerCommand("amspirit.debugger.openPanel", () =>
+      DebuggerPanel.show(
+        context.extensionUri,
+        () => new EmulatorClient({ port: loadSettings().webPort }),
       ),
     ),
   )

@@ -205,6 +205,12 @@
         "title": "Get Started",
         "category": "AMSpiriT",
         "icon": "$(book)"
+      },
+      {
+        "command": "amspirit.debugger.openPanel",
+        "title": "Open Debug Panel (Z80 registers)",
+        "category": "AMSpiriT",
+        "icon": "$(debug-alt)"
       }
     ],
     "keybindings": [
@@ -370,8 +376,8 @@
     }
   },
   "scripts": {
-    "build": "node esbuild.mjs --production",
-    "compile": "node esbuild.mjs",
+    "build": "vite build && node esbuild.mjs --production",
+    "compile": "vite build && node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
@@ -389,12 +395,20 @@
     "@vscode/debugprotocol": "^1.68.0"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/react": "^16.1.0",
     "@types/node": "^20.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "@types/vscode": "^1.80.0",
+    "@vitejs/plugin-react": "^4.3.4",
     "@vitest/coverage-v8": "^4.1.8",
     "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.28.1",
+    "jsdom": "^25.0.1",
     "ovsx": "^1.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "typescript": "^5.6.0",
     "vite": "^7.3.5",
     "vitest": "^4.1.8"

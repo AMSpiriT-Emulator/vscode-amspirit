@@ -1,6 +1,6 @@
-export type { ConnectionState } from "../connection/PingService.js"
+export type { ConnectionState } from "../connection/ping-service.js"
 
-import type { ConnectionState } from "../connection/PingService.js"
+import type { ConnectionState } from "../connection/ping-service.js"
 
 export interface IndicatorView {
   text: string

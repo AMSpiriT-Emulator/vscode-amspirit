@@ -70,6 +70,27 @@ export interface PingState {
   paused: boolean
 }
 
+/** Z80 register snapshot from `/api/z80` (all values unsigned). */
+export interface Z80Registers {
+  PC: number
+  SP: number
+  A: number
+  F: number
+  B: number
+  C: number
+  D: number
+  E: number
+  H: number
+  L: number
+  IX: number
+  IY: number
+  I: number
+  R: number
+  IFF1: number
+  IFF2: number
+  IM: number
+}
+
 /** Line number `0xFFFF` reported by the emulator when no program is running. */
 export const DIRECT_MODE_LINE = 0xffff
 
@@ -177,6 +198,11 @@ export class EmulatorClient {
     } catch {
       return { ok: false, paused: false }
     }
+  }
+
+  /** Z80 register snapshot via `/api/z80`. */
+  async getZ80(): Promise<Z80Registers> {
+    return this.getJson<Z80Registers>("/api/z80", this.debugTimeoutMs)
   }
 
   /** Read `len` bytes of central RAM from `addr` via `/api/ram`. */

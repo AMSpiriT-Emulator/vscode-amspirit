@@ -6,7 +6,7 @@ import {
   indexListingByLine,
   parseBasicLineNumber,
   resolveBreakpoints,
-} from "../../src/debug/BreakpointMapper.js"
+} from "../../src/debug/breakpoint-mapper.js"
 
 const listing: BasicListing = {
   lines: [

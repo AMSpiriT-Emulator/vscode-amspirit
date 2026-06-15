@@ -35,8 +35,9 @@
 | Debug HTTP methods on `EmulatorClient` (+ tests) | ✅ | basic_state/listing/step/bp/runto/config/pingState |
 | Pure debug modules (BreakpointMapper / StopPoller / dapHandlers) | ✅ | line↔addr mapping, paused polling, DAP responses |
 | `BasicDebugSession` (DAP) + manifest contributes | ✅ | breakpoints + debuggers + activation (inline adapter) |
-| Phase 2a: Locomotive BASIC variable inspection (DAP Variables) | ✅ | pure `BasicVarParser` + `readRam`; strings resolved |
-| Phase 2b: React/TSX webview (Z80 regs / disasm) | ⬜ | React only; Vite; CSP nonce; typed postMessage |
+| Phase 2a: Locomotive BASIC variable inspection (DAP Variables) | ✅ | pure `basic-var-parser` + `readRam`; strings resolved |
+| Phase 2b: React/TSX webview — Z80 registers | ✅ | Vite + CSP nonce; `getZ80`/`z80-flags`/`register-view` (TDD); `registers.tsx` (RTL) |
+| Phase 2c: webview disassembly view | ⬜ | Z80 disassembler (pure, TDD) + memory view |
 | End-to-end manual validation vs real emulator | ⬜ | launch `--web-server`, set BP, observe |
 
 ## Guardrail baseline
