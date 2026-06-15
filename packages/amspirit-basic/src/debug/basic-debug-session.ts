@@ -59,6 +59,14 @@ export class BasicDebugSession extends LoggingDebugSession {
   private poller: StopPoller | undefined
   private disposed = false
   private stopOnEntry = false
+  /** True once the program is running and a stop is expected (arms the monitor). */
+  private running = false
+  /** Reason for the first stop after start ("entry" when stopping on entry). */
+  private firstStopReason = "breakpoint"
+  /** Internal one-shot breakpoint on the program's first line (stop-on-entry). */
+  private entryAddr: number | undefined
+  /** Last user breakpoint addresses, so the entry bp can be merged then dropped. */
+  private userBpAddrs: number[] = []
 
   constructor(
     private readonly createClient: (host: string, port: number) => EmulatorClient,
@@ -81,7 +89,18 @@ export class BasicDebugSession extends LoggingDebugSession {
     response: DebugProtocol.AttachResponse,
     args: DebugProtocol.AttachRequestArguments & BasicDebugConfig,
   ): Promise<void> {
-    await this.connect(args)
+    this.connect(args)
+    if (this.stopOnEntry && this.client) {
+      // Attach freezes whatever the program is doing right now.
+      try {
+        await this.client.setPaused(true)
+      } catch {
+        // best effort
+      }
+      this.sendEvent(new StoppedEvent("entry", THREAD_ID))
+    } else {
+      this.running = true
+    }
     this.sendResponse(response)
   }
 
@@ -89,12 +108,25 @@ export class BasicDebugSession extends LoggingDebugSession {
     response: DebugProtocol.LaunchResponse,
     args: DebugProtocol.LaunchRequestArguments & BasicDebugConfig,
   ): Promise<void> {
-    await this.connect(args)
-    if (this.client && args.program) {
+    this.connect(args)
+    const client = this.client
+    if (client && args.program) {
       this.programPath = args.program
       const source = this.readLines(args.program).join("\n")
       try {
-        await this.client.injectBasic(source, false, !args.stopOnEntry)
+        if (this.stopOnEntry) {
+          // Tokenize first (no run) so we can resolve the entry line and ARM the
+          // entry breakpoint *before* RUN — otherwise line 1 executes before the
+          // breakpoint is set and we sail past it.
+          await client.injectBasic(source, false, false)
+          this.entryAddr = await this.resolveEntryAddr(client)
+          this.firstStopReason = "entry"
+          if (this.entryAddr !== undefined) {
+            await client.setBasicBreakpoints([this.entryAddr])
+          }
+        }
+        await client.injectBasic(source, false, true)
+        this.running = true
       } catch {
         // Surface nothing fatal; the user can still attach to current memory.
       }
@@ -102,20 +134,30 @@ export class BasicDebugSession extends LoggingDebugSession {
     this.sendResponse(response)
   }
 
-  private async connect(args: BasicDebugConfig): Promise<void> {
+  /**
+   * Address of the first statement, retried because injection is async — the
+   * listing is empty until the emulator finishes tokenizing (a frame or two).
+   */
+  private async resolveEntryAddr(client: EmulatorClient): Promise<number | undefined> {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      try {
+        const listing = await client.getBasicListing()
+        const addr = listing.lines[0]?.stmts[0]?.addr
+        if (addr !== undefined) return addr
+      } catch {
+        // retry
+      }
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    }
+    return undefined
+  }
+
+  private connect(args: BasicDebugConfig): void {
     const host = args.host ?? "127.0.0.1"
     const port = args.port ?? 8765
     this.client = this.createClient(host, port)
     this.stopOnEntry = args.stopOnEntry === true
     if (args.program) this.programPath = args.program
-    if (this.stopOnEntry && this.client) {
-      try {
-        await this.client.setPaused(true)
-      } catch {
-        // best effort
-      }
-      this.sendEvent(new StoppedEvent("entry", THREAD_ID))
-    }
   }
 
   protected override async setBreakPointsRequest(
@@ -131,7 +173,8 @@ export class BasicDebugSession extends LoggingDebugSession {
       try {
         const listing = await this.client.getBasicListing()
         const resolved = resolveBreakpoints(requested, this.readLines(path), listing)
-        await this.client.setBasicBreakpoints(breakpointAddresses(resolved))
+        this.userBpAddrs = breakpointAddresses(resolved)
+        await this.client.setBasicBreakpoints(this.bpAddrsToPost())
         verified = resolved.map((r) => ({ line: r.line, verified: r.verified }))
       } catch {
         // leave all unverified
@@ -142,14 +185,22 @@ export class BasicDebugSession extends LoggingDebugSession {
     this.sendResponse(response)
   }
 
+  /** User breakpoints plus the internal entry breakpoint (deduped). */
+  private bpAddrsToPost(): number[] {
+    if (this.entryAddr === undefined || this.userBpAddrs.includes(this.entryAddr)) {
+      return this.userBpAddrs
+    }
+    return [...this.userBpAddrs, this.entryAddr]
+  }
+
   protected override configurationDoneRequest(
     response: DebugProtocol.ConfigurationDoneResponse,
     args: DebugProtocol.ConfigurationDoneArguments,
   ): void {
     super.configurationDoneRequest(response, args)
-    // When we didn't stop on entry the program is free-running; watch for the
-    // first breakpoint hit (the emulator freezes itself, we only detect it).
-    if (!this.stopOnEntry) this.monitorStop("breakpoint", 0)
+    // Once the program is running, watch for the first freeze (entry bp or a
+    // user breakpoint). The emulator freezes itself; we only detect it.
+    if (this.running) this.monitorStop(this.firstStopReason, 0)
   }
 
   protected override threadsRequest(response: DebugProtocol.ThreadsResponse): void {
@@ -338,11 +389,24 @@ export class BasicDebugSession extends LoggingDebugSession {
       if (this.disposed || this.poller !== poller) return
       void poller.start().then((result) => {
         if (result === "stopped" && this.poller === poller && !this.disposed) {
+          this.consumeEntryBreakpoint()
           this.sendEvent(new StoppedEvent(reason, THREAD_ID))
         }
       })
     }
     if (settleMs > 0) setTimeout(begin, settleMs)
     else begin()
+  }
+
+  /**
+   * Drop the one-shot entry breakpoint after the entry stop, re-syncing the
+   * core to just the user's breakpoints so it doesn't re-break at line 1.
+   */
+  private consumeEntryBreakpoint(): void {
+    if (this.entryAddr === undefined) return
+    this.entryAddr = undefined
+    this.firstStopReason = "breakpoint"
+    const client = this.client
+    if (client) void client.setBasicBreakpoints(this.userBpAddrs).catch(() => {})
   }
 }
