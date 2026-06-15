@@ -64,6 +64,14 @@ CI mirrors it and adds `pnpm audit:prod`.
 - **Quality gate is non-negotiable.** Biome (no ESLint/Prettier), TS strict with
   `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`, Vitest with enforced
   coverage. Run `/refactor-preflight` before pushing.
+- **One tsconfig the editor and the gate share.** Each package's `tsconfig.json`
+  is the editor + `typecheck` config and covers **everything** — `src`, `tests`,
+  and `vitest.config.mts` — with `noEmit`, so VS Code's Problems panel matches
+  `pnpm typecheck` exactly. Emission is a separate `tsconfig.build.json` (src
+  only). Don't exclude `tests` from `tsconfig.json` (that re-creates IDE-only
+  "inferred project" errors the gate can't see). Vitest configs are `.mts`
+  (genuinely ESM) so they typecheck under `node16`. knip entries are pinned in
+  `knip.json` since the editor config no longer maps `out/` → `src/`.
 - **TDD with DI in `amspirit-basic`.** Business logic lives in pure, testable
   modules; `src/extension.ts` is a thin, untested VS Code adapter. Examples:
   `src/config/Settings.ts`, `src/connection/PingService.ts`,
