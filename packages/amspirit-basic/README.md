@@ -16,6 +16,9 @@ the emulator's memory.
 - **Launch the emulator** from VS Code and a **status-bar connection
   indicator**.
 - **Line-number diagnostics** for statements missing a line number.
+- **Debug your BASIC** — breakpoints in the gutter, step by line or statement,
+  run-to-cursor, current-line highlight, and a live **Variables** view (see
+  [Debugging](#debugging)).
 
 ## Requirements
 
@@ -31,6 +34,53 @@ amspirit-lite-sdl --web-server --web-port 8765   # or: amspirit-lite-qt --web-se
 Point the extension at the binary via `amspirit.emulatorPath`, or run
 **AMSpiriT: Launch Emulator** and pick it on first use.
 
+## Debugging
+
+Debug a Locomotive BASIC program running in the emulator with the native VS Code
+debugger. The debug type is `amspirit-basic`; there are two ways to start it:
+
+- **Attach** — debug a program already running in the emulator.
+- **Launch** — inject the current `.bas`, run it, and break on entry.
+
+In the **Run and Debug** view, *create a launch.json* offers both as snippets,
+or use the built-in **Attach to AMSpiriT** default. A typical
+`.vscode/launch.json`:
+
+```jsonc
+{
+  "configurations": [
+    { "type": "amspirit-basic", "request": "attach", "name": "Attach to AMSpiriT", "port": 8765 },
+    { "type": "amspirit-basic", "request": "launch", "name": "Launch current BASIC", "program": "${file}", "stopOnEntry": true }
+  ]
+}
+```
+
+What you get:
+
+- **Breakpoints** in the `.bas` gutter — set on the line number.
+- **Continue / Pause**, **Step Over** (advance one line), **Step Into** (advance
+  one statement), and **Run to Cursor**.
+- The **current line** is highlighted as execution advances.
+- The **Variables** view decodes the live Locomotive BASIC variables — integers,
+  reals and strings — straight from CPC RAM.
+- **AMSpiriT: Open Debug Panel (BASIC Variables)** opens a richer card that
+  mirrors the emulator's own Variables panel: the BASIC memory layout (TXTTOP,
+  program size, variable/array zones, free RAM, statement address, version) plus
+  a name/type/value table whose cells flash when a value changes. It refreshes
+  while the emulator is paused.
+
+| Config attribute | Applies to | Default | Description |
+|---|---|---|---|
+| `program` | launch | `${file}` | `.bas` file injected before debugging |
+| `host` | attach / launch | `127.0.0.1` | Emulator web-debug host |
+| `port` | attach / launch | `8765` | Emulator web-debug port (matches `amspirit.webPort`) |
+| `stopOnEntry` | attach / launch | `true` (launch) / `false` (attach) | Pause as soon as debugging starts |
+
+> Stepping operates at the BASIC level. The emulator interprets BASIC, so the
+> Z80 program counter stays inside the firmware while you step statements — the
+> highlighted line and the Variables view are the source of truth for *where*
+> the program is, not the Z80 registers.
+
 ## Commands
 
 | Command | Default key | Description |
@@ -40,6 +90,7 @@ Point the extension at the binary via `amspirit.emulatorPath`, or run
 | AMSpiriT: Inject BASIC (no run) | `Ctrl+F6` | Inject without running |
 | AMSpiriT: Reset & Inject BASIC (no run) | — | Hard-reset, inject without running |
 | AMSpiriT: Pull BASIC from Emulator | — | Read memory into a new `.bas` editor |
+| AMSpiriT: Open Debug Panel (BASIC Variables) | — | Live BASIC variables card (memory layout + values) |
 | AMSpiriT: Launch Emulator | — | Start `amspirit-lite-sdl --web-server` |
 | AMSpiriT: Connect to Emulator | — | Ping and update the status bar |
 | AMSpiriT: Open Documentation | — | Open the online documentation in your browser |

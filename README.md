@@ -17,13 +17,14 @@ vscode-amspirit/
 ├── tsconfig.base.json           # TS strict partagé
 ├── pnpm-workspace.yaml
 └── doc/
-    └── debugger-plan.md         # Plan d'évolution future (debugger DAP)
+    ├── STATUS.md                # Point de reprise multi-session (état courant)
+    └── debugger-plan.md         # Plan initial du debugger (historique, antérieur à l'API)
 ```
 
 | Package | Rôle | Statut |
 |---|---|---|
-| [`@amspirit/shared`](packages/shared/) | `EmulatorClient` + `spawnEmulator` | Stable, couvert par tests Vitest |
-| [`amspirit-basic`](packages/amspirit-basic/) | Extension VS Code (BASIC + injection), architecture TDD (modules testables, DI) | Actif, c'est ce qui est packagé |
+| [`@amspirit/shared`](packages/shared/) | `EmulatorClient` (HTTP, dont les endpoints de debug BASIC + `readRam`), `spawnEmulator`, désassembleur Z80 réutilisable | Stable, couvert par tests Vitest |
+| [`amspirit-basic`](packages/amspirit-basic/) | Extension VS Code (BASIC + injection + **débogueur DAP**), architecture TDD (modules testables, DI) | Actif, c'est ce qui est packagé |
 
 ## Stack outillage
 
@@ -81,6 +82,11 @@ Procédure complète (secrets, comptes publisher, étapes) : [doc/release.md](do
 - Lancement de l'émulateur depuis VS Code
 - Indicateur de connexion dans la barre d'état
 - Diagnostics de numéros de ligne manquants
+- **Débogueur BASIC** (type DAP `amspirit-basic`) : points d'arrêt dans la
+  gouttière, pas-à-pas par ligne ou par instruction, exécution jusqu'au curseur,
+  surbrillance de la ligne courante, et inspection des variables Locomotive
+  BASIC (entiers, réels, chaînes) lues en RAM. Panneau « Open Debug Panel
+  (BASIC Variables) » reproduisant la carte Variables de l'émulateur.
 - Walkthrough de prise en main + commande « Open Documentation »
 
 ### Configuration (`Ctrl+,` → chercher `amspirit`)
@@ -111,6 +117,7 @@ Procédure complète (secrets, comptes publisher, étapes) : [doc/release.md](do
 | `AMSpiriT: Inject BASIC (no run)` | Injecte sans exécuter |
 | `AMSpiriT: Reset & Inject BASIC (no run)` | Hard-reset puis injecte sans exécuter |
 | `AMSpiriT: Pull BASIC from Emulator` | Récupère le programme en mémoire dans un nouvel éditeur `.bas` |
+| `AMSpiriT: Open Debug Panel (BASIC Variables)` | Carte des variables BASIC en direct (layout mémoire + valeurs) |
 | `AMSpiriT: Open Documentation` | Ouvre la documentation en ligne dans le navigateur |
 | `AMSpiriT: Open Settings` | Ouvre les réglages de l'extension |
 | `AMSpiriT: Get Started` | Ouvre le walkthrough de prise en main |
@@ -143,11 +150,13 @@ Development Host avec l'extension chargée. Recharge la fenêtre hôte
 
 L'architecture isole la logique métier de l'API VS Code :
 
-- `src/config/Settings.ts` — lecture/validation des settings (testable sans VS Code)
-- `src/connection/PingService.ts` — boucle de ping + transitions d'état
-- `src/lifecycle/EmulatorLauncher.ts` — gestion du process enfant
-- `src/statusBar/ConnectionIndicator.ts` — view-model pur de la barre d'état
+- `src/config/settings.ts` — lecture/validation des settings (testable sans VS Code)
+- `src/connection/ping-service.ts` — boucle de ping + transitions d'état
+- `src/lifecycle/emulator-launcher.ts` — gestion du process enfant
+- `src/status-bar/connection-indicator.ts` — view-model pur de la barre d'état
 - `src/commands/inject.ts` — réducteur d'outcome pour les 4 modes d'injection
+- `src/debug/` — débogueur DAP : mapping ligne↔adresse, détection d'arrêt,
+  parseur de variables BASIC, lecture partagée des variables (modules purs testés)
 - `src/extension.ts` — fine couche d'adaptation VS Code (non testée)
 
 Tous les modules métier sont couverts par des tests Vitest dans
@@ -162,8 +171,10 @@ Tous les modules métier sont couverts par des tests Vitest dans
 - [x] Commande « Pull BASIC from Emulator » (`GET /api/basic_export`)
 - [x] Commande « Open Documentation » + étape walkthrough
 - [x] Bundling esbuild + pipeline de release (Changesets, VS Marketplace + Open VSX)
-- [ ] Validation manuelle de bout en bout contre l'émulateur réel
-- [ ] Extension `amspirit-debugger` (DAP) — voir [doc/debugger-plan.md](doc/debugger-plan.md)
+- [x] Débogueur BASIC (DAP) intégré à `amspirit-basic` : points d'arrêt,
+      pas-à-pas, variables, carte « BASIC Variables »
+- [x] Désassembleur Z80 réutilisable dans `@amspirit/shared`
+- [ ] Validation manuelle de bout en bout de la carte Variables contre l'émulateur réel
 
 ## License
 
