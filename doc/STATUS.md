@@ -6,7 +6,7 @@
 
 ## Where we are
 
-- **Branch:** `docs/sdl-and-qt`
+- **Branch:** `feat/basic-debugger` (not pushed; no PR yet)
 - **Current effort:** BASIC debugger in the `amspirit-basic` extension —
   bringing the features of the amspirit-lite web debugger (breakpoints, step,
   continue/pause, run-to, current-line highlight, variables) into VS Code.
@@ -14,15 +14,17 @@
   (breakpoints, continue/pause, step line & statement, run-to-cursor, current
   line) — **no emulator changes needed**. Phase 2 = Webview (Z80 registers,
   disassembly) + Locomotive BASIC variable inspection.
-- **Why now:** the amspirit-lite HTTP API evolved and now exposes native BASIC
-  debug endpoints (`/api/basic_state`, `/api/basic_listing`,
-  `/api/basic_step`, `/api/basic_bp`, `/api/basic_runto`, `/api/config`).
-  `doc/debugger-plan.md` predates this and is stale on its core assumption
-  ("no breakpoints/step") — to be updated as part of the work.
-- **Next step:** Phase 1 (DAP execution control) is implemented and unit-tested;
-  remaining is **end-to-end manual validation** against the real emulator
-  (set a breakpoint, continue, step, run-to-cursor), then Phase 2 (React/TSX
-  webview: Z80 registers / disassembly + Locomotive BASIC variable inspection).
+- **Done & validated** (real emulator, dev host): Phases 1, 2a, 2b — breakpoints,
+  current-line highlight, variables (`A`), step, Attach **and** Launch with real
+  stop-on-entry all confirmed working. Latest report:
+  `doc/sessions/2026-06-15-debugger-phase1-2.md`.
+- **Why this shape:** the amspirit-lite HTTP API exposes native BASIC debug
+  endpoints (`/api/basic_state`, `/api/basic_listing`, `/api/basic_step`,
+  `/api/basic_bp`, `/api/basic_runto`, `/api/config`); the emulator pauses
+  *itself* on a hit (`freeze=true`) so the adapter runs a persistent stop monitor.
+  `doc/debugger-plan.md` predates this API and is stale.
+- **Next step:** Phase 2c — TDD a pure Z80 disassembler + a memory/disasm React
+  view (mirror the register-view slice). Then push the branch / open a PR.
 
 ## Roadmap
 
@@ -37,8 +39,11 @@
 | `BasicDebugSession` (DAP) + manifest contributes | ✅ | breakpoints + debuggers + activation (inline adapter) |
 | Phase 2a: Locomotive BASIC variable inspection (DAP Variables) | ✅ | pure `basic-var-parser` + `readRam`; strings resolved |
 | Phase 2b: React/TSX webview — Z80 registers | ✅ | Vite + CSP nonce; `getZ80`/`z80-flags`/`register-view` (TDD); `registers.tsx` (RTL) |
-| Phase 2c: webview disassembly view | ⬜ | Z80 disassembler (pure, TDD) + memory view |
-| End-to-end manual validation vs real emulator | ⬜ | launch `--web-server`, set BP, observe |
+| Stop-detection / variables / Launch fixes | ✅ | persistent monitor; name A≠AA; Launch injects+runs w/ stop-on-entry |
+| End-to-end manual validation vs real emulator | ✅ | breakpoints, step, variables, Launch stop-on-entry confirmed in dev host |
+| Phase 2c: webview disassembly + memory view | ⬜ | Z80 disassembler (pure, TDD) + memory view |
+| Wire webview to DAP `stopped` events (not just 500 ms poll) | ⬜ | refresh registers/vars on stop |
+| Push branch + open PR | ⬜ | `feat/basic-debugger` |
 
 ## Guardrail baseline
 
