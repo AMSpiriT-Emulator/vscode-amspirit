@@ -6,7 +6,9 @@
 
 ## Where we are
 
-- **Branch:** `feat/basic-debugger` (not pushed; no PR yet)
+- **Branch:** `main` — the BASIC debugger shipped via **PR #3 (merged**, merge
+  commit `fcf5a91`). Local `feat/basic-debugger` deleted; the remote branch may
+  still need pruning.
 - **Current effort:** BASIC debugger in the `amspirit-basic` extension —
   bringing the features of the amspirit-lite web debugger (breakpoints, step,
   continue/pause, run-to, current-line highlight, variables) into VS Code.
@@ -27,8 +29,15 @@
   `/api/basic_bp`, `/api/basic_runto`, `/api/config`); the emulator pauses
   *itself* on a hit (`freeze=true`) so the adapter runs a persistent stop monitor.
   `doc/debugger-plan.md` predates this API and is stale.
-- **Next step:** wire the Variables card refresh to DAP `stopped` events (refresh
-  on stop, not just the 500 ms poll); then push the branch / open a PR.
+- **Latest fix (branch `fix/debugger-prerun-breakpoints`):** breakpoints set
+  *before* launch were ignored — `launchRequest` ran the program (`run=true`)
+  immediately, racing `setBreakPointsRequest`. Now gated on the DAP handshake
+  (tokenize → set breakpoints → `configurationDone` → run) via two one-shot
+  gates; first unit test for `BasicDebugSession` added. **Validated on a real
+  emulator.** See `doc/sessions/2026-06-15-debugger-prerun-breakpoints.md`.
+- **Next step (open follow-ups):** (1) validate the BASIC Variables card against
+  a real emulator (only unit/RTL-green so far); (2) optionally wire the card
+  refresh to DAP `stopped` events instead of the paused-gated 500 ms poll.
 
 ## Roadmap
 
@@ -49,8 +58,9 @@
 | `readRam` CPU-visible read (`view=cpu`) | ✅ | reads memory as the Z80 sees it (ROM mapped); kept in shared API |
 | BASIC Variables card (amspirit-lite style) | ✅ | **the** webview content now: `basic-vars-view` (pure, TDD) + `basic-variables.tsx` (RTL, value-flash); panel reads `getBasicState`+`parseBasicVars` each tick; memory-layout header + name/type/value table |
 | Z80 registers + disassembly webview views | ❌ removed | not needed for a BASIC extension; modules/tests deleted from `amspirit-basic`. Disassembler stays in shared for reuse |
+| Pre-run breakpoints honored on Launch | ✅ | DAP handshake gated (tokenize→setBreakpoints→configurationDone→run); first `BasicDebugSession` unit test. Real-emulator validated |
 | Wire webview to DAP `stopped` events (not just 500 ms poll) | ⬜ | refresh variables card on stop instead of bare 500 ms poll |
-| Push branch + open PR | ⬜ | `feat/basic-debugger` |
+| Push branch + open PR | ✅ | PR #3 **merged** to `main` (`fcf5a91`) |
 
 ## Guardrail baseline
 
