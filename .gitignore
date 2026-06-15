@@ -2,7 +2,13 @@ node_modules/
 out/
 dist/
 *.vsix
-.claude/
+# Keep .claude local (plans, settings) but track shared skills.
+.claude/*
+!.claude/skills/
+
+# Dated session reports are local/append-only; the template stays tracked.
+doc/sessions/*
+!doc/sessions/_TEMPLATE.md
 .vite/
 coverage/
 *.tsbuildinfo
