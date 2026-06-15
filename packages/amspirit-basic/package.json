@@ -208,7 +208,7 @@
       },
       {
         "command": "amspirit.debugger.openPanel",
-        "title": "Open Debug Panel (Z80 registers)",
+        "title": "Open Debug Panel (BASIC Variables)",
         "category": "AMSpiriT",
         "icon": "$(debug-alt)"
       }
@@ -378,7 +378,7 @@
   "scripts": {
     "build": "vite build && node esbuild.mjs --production",
     "compile": "vite build && node esbuild.mjs",
-    "watch": "node esbuild.mjs --watch",
+    "watch": "vite build --watch & node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",

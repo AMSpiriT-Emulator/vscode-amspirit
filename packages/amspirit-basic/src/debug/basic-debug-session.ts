@@ -13,7 +13,7 @@ import {
   Thread,
 } from "@vscode/debugadapter"
 import type { DebugProtocol } from "@vscode/debugprotocol"
-import { type BasicVar, decodeCpcString, parseBasicVars } from "./basic-var-parser.js"
+import { readResolvedBasicVars } from "./basic-vars-reader.js"
 import { breakpointAddresses, resolveBreakpoints } from "./breakpoint-mapper.js"
 import {
   buildStackFrame,
@@ -26,8 +26,6 @@ import { StopPoller } from "./stop-poller.js"
 const THREAD_ID = 1
 const VARS_REF = 1
 const STATE_REF = 2
-/** Cap on the variable zone read, mirroring the web debugger. */
-const MAX_VAR_BYTES = 8192
 /**
  * After issuing a resume/step, ignore the emulator's `paused` flag for this long
  * so we don't read the stale pre-resume freeze (the emulator applies pending
@@ -267,25 +265,8 @@ export class BasicDebugSession extends LoggingDebugSession {
   private async readBasicVariables(): Promise<DebugProtocol.Variable[]> {
     const client = this.client
     if (!client) return []
-    const state = await client.getBasicState()
-    const [chainBytes, varBytes] = await Promise.all([
-      client.readRam(state.chain_heads_addr, 54),
-      client.readRam(state.txttop, Math.min(state.var_size, MAX_VAR_BYTES)),
-    ])
-    const parsed = parseBasicVars(chainBytes, varBytes)
-    return Promise.all(parsed.map((v) => this.toVariable(client, v)))
-  }
-
-  private async toVariable(client: EmulatorClient, v: BasicVar): Promise<DebugProtocol.Variable> {
-    let value = v.value
-    if (v.type === "string" && v.strLen > 0) {
-      try {
-        value = `"${decodeCpcString(await client.readRam(v.strAddr, v.strLen))}"`
-      } catch {
-        // keep the "(len N)" placeholder on read failure
-      }
-    }
-    return { name: v.name, value, variablesReference: 0 }
+    const { vars } = await readResolvedBasicVars(client)
+    return vars.map((v) => ({ name: v.name, value: v.value, variablesReference: 0 }))
   }
 
   protected override async continueRequest(

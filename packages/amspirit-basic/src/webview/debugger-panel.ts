@@ -2,24 +2,25 @@ import { randomBytes } from "node:crypto"
 import type { EmulatorClient } from "@amspirit/shared"
 import * as vscode from "vscode"
 import type { ExtToWebview } from "../../webview/messaging.js"
-import { decodeCpcString, parseBasicVars } from "../debug/basic-var-parser.js"
+import { readResolvedBasicVars } from "../debug/basic-vars-reader.js"
 import { type BasicVarsView, buildBasicVarsView } from "../debug/basic-vars-view.js"
 import { buildWebviewHtml } from "./html.js"
 
 const POLL_INTERVAL_MS = 500
-/** Cap the variable-zone read (matches the amspirit-lite web debugger). */
-const MAX_VAR_BYTES = 8192
-const CHAIN_HEADS_BYTES = 54
 
 /**
  * Singleton webview panel showing the live Locomotive BASIC variables (React),
  * styled after the amspirit-lite web debugger. Thin shell: it polls the
- * emulator each tick and posts a snapshot; the React app only renders.
+ * emulator while visible and posts a snapshot; the React app only renders.
+ * The variable data is only meaningful while the emulator is paused, so the
+ * poll skips the (multi-request) read when the program is running.
  */
 export class DebuggerPanel {
   private static current: DebuggerPanel | undefined
 
   private timer: ReturnType<typeof setInterval> | undefined
+  /** Last snapshot posted, serialized — skip posting identical snapshots. */
+  private lastPosted = ""
   private readonly disposables: vscode.Disposable[] = []
 
   private constructor(
@@ -31,6 +32,11 @@ export class DebuggerPanel {
     this.disposables.push(
       this.panel.webview.onDidReceiveMessage((m: { type?: string }) => {
         if (m.type === "ready") this.startPolling()
+      }),
+      // Don't poll a hidden panel; resume when it comes back into view.
+      this.panel.onDidChangeViewState(() => {
+        if (this.panel.visible) this.startPolling()
+        else this.stopPolling()
       }),
     )
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables)
@@ -71,35 +77,36 @@ export class DebuggerPanel {
   private startPolling(): void {
     if (this.timer) return
     const tick = async (): Promise<void> => {
-      const variables = await this.readVariables(this.makeClient())
-      const payload: ExtToWebview = { type: "snapshot", snapshot: { variables } }
-      void this.panel.webview.postMessage(payload)
+      const client = this.makeClient()
+      // The variable zone is only coherent while paused; a cheap ping gate
+      // avoids the multi-request read (state + chains + per-string) while the
+      // program runs free.
+      const { paused } = await client.pingState()
+      const variables = paused ? await this.readVariables(client) : null
+      this.post({ type: "snapshot", snapshot: { variables } })
     }
     void tick()
     this.timer = setInterval(() => void tick(), POLL_INTERVAL_MS)
   }
 
-  /** Read + decode the Locomotive BASIC variables (mirrors the DAP Variables scope). */
+  private stopPolling(): void {
+    if (this.timer) clearInterval(this.timer)
+    this.timer = undefined
+  }
+
+  /** Post a snapshot, skipping the round-trip when it's identical to the last. */
+  private post(payload: ExtToWebview): void {
+    const json = JSON.stringify(payload)
+    if (json === this.lastPosted) return
+    this.lastPosted = json
+    void this.panel.webview.postMessage(payload)
+  }
+
+  /** Read + decode the Locomotive BASIC variables (shared with the DAP Variables scope). */
   private async readVariables(client: EmulatorClient): Promise<BasicVarsView | null> {
     try {
-      const state = await client.getBasicState()
-      const [chainBytes, varBytes] = await Promise.all([
-        client.readRam(state.chain_heads_addr, CHAIN_HEADS_BYTES),
-        client.readRam(state.txttop, Math.min(state.var_size, MAX_VAR_BYTES)),
-      ])
-      const parsed = parseBasicVars(chainBytes, varBytes)
-      await Promise.all(
-        parsed.map(async (v) => {
-          if (v.type === "string" && v.strLen > 0) {
-            try {
-              v.value = `"${decodeCpcString(await client.readRam(v.strAddr, v.strLen))}"`
-            } catch {
-              // keep the "(len N)" placeholder on read failure
-            }
-          }
-        }),
-      )
-      return buildBasicVarsView(state, parsed)
+      const { state, vars } = await readResolvedBasicVars(client)
+      return buildBasicVarsView(state, vars)
     } catch {
       return null
     }
@@ -107,8 +114,7 @@ export class DebuggerPanel {
 
   private dispose(): void {
     DebuggerPanel.current = undefined
-    if (this.timer) clearInterval(this.timer)
-    this.timer = undefined
+    this.stopPolling()
     this.panel.dispose()
     for (const d of this.disposables) d.dispose()
   }

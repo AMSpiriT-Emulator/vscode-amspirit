@@ -309,6 +309,9 @@ export class EmulatorClient {
 
 /** Decode a hex string (2 chars per byte) into a byte array. */
 function hexToBytes(hex: string): number[] {
+  if (hex.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(hex)) {
+    throw new Error(`malformed hex response (${hex.length} chars)`)
+  }
   const n = hex.length >> 1
   const bytes = new Array<number>(n)
   for (let i = 0; i < n; i++) {
