@@ -1,5 +1,5 @@
 import * as vscode from "vscode"
-import { buildIndicator, type ConnectionState } from "./ConnectionIndicator.js"
+import { buildIndicator, type ConnectionState } from "./connection-indicator.js"
 
 const WARNING_BG = new vscode.ThemeColor("statusBarItem.warningBackground")
 

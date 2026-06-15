@@ -1,5 +1,12 @@
 # Plan : extension `amspirit-debugger` (DAP + React webview)
 
+> ⚠️ **Document historique — partiellement périmé.** Le débogueur a finalement
+> été intégré à l'extension **`amspirit-basic`** (pas un package séparé), en
+> s'appuyant sur les endpoints de debug BASIC natifs de l'émulateur
+> (`/api/basic_*`) apparus après la rédaction de ce plan, et la vue webview se
+> limite à la carte « BASIC Variables ». Pour l'état réel et le point de reprise,
+> voir **[`doc/STATUS.md`](STATUS.md)**.
+
 > Statut : **plan validé, prêt à implémentation**
 > Date : 2026-05-31
 > Stack : pnpm workspaces · TypeScript strict · Biome · Vitest + RTL · React (TSX uniquement) · Vite · DAP

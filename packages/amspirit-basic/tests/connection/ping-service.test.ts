@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { PingService } from "../../src/connection/PingService.js"
+import { PingService } from "../../src/connection/ping-service.js"
 
 describe("PingService", () => {
   beforeEach(() => {

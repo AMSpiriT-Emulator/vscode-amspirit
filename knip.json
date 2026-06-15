@@ -1,0 +1,10 @@
+{
+  "workspaces": {
+    "packages/amspirit-basic": {
+      "entry": ["src/extension.ts!"]
+    },
+    "packages/shared": {
+      "entry": ["src/index.ts!"]
+    }
+  }
+}

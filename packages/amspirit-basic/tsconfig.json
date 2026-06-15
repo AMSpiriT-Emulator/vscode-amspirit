@@ -3,16 +3,17 @@
   "compilerOptions": {
     "module": "node16",
     "moduleResolution": "node16",
-    "outDir": "./out",
-    "rootDir": "./src",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node", "vscode"],
+    "jsx": "react-jsx",
+    "noEmit": true,
     "composite": false,
     "declaration": false,
     "declarationMap": false,
-    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
+    "rootDir": ".",
+    "tsBuildInfoFile": "./typecheck.tsbuildinfo"
   },
-  "references": [{ "path": "../shared" }],
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "out", "tests"]
+  "references": [{ "path": "../shared/tsconfig.build.json" }],
+  "include": ["src/**/*", "webview/**/*", "tests/**/*", "vitest.config.mts"],
+  "exclude": ["node_modules", "out"]
 }

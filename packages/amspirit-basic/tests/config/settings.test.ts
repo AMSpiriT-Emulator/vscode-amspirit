@@ -3,7 +3,7 @@ import {
   type ConfigReader,
   readSettings,
   readSettingsWithWarnings,
-} from "../../src/config/Settings.js"
+} from "../../src/config/settings.js"
 
 function makeReader(map: Record<string, unknown>): ConfigReader {
   return {

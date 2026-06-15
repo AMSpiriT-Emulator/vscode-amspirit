@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildIndicator } from "../../src/statusBar/ConnectionIndicator.js"
+import { buildIndicator } from "../../src/status-bar/connection-indicator.js"
 
 describe("buildIndicator", () => {
   it("uses an active icon and no warning bg when connected", () => {
