@@ -2,14 +2,13 @@
  * Pure decoder for Locomotive BASIC variables out of raw CPC RAM.
  *
  * Ported from the amspirit-lite web debugger (`parseBasicVars`). Variables live
- * in 27 chains anchored at `chain_heads_addr` (A–Z plus the `FN ` chain); each
- * node stores the *rest* of the name after its implicit first letter, a type
- * byte, then the value. String values aren't inlined — the node holds a
+ * in 27 chains anchored at `chain_heads_addr` (A–Z plus the `FN ` chain). Each
+ * node stores the **full** name (every character, the last with bit 7 set), a
+ * type byte, then the value — the first-letter chain is just an index, so the
+ * name is read straight from the node (do NOT re-prepend the chain letter, that
+ * doubled it to `AA`). String values aren't inlined — the node holds a
  * length+address descriptor, so the caller resolves the text with a follow-up
  * RAM read (see {@link decodeCpcString}).
- *
- * Note: unlike the web UI, this prepends the implicit first letter, so a
- * single-letter variable reads back as `A` (the web UI drops it and shows "").
  */
 
 type BasicVarType = "int" | "string" | "real" | "deffn" | "unknown"
@@ -29,8 +28,6 @@ export interface BasicVar {
   /** Variable record address (the chain pointer), for diagnostics. */
   addr: number
 }
-
-const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 const byte = (b: readonly number[], i: number): number => b[i] ?? 0
 
@@ -71,7 +68,6 @@ export function parseBasicVars(
   const visited = new Set<number>()
 
   for (let i = 0; i < 27; i++) {
-    const firstLetter = i < 26 ? (LETTERS[i] ?? "") : "FN "
     let ptr = byte(chainBytes, i * 2) | (byte(chainBytes, i * 2 + 1) << 8)
     let safety = 0
 
@@ -84,16 +80,16 @@ export function parseBasicVars(
 
       const next = byte(varBytes, rel) | (byte(varBytes, rel + 1) << 8)
 
-      // Name suffix: ASCII bytes, last byte has bit 7 set; first letter implicit.
+      // Full name: ASCII bytes, last byte has bit 7 set.
       let pos = rel + 2
-      let suffix = ""
+      let name = ""
       while (pos < varBytes.length) {
         const ch = byte(varBytes, pos++)
-        suffix += String.fromCharCode(ch & 0x7f)
+        name += String.fromCharCode(ch & 0x7f)
         if (ch & 0x80) break
       }
-      // biome-ignore lint/suspicious/noControlCharactersInRegex: strip NUL of the empty suffix
-      const baseName = firstLetter + suffix.replace(/\x00/g, "")
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: strip a stray NUL
+      const baseName = name.replace(/\x00/g, "")
       if (pos >= varBytes.length) break
 
       const tc = byte(varBytes, pos++)

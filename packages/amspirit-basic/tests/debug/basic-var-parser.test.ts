@@ -42,25 +42,27 @@ describe("parseBasicVars", () => {
     expect(parseBasicVars(new Array(54).fill(0), [])).toEqual([])
   })
 
+  // The name field stores the FULL name (incl. first letter); the last char has
+  // bit 7 set. So variable "A" is the single byte 'A'|0x80 = 0xC1.
   it("decodes an integer variable A% = 5", () => {
-    const vars = parseBasicVars(chainHeads(0, 1), [0x00, 0x00, 0x80, 0x01, 0x05, 0x00])
+    const vars = parseBasicVars(chainHeads(0, 1), [0x00, 0x00, 0xc1, 0x01, 0x05, 0x00])
     expect(vars).toHaveLength(1)
     expect(vars[0]).toMatchObject({ name: "A%", baseName: "A", type: "int", value: "5" })
   })
 
   it("decodes a negative integer (two's complement)", () => {
-    const vars = parseBasicVars(chainHeads(0, 1), [0x00, 0x00, 0x80, 0x01, 0xff, 0xff])
+    const vars = parseBasicVars(chainHeads(0, 1), [0x00, 0x00, 0xc1, 0x01, 0xff, 0xff])
     expect(vars[0]?.value).toBe("-1")
   })
 
   it("decodes a multi-letter integer name AB%", () => {
-    // name suffix "B" with bit 7 set on the last char = 0x42 | 0x80 = 0xC2
-    const vars = parseBasicVars(chainHeads(0, 1), [0x00, 0x00, 0xc2, 0x01, 0x07, 0x00])
+    // name "AB": 'A' (0x41) then 'B'|0x80 (0xC2)
+    const vars = parseBasicVars(chainHeads(0, 1), [0x00, 0x00, 0x41, 0xc2, 0x01, 0x07, 0x00])
     expect(vars[0]).toMatchObject({ name: "AB%", baseName: "AB", value: "7" })
   })
 
   it("decodes a string descriptor B$ (length + address, no content)", () => {
-    const vars = parseBasicVars(chainHeads(1, 1), [0x00, 0x00, 0x80, 0x02, 0x03, 0x34, 0x12])
+    const vars = parseBasicVars(chainHeads(1, 1), [0x00, 0x00, 0xc2, 0x02, 0x03, 0x34, 0x12])
     expect(vars[0]).toMatchObject({
       name: "B$",
       type: "string",
@@ -73,14 +75,14 @@ describe("parseBasicVars", () => {
   it("decodes a real variable C = 1", () => {
     const vars = parseBasicVars(
       chainHeads(2, 1),
-      [0x00, 0x00, 0x80, 0x04, 0x00, 0x00, 0x00, 0x00, 0x81],
+      [0x00, 0x00, 0xc3, 0x04, 0x00, 0x00, 0x00, 0x00, 0x81],
     )
     expect(vars[0]).toMatchObject({ name: "C", type: "real", value: "1" })
   })
 
   it("stops a corrupt self-referential chain (visited guard)", () => {
     // next offset points back to the same node (ptr 1) -> must not loop forever
-    const vars = parseBasicVars(chainHeads(0, 1), [0x01, 0x00, 0x80, 0x01, 0x09, 0x00])
+    const vars = parseBasicVars(chainHeads(0, 1), [0x01, 0x00, 0xc1, 0x01, 0x09, 0x00])
     expect(vars).toHaveLength(1)
     expect(vars[0]?.value).toBe("9")
   })
