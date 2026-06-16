@@ -6,10 +6,17 @@
 
 ## Where we are
 
-- **Branch:** `main` — the BASIC debugger shipped via **PR #3 (merged**, merge
-  commit `fcf5a91`). Local `feat/basic-debugger` deleted; the remote branch may
-  still need pruning.
-- **Current effort:** BASIC debugger in the `amspirit-basic` extension —
+- **Branch:** `feat/amspirit-z80` — phase 1 of the **new `amspirit-z80`
+  extension** (Z80 assembler DAP debugger) is implemented and the full gate is
+  green, but **uncommitted** and **not yet live-validated**. See
+  `doc/sessions/2026-06-16-amspirit-z80-phase1.md` and the brief
+  `doc/amspirit-z80-plan.md`.
+- **Next step:** live-validate `amspirit-z80` against a real emulator built from
+  amspirit-lite `feat/z80-breakpoints` (assemble `.asm` with `sjasmplus --sld`,
+  attach, check breakpoint/step/registers), then commit + open a PR to `main`.
+- **Prior effort (done, merged):** BASIC debugger in `amspirit-basic` — shipped
+  via **PR #3 (merged**, merge commit `fcf5a91`).
+- **BASIC debugger context:** `amspirit-basic` extension —
   bringing the features of the amspirit-lite web debugger (breakpoints, step,
   continue/pause, run-to, current-line highlight, variables) into VS Code.
 - **Approach:** Hybrid **DAP + Webview**. Phase 1 = DAP execution control
@@ -61,6 +68,9 @@
 | Pre-run breakpoints honored on Launch | ✅ | DAP handshake gated (tokenize→setBreakpoints→configurationDone→run); first `BasicDebugSession` unit test. Real-emulator validated |
 | Wire webview to DAP `stopped` events (not just 500 ms poll) | ⬜ | refresh variables card on stop instead of bare 500 ms poll |
 | Push branch + open PR | ✅ | PR #3 **merged** to `main` (`fcf5a91`) |
+| **`amspirit-z80`** package — Z80 assembler DAP debugger | 🟡 | Phase 1 implemented in TDD: shared `setZ80Breakpoints`/`step` + shadow regs; `StopPoller` moved to shared; pure modules `SjasmplusSldParser`/`registers-view`/`step-targets` (tested); `Z80DebugSession` (attach) + extension. Gate green, changeset added. **Uncommitted + not live-validated.** |
+| Live-validate `amspirit-z80` vs real emulator | ⬜ | §7 of `amspirit-z80-plan.md`; needs amspirit-lite `feat/z80-breakpoints` build + `sjasmplus --sld` |
+| Commit `amspirit-z80` + open PR to `main` | ⬜ | §8; no attribution trailer |
 
 ## Guardrail baseline
 

@@ -14,6 +14,26 @@
       "name": "Launch current BASIC",
       "program": "${file}",
       "stopOnEntry": true
+    },
+    {
+      "type": "amspirit-z80",
+      "request": "launch",
+      "name": "Launch Z80 (hello.asm)",
+      "program": "${workspaceFolder}/hello.asm",
+      "mapFile": "${workspaceFolder}/hello.sld",
+      "binary": "${workspaceFolder}/hello.bin",
+      "stopOnEntry": true,
+      "port": 8765,
+      "preLaunchTask": "sjasmplus: assemble"
+    },
+    {
+      "type": "amspirit-z80",
+      "request": "attach",
+      "name": "Attach Z80 (hello.asm)",
+      "program": "${workspaceFolder}/hello.asm",
+      "mapFile": "${workspaceFolder}/hello.sld",
+      "port": 8765,
+      "stopOnEntry": false
     }
   ]
 }

@@ -11,6 +11,17 @@
       ],
       "outFiles": ["${workspaceFolder}/packages/amspirit-basic/out/**/*.js"],
       "preLaunchTask": "build:amspirit-basic"
+    },
+    {
+      "name": "Run amspirit-z80",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/amspirit-z80",
+        "${workspaceFolder}/sandbox"
+      ],
+      "outFiles": ["${workspaceFolder}/packages/amspirit-z80/out/**/*.js"],
+      "preLaunchTask": "build:amspirit-z80"
     }
   ]
 }

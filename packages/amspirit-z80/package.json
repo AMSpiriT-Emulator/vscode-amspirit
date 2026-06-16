@@ -1,0 +1,247 @@
+{
+  "name": "amspirit-z80",
+  "displayName": "AMSpiriT Z80",
+  "description": "Z80 assembler debugger for AMSpiriT Lite (source-level breakpoints, stepping, registers)",
+  "version": "0.0.0",
+  "publisher": "amspirit-emulator",
+  "private": true,
+  "license": "MIT",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AMSpiriT-emulator/vscode-amspirit"
+  },
+  "bugs": {
+    "url": "https://github.com/AMSpiriT-emulator/vscode-amspirit/issues"
+  },
+  "homepage": "https://github.com/AMSpiriT-emulator/vscode-amspirit#readme",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Debuggers",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "amstrad",
+    "cpc",
+    "z80",
+    "assembler",
+    "debugger",
+    "emulator"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onDebugResolve:amspirit-z80"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "z80-asm",
+        "aliases": [
+          "Z80 Assembler",
+          "Z80 ASM"
+        ],
+        "extensions": [
+          ".asm",
+          ".z80",
+          ".s"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "z80-asm"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "amspirit-z80",
+        "label": "AMSpiriT Z80",
+        "languages": [
+          "z80-asm"
+        ],
+        "configurationAttributes": {
+          "attach": {
+            "properties": {
+              "host": {
+                "type": "string",
+                "description": "Host of the emulator web debug server.",
+                "default": "127.0.0.1"
+              },
+              "port": {
+                "type": "number",
+                "description": "Port of the emulator web debug server (matches amspirit.webPort).",
+                "default": 8765
+              },
+              "program": {
+                "type": "string",
+                "description": "Path to the assembled program source, used to display the current line and auto-detect the symbol map.",
+                "default": "${file}"
+              },
+              "mapFile": {
+                "type": "string",
+                "description": "Path to the sjasmplus SLD symbol map (.sld). Auto-detected next to program when omitted."
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Pause the emulator as soon as the debugger attaches.",
+                "default": false
+              }
+            }
+          },
+          "launch": {
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Path to the assembler source, used for the current line and to auto-detect the symbol map (.sld) and binary (.bin).",
+                "default": "${file}"
+              },
+              "mapFile": {
+                "type": "string",
+                "description": "Path to the sjasmplus SLD symbol map (.sld). Auto-detected next to program when omitted."
+              },
+              "binary": {
+                "type": "string",
+                "description": "Path to the assembled flat binary to load into RAM. Defaults to the program with a .bin extension."
+              },
+              "loadAddress": {
+                "type": "number",
+                "description": "Address to load the binary at (the assembler ORG). Defaults to the lowest address in the symbol map."
+              },
+              "entry": {
+                "type": "number",
+                "description": "PC to jump to after loading. Defaults to loadAddress."
+              },
+              "host": {
+                "type": "string",
+                "default": "127.0.0.1"
+              },
+              "port": {
+                "type": "number",
+                "default": 8765
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Break at the program entry as soon as it is loaded.",
+                "default": true
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "amspirit-z80",
+            "request": "attach",
+            "name": "Attach to AMSpiriT (Z80)",
+            "port": 8765
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "AMSpiriT Z80: Launch (load & run binary)",
+            "description": "Load an assembled Z80 binary into the emulator, run it and debug.",
+            "body": {
+              "type": "amspirit-z80",
+              "request": "launch",
+              "name": "Launch Z80 program",
+              "program": "^\"\\${file}\"",
+              "stopOnEntry": true,
+              "port": 8765
+            }
+          },
+          {
+            "label": "AMSpiriT Z80: Attach",
+            "description": "Debug a Z80 assembler program in a running AMSpiriT emulator.",
+            "body": {
+              "type": "amspirit-z80",
+              "request": "attach",
+              "name": "Attach to AMSpiriT (Z80)",
+              "program": "^\"\\${file}\"",
+              "port": 8765
+            }
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "amspirit.z80.launch",
+        "title": "Launch Emulator",
+        "category": "AMSpiriT Z80",
+        "icon": "$(play)"
+      },
+      {
+        "command": "amspirit.z80.connect",
+        "title": "Connect to Emulator",
+        "category": "AMSpiriT Z80",
+        "icon": "$(plug)"
+      }
+    ],
+    "configuration": {
+      "title": "AMSpiriT Z80",
+      "properties": {
+        "amspirit-z80.emulatorPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "order": 1,
+          "markdownDescription": "Absolute path to the AMSpiriT Lite binary (any build exposing the web debug server). Leave empty to be prompted on first launch."
+        },
+        "amspirit-z80.webPort": {
+          "type": "integer",
+          "default": 8765,
+          "minimum": 1,
+          "maximum": 65535,
+          "order": 2,
+          "markdownDescription": "TCP port used by the emulator's web debug server. Must match the `--web-port` value passed at launch."
+        },
+        "amspirit-z80.autoLaunch": {
+          "type": "boolean",
+          "default": false,
+          "order": 3,
+          "markdownDescription": "When `true`, automatically launch the emulator at activation if it is not already reachable."
+        },
+        "amspirit-z80.emulatorArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "order": 4,
+          "markdownDescription": "Extra command-line arguments appended after `--web-server --web-port <port>` when launching the emulator."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs --production",
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "vscode:prepublish": "pnpm build",
+    "package": "vsce package --no-dependencies",
+    "publish:vsce": "vsce publish --no-dependencies --packagePath",
+    "publish:ovsx": "ovsx publish",
+    "clean": "rm -rf out *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@amspirit/shared": "workspace:*",
+    "@vscode/debugadapter": "^1.68.0",
+    "@vscode/debugprotocol": "^1.68.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.80.0",
+    "@vitest/coverage-v8": "^4.1.8",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.1",
+    "ovsx": "^1.0.1",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.8"
+  }
+}

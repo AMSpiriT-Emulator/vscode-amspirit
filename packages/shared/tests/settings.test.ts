@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest"
-import {
-  type ConfigReader,
-  readSettings,
-  readSettingsWithWarnings,
-} from "../../src/config/settings.js"
+import { type ConfigReader, readSettings, readSettingsWithWarnings } from "../src/settings.js"
 
 function makeReader(map: Record<string, unknown>): ConfigReader {
   return {

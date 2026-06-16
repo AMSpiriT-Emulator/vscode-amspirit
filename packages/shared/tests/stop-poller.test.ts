@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { StopPoller, type StopPollerOptions } from "../../src/debug/stop-poller.js"
+import { StopPoller, type StopPollerOptions } from "../src/stop-poller.js"
 
 /** A setInterval/clearInterval pair whose callback can be fired manually. */
 function fakeTimer(): StopPollerOptions & { fire: () => void; cleared: () => boolean } {

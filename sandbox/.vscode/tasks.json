@@ -1,0 +1,25 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "sjasmplus: assemble",
+      "detail": "Assemble the active .asm with a symbol map (.sld) and binary (.bin via SAVEBIN).",
+      "type": "shell",
+      "command": "sjasmplus --fullpath --sld=${fileBasenameNoExtension}.sld ${fileBasename}",
+      "options": { "cwd": "${fileDirname}" },
+      "group": "build",
+      "presentation": { "reveal": "silent", "panel": "shared", "clear": true },
+      "problemMatcher": {
+        "owner": "z80-asm",
+        "fileLocation": ["relative", "${fileDirname}"],
+        "pattern": {
+          "regexp": "^(.*)\\((\\d+)\\):\\s+(error|warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "severity": 3,
+          "message": 4
+        }
+      }
+    }
+  ]
+}

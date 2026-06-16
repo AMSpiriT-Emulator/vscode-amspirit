@@ -88,6 +88,43 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@types/node@20.19.41)(@vitest/coverage-v8@4.1.8)(jsdom@25.0.1)(vite@7.3.5(@types/node@20.19.41)(jiti@2.7.0)(yaml@2.9.0))
 
+  packages/amspirit-z80:
+    dependencies:
+      '@amspirit/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@vscode/debugadapter':
+        specifier: ^1.68.0
+        version: 1.68.0
+      '@vscode/debugprotocol':
+        specifier: ^1.68.0
+        version: 1.68.0
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.41
+      '@types/vscode':
+        specifier: ^1.80.0
+        version: 1.120.0
+      '@vitest/coverage-v8':
+        specifier: ^4.1.8
+        version: 4.1.8(vitest@4.1.8)
+      '@vscode/vsce':
+        specifier: ^3.9.2
+        version: 3.9.2
+      esbuild:
+        specifier: '>=0.28.1'
+        version: 0.28.1
+      ovsx:
+        specifier: ^1.0.1
+        version: 1.0.1
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@types/node@20.19.41)(@vitest/coverage-v8@4.1.8)(jsdom@25.0.1)(vite@7.3.5(@types/node@20.19.41)(jiti@2.7.0)(yaml@2.9.0))
+
   packages/shared:
     devDependencies:
       '@types/node':
