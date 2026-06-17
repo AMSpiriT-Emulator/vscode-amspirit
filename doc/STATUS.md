@@ -6,14 +6,25 @@
 
 ## Where we are
 
-- **Branch:** `feat/amspirit-z80` — phase 1 of the **new `amspirit-z80`
-  extension** (Z80 assembler DAP debugger) is implemented and the full gate is
-  green, but **uncommitted** and **not yet live-validated**. See
-  `doc/sessions/2026-06-16-amspirit-z80-phase1.md` and the brief
-  `doc/amspirit-z80-plan.md`.
-- **Next step:** live-validate `amspirit-z80` against a real emulator built from
-  amspirit-lite `feat/z80-breakpoints` (assemble `.asm` with `sjasmplus --sld`,
-  attach, check breakpoint/step/registers), then commit + open a PR to `main`.
+- **Branch:** `feat/amspirit-z80` — the **new `amspirit-z80` extension** (Z80
+  assembler DAP debugger). **Committed** (`616b93f` phase 1, `13bc03b` rasm
+  adapter), full gate green, **live-validated on a real emulator** (stepping +
+  current line confirmed for both sjasmplus and rasm). **Not pushed / no PR yet.**
+  See `doc/sessions/2026-06-16-amspirit-z80-phase1.md` and `doc/amspirit-z80-plan.md`.
+- **What works:** `attach` to a running program, and `launch` (load the `.bin`
+  into RAM via `/api/ram` + run, stop-on-entry); source-level breakpoints,
+  current-line highlight, step in/over/out (temp breakpoints); Z80 registers view
+  (Registers/Flags/Shadow/Interrupts); `readMemory` + `disassemble`; a status-bar
+  widget that can launch the emulator (own `amspirit-z80.*` settings namespace).
+  Symbol maps come from **sjasmplus SLD** (`.sld`) or **rasm `-map`** (`.map`,
+  ANSI-stripped), via a `SymbolMapParser` adapter chosen by file type.
+- **Tooling installed locally** (for the sandbox assemble tasks): **sjasmplus
+  v1.23.1** and **rasm v3.0.8** (both on PATH). Emulator: build amspirit-lite
+  `feat/z80-breakpoints` and run from `amspirit-lite/src` (ROMs are CWD-relative).
+- **Next step:** push `feat/amspirit-z80` + open PR to `main`. Open follow-ups:
+  rasm's trailing-`ret` line-attribution quirk; DeZog/CPC features (firmware
+  jumpblock labels + call-stack reconstruction, code coverage via `/api/codemap`);
+  rasm SNA/DSK load modes via `/api/script`.
 - **Prior effort (done, merged):** BASIC debugger in `amspirit-basic` — shipped
   via **PR #3 (merged**, merge commit `fcf5a91`).
 - **BASIC debugger context:** `amspirit-basic` extension —
@@ -68,9 +79,14 @@
 | Pre-run breakpoints honored on Launch | ✅ | DAP handshake gated (tokenize→setBreakpoints→configurationDone→run); first `BasicDebugSession` unit test. Real-emulator validated |
 | Wire webview to DAP `stopped` events (not just 500 ms poll) | ⬜ | refresh variables card on stop instead of bare 500 ms poll |
 | Push branch + open PR | ✅ | PR #3 **merged** to `main` (`fcf5a91`) |
-| **`amspirit-z80`** package — Z80 assembler DAP debugger | 🟡 | Phase 1 implemented in TDD: shared `setZ80Breakpoints`/`step` + shadow regs; `StopPoller` moved to shared; pure modules `SjasmplusSldParser`/`registers-view`/`step-targets` (tested); `Z80DebugSession` (attach) + extension. Gate green, changeset added. **Uncommitted + not live-validated.** |
-| Live-validate `amspirit-z80` vs real emulator | ⬜ | §7 of `amspirit-z80-plan.md`; needs amspirit-lite `feat/z80-breakpoints` build + `sjasmplus --sld` |
-| Commit `amspirit-z80` + open PR to `main` | ⬜ | §8; no attribution trailer |
+| **`amspirit-z80`** package — Z80 assembler DAP debugger | ✅ | TDD: shared `setZ80Breakpoints`/`step`/`writeRam` + shadow regs; `StopPoller`/`PingService`/`EmulatorLauncher`/settings moved to shared; pure modules `registers-view`/`step-targets`/symbol-map adapters; `Z80DebugSession` (attach + launch) + extension + status bar. Committed `616b93f`/`13bc03b`, gate green |
+| `amspirit-z80` attach + launch (load `.bin` via `/api/ram`, stop-on-entry) | ✅ | DAP handshake gates RUN until breakpoints set; one-shot entry bp; persistent stop monitor (emulator self-freezes on a Z80 PC bp) |
+| Symbol-map adapters: sjasmplus SLD + rasm `-map` | ✅ | `TraceSymbolMap` shared; `SjasmplusSldParser` (8-field SLD) + `RasmMapParser` (ANSI-stripped); selected by extension/sniff; TDD vs real output |
+| `amspirit-z80` status-bar widget + launch emulator | ✅ | `PingService`-driven indicator; click launches/connects; `amspirit-z80.*` settings namespace (no clash with `amspirit-basic`) |
+| Live-validate `amspirit-z80` vs real emulator | ✅ | breakpoint stop at PC, step in/over/out + current-line confirmed for sjasmplus **and** rasm |
+| Push `amspirit-z80` + open PR to `main` | ⬜ | branch `feat/amspirit-z80`; changeset `amspirit-z80: minor`; no attribution trailer |
+| rasm trailing-`ret` line-attribution quirk | ⬜ | rasm maps a `ret` before a label/EOF to the previous line; parsed as-is, refine later |
+| `amspirit-z80` DeZog/CPC features | ⬜ | firmware jumpblock labels + call-stack reconstruction, code coverage (`/api/codemap`); rasm SNA/DSK load via `/api/script` |
 
 ## Guardrail baseline
 
