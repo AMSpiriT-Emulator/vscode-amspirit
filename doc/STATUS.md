@@ -21,10 +21,26 @@
 - **Tooling installed locally** (for the sandbox assemble tasks): **sjasmplus
   v1.23.1** and **rasm v3.0.8** (both on PATH). Emulator: build amspirit-lite
   `feat/z80-breakpoints` and run from `amspirit-lite/src` (ROMs are CWD-relative).
-- **Next step:** push `feat/amspirit-z80` + open PR to `main`. Open follow-ups:
-  rasm's trailing-`ret` line-attribution quirk; DeZog/CPC features (firmware
-  jumpblock labels + call-stack reconstruction, code coverage via `/api/codemap`);
-  rasm SNA/DSK load modes via `/api/script`.
+- **Latest (2026-06-17):** call-stack reconstruction + firmware jumpblock labels
+  shipped; VS Code Disassembly View made to work (`instructionPointerReference`
+  anchor + real backward decode); step robustness (PC-settle wait + launch
+  stop-on-entry phantom-step workaround) all **live-validated by the user**.
+  Pure modules `call-stack`/`firmware-labels`/`disasm-window`/`step-landing` (TDD);
+  shared `disassemble()` reused; sample `sandbox/vectors.asm`. **Uncommitted.**
+  See `doc/sessions/2026-06-17-amspirit-z80-callstack-disasm-step.md`.
+- **Next step:** commit `feat/amspirit-z80` + push + open PR to `main`. Open
+  follow-ups: rasm's trailing-`ret` line-attribution quirk; code coverage via
+  `/api/codemap`; rasm SNA/DSK load modes via `/api/script`.
+- **Known emulator root cause (worked around in-extension, not fixed):** on
+  `launch`, `POST /api/ram {exec}` does `Core_z80_Write_Register(PC, entry)` +
+  `set_paused(false)` while the core is mid-instruction (emulator was running),
+  leaving a dirty M-cycle latch. The first raw `/api/step` then completes that
+  stale partial → PC lands one byte in (e.g. `&8000→&8001→&8004`). Attach is
+  clean because stop-on-entry uses `setPaused(true)` (boundary-aligned). The
+  amspirit-z80 extension works around it (first launch-entry step = run-to-next-
+  boundary). Proper fix would be in amspirit-lite's `exec` path (align to an
+  instruction boundary before/after the PC override). **Decided: keep the
+  workaround, no emulator change.**
 - **Prior effort (done, merged):** BASIC debugger in `amspirit-basic` — shipped
   via **PR #3 (merged**, merge commit `fcf5a91`).
 - **BASIC debugger context:** `amspirit-basic` extension —
@@ -84,6 +100,10 @@
 | Symbol-map adapters: sjasmplus SLD + rasm `-map` | ✅ | `TraceSymbolMap` shared; `SjasmplusSldParser` (8-field SLD) + `RasmMapParser` (ANSI-stripped); selected by extension/sniff; TDD vs real output |
 | `amspirit-z80` status-bar widget + launch emulator | ✅ | `PingService`-driven indicator; click launches/connects; `amspirit-z80.*` settings namespace (no clash with `amspirit-basic`) |
 | Live-validate `amspirit-z80` vs real emulator | ✅ | breakpoint stop at PC, step in/over/out + current-line confirmed for sjasmplus **and** rasm |
+| Call-stack reconstruction + firmware jumpblock labels | ✅ | pure `call-stack` (CALL/RST scan) + `firmware-labels` (&BB00–&BD37); multi-frame `stackTrace`, `TXT OUTPUT (0xBBxx)` labels. TDD |
+| VS Code Disassembly View working | ✅ | `instructionPointerReference` anchor (was blank without it) + pure `disasm-window` (real backward decode, PC centred); reuses shared `disassemble()`. TDD |
+| Step robustness | ✅ | `step-landing.stepSettled` (PC moves + stable) replaces fixed settle; launch stop-on-entry phantom step worked around (first step = run-to-boundary). Live-validated |
+| `stackTrace` resilience | ✅ | current-line frame 0 always emitted, even if the 64 KB call-stack snapshot read fails |
 | Push `amspirit-z80` + open PR to `main` | ⬜ | branch `feat/amspirit-z80`; changeset `amspirit-z80: minor`; no attribution trailer |
 | rasm trailing-`ret` line-attribution quirk | ⬜ | rasm maps a `ret` before a label/EOF to the previous line; parsed as-is, refine later |
 | `amspirit-z80` DeZog/CPC features | ⬜ | firmware jumpblock labels + call-stack reconstruction, code coverage (`/api/codemap`); rasm SNA/DSK load via `/api/script` |

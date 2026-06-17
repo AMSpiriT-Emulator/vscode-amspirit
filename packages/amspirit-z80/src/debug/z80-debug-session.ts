@@ -18,7 +18,11 @@ import {
   Thread,
 } from "@vscode/debugadapter"
 import type { DebugProtocol } from "@vscode/debugprotocol"
+import { type ReadMem, reconstructCallStack } from "../call-stack.js"
+import { type ByteReader, buildDisassemblyWindow } from "../disasm-window.js"
+import { firmwareLabel } from "../firmware-labels.js"
 import { buildRegisterScopes } from "../registers-view.js"
+import { stepSettled } from "../step-landing.js"
 import { planStepOver, returnAddress } from "../step-targets.js"
 import { parseSymbolMap } from "../symbol-map/parse-symbol-map.js"
 import type { SymbolMap } from "../symbol-map/symbol-map.js"
@@ -31,6 +35,11 @@ const FIRST_SCOPE_REF = 1
  * read the stale pre-resume freeze (it applies pending actions a frame later).
  */
 const STOP_SETTLE_MS = 150
+/**
+ * Max PC polls (~100 ms each) before a single step gives up waiting for the PC
+ * to settle — covers instructions that don't move the PC (`jr $`, `HALT`).
+ */
+const STEP_SETTLE_MAX_POLLS = 30
 /** Longest Z80 instruction is 4 bytes; read a small window to decode at PC. */
 const MAX_INSTR_LEN = 4
 
@@ -89,6 +98,13 @@ export class Z80DebugSession extends LoggingDebugSession {
   private running = false
   /** Reason for the first stop ("entry" when stopping on entry). */
   private firstStopReason = "breakpoint"
+  /**
+   * Set after a launch stop-on-entry. The emulator leaves a pre-fetched exec
+   * state at the entry, so the first *raw* step only advances one byte. Run to
+   * the next instruction boundary for that first step instead. Cleared once any
+   * execution resumes.
+   */
+  private atLaunchEntry = false
   /** One-shot breakpoint at the program entry (stop-on-entry), dropped after. */
   private entryAddr: number | undefined
   /** Last user breakpoint addresses; a temporary bp is merged then dropped. */
@@ -176,6 +192,7 @@ export class Z80DebugSession extends LoggingDebugSession {
     if (this.stopOnEntry) {
       this.entryAddr = entry
       this.firstStopReason = "entry"
+      this.atLaunchEntry = true
     }
 
     try {
@@ -295,21 +312,50 @@ export class Z80DebugSession extends LoggingDebugSession {
     const client = this.client
     if (client) {
       try {
-        const pc = (await client.getZ80()).PC
-        const loc = this.symbols?.addressToLine(pc)
-        const name = `0x${pc.toString(16).toUpperCase().padStart(4, "0")}`
-        if (loc) {
-          const source = this.sourceFor(loc.file)
-          frames.push(new StackFrame(0, name, source, loc.line, 1))
-        } else {
-          frames.push(new StackFrame(0, name))
+        const regs = await client.getZ80()
+        // Always surface the current line first. The call-stack reconstruction
+        // below is best-effort (it reads a large memory snapshot); a failure
+        // there must never drop this frame, or the current-line highlight blanks.
+        frames.push(this.frameFor(0, regs.PC))
+        try {
+          // No frame pointers, so reconstruct the stack by scanning memory for
+          // CALL/RST return addresses. Snapshot the CPU-visible 64 KB once and
+          // read it synchronously (PC often sits in ROM).
+          const snapshot = await client.readRam(0, 0x10000, { cpuView: true })
+          const read: ReadMem = (addr, len) => {
+            const out: number[] = []
+            for (let i = 0; i < len; i++) out.push(snapshot[(addr + i) & 0xffff] ?? 0)
+            return out
+          }
+          for (const frame of reconstructCallStack(regs.PC, regs.SP, read).slice(1)) {
+            frames.push(this.frameFor(frames.length, frame.address))
+          }
+        } catch {
+          // best-effort call stack; the current-line frame stands alone
         }
       } catch {
-        // no frame available
+        // no registers -> no frame
       }
     }
     response.body = { stackFrames: frames, totalFrames: frames.length }
     this.sendResponse(response)
+  }
+
+  /**
+   * A DAP frame for `addr`: a source line when the map knows it, else a CPC
+   * firmware routine name when the address is a jumpblock entry, else the bare
+   * hex address.
+   */
+  private frameFor(id: number, addr: number): StackFrame {
+    const hex = `0x${addr.toString(16).toUpperCase().padStart(4, "0")}`
+    const loc = this.symbols?.addressToLine(addr)
+    const fw = firmwareLabel(addr)
+    const frame = loc
+      ? new StackFrame(id, hex, this.sourceFor(loc.file), loc.line, 1)
+      : new StackFrame(id, fw ? `${fw} (${hex})` : hex)
+    // Anchor VS Code's Disassembly View at this frame's address.
+    frame.instructionPointerReference = hex
+    return frame
   }
 
   /** Resolve an SLD source path (often relative) against the program directory. */
@@ -354,6 +400,7 @@ export class Z80DebugSession extends LoggingDebugSession {
   protected override async continueRequest(
     response: DebugProtocol.ContinueResponse,
   ): Promise<void> {
+    this.atLaunchEntry = false
     if (this.client) {
       try {
         await this.client.setPaused(false)
@@ -421,17 +468,72 @@ export class Z80DebugSession extends LoggingDebugSession {
     await this.stepOne(response)
   }
 
-  /** Execute exactly one instruction; the emulator re-pauses synchronously. */
+  /**
+   * Execute exactly one instruction. The emulator stays paused and applies the
+   * step a frame later, so we poll the PC until it settles at a new address
+   * rather than trusting a fixed delay (which can read a mid-instruction PC).
+   */
   private async stepOne(response: DebugProtocol.Response): Promise<void> {
-    if (this.client) {
+    const client = this.client
+    // First step after a launch stop-on-entry: a raw step only advances one byte
+    // (pre-fetched exec state), so run to the next instruction boundary instead.
+    if (this.atLaunchEntry && client) {
+      this.atLaunchEntry = false
       try {
-        await this.client.step()
+        const instr = await this.decodeAtPc(client)
+        if (instr) {
+          this.sendResponse(response)
+          await this.runToTemp((instr.address + instr.bytes.length) & 0xffff, "step")
+          return
+        }
+      } catch {
+        // fall through to a raw step
+      }
+    }
+    this.atLaunchEntry = false
+
+    let prePc: number | undefined
+    if (client) {
+      try {
+        prePc = (await client.getZ80()).PC
+        await client.step()
       } catch {
         // ignore; the monitor below still reports the stop
       }
     }
     this.sendResponse(response)
-    this.monitorStop("step", STOP_SETTLE_MS)
+    if (client && prePc !== undefined) this.monitorStepSettled(client, prePc)
+    else this.monitorStop("step", STOP_SETTLE_MS)
+  }
+
+  /**
+   * Poll the PC until the step has settled ({@link stepSettled}): moved off
+   * `prePc` and stable across two polls. Falls back to reporting a stop after a
+   * bounded number of attempts so a self-loop (`jr $`) or `HALT` still resolves.
+   */
+  private monitorStepSettled(client: EmulatorClient, prePc: number): void {
+    this.poller?.cancel()
+    let prevPc: number | undefined
+    let attempts = 0
+    const poller = new StopPoller(async () => {
+      attempts += 1
+      try {
+        const pc = (await client.getZ80()).PC
+        if (stepSettled(prePc, pc, prevPc)) return true
+        prevPc = pc
+      } catch {
+        // transient read error; keep polling
+      }
+      return attempts >= STEP_SETTLE_MAX_POLLS
+    })
+    this.poller = poller
+    if (this.disposed) return
+    void poller.start().then((result) => {
+      if (result === "stopped" && this.poller === poller && !this.disposed) {
+        this.consumeEntryBreakpoint()
+        this.sendEvent(new StoppedEvent("step", THREAD_ID))
+      }
+    })
   }
 
   /** Set a one-shot breakpoint at `addr` (plus user bps), resume, restore on stop. */
@@ -486,22 +588,26 @@ export class Z80DebugSession extends LoggingDebugSession {
   ): Promise<void> {
     const client = this.client
     const count = args.instructionCount
-    const start = (Number(args.memoryReference) + (args.offset ?? 0)) & 0xffff
-    const instructions: DebugProtocol.DisassembledInstruction[] = []
-    if (client && Number.isFinite(start)) {
+    const offset = args.instructionOffset ?? 0
+    const base = (Number(args.memoryReference) + (args.offset ?? 0)) & 0xffff
+    let instructions: DebugProtocol.DisassembledInstruction[] = []
+    if (client && Number.isFinite(base)) {
       try {
-        const bytes = await client.readRam(start, count * MAX_INSTR_LEN, { cpuView: true })
-        let pos = 0
-        for (let i = 0; i < count; i++) {
-          const ins = decodeOne(bytes.slice(pos), (start + pos) & 0xffff)
-          if (!ins) break
-          instructions.push({
-            address: `0x${ins.address.toString(16)}`,
-            instructionBytes: ins.bytes.map((b) => b.toString(16).padStart(2, "0")).join(" "),
-            instruction: ins.text,
-          })
-          pos += ins.bytes.length
+        // Rows before `base` (negative offset) are decoded forward from a point
+        // ahead of the window, so snapshot from there through the forward span.
+        const lead = Math.min(Math.max(-offset, 0), count)
+        const start = Math.max(0, base - lead * MAX_INSTR_LEN)
+        const span = base - start + (count + Math.max(offset, 0)) * MAX_INSTR_LEN
+        const snapshot = await client.readRam(start, span, { cpuView: true })
+        const read: ByteReader = (addr, len) => {
+          const out: number[] = []
+          for (let i = 0; i < len; i++) {
+            const idx = addr - start + i
+            out.push(idx >= 0 && idx < snapshot.length ? (snapshot[idx] ?? 0) : 0)
+          }
+          return out
         }
+        instructions = buildDisassemblyWindow(read, base, offset, count)
       } catch {
         // empty
       }

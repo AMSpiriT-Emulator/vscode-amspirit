@@ -39,6 +39,17 @@
     },
     {
       "type": "amspirit-z80",
+      "request": "launch",
+      "name": "Launch Z80 — vectors.asm (firmware vectors)",
+      "program": "${workspaceFolder}/vectors.asm",
+      "binary": "${workspaceFolder}/vectors.bin",
+      "mapFile": "${workspaceFolder}/vectors.sld",
+      "stopOnEntry": true,
+      "port": 8765,
+      "preLaunchTask": "sjasmplus: assemble vectors"
+    },
+    {
+      "type": "amspirit-z80",
       "request": "attach",
       "name": "Attach Z80 (current file)",
       "program": "${file}",
