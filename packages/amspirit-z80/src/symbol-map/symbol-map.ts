@@ -1,3 +1,5 @@
+import { basename } from "node:path"
+
 /** A source location reported by a symbol map (file path as recorded in the map). */
 export interface SourceLocation {
   file: string
@@ -22,4 +24,43 @@ export interface SymbolMapParser {
   /** Stable identifier, e.g. `"sjasmplus-sld"` or `"rasm"`. */
   readonly id: string
   parse(content: string): SymbolMap
+}
+
+/**
+ * One trace data point: the address of the instruction assembled for a source
+ * line. `file` keeps the path as written in the artifact (so includes resolve
+ * relative to the program); matching is by basename.
+ */
+export interface TraceRecord {
+  file: string
+  line: number
+  addr: number
+}
+
+/**
+ * A {@link SymbolMap} backed by trace records. Shared by every adapter — each
+ * parser just turns its artifact into records and hands them here.
+ */
+export class TraceSymbolMap implements SymbolMap {
+  constructor(private readonly records: readonly TraceRecord[]) {}
+
+  lineToAddresses(file: string, line: number): number[] {
+    const key = basename(file)
+    return this.records
+      .filter((r) => basename(r.file) === key && r.line === line)
+      .map((r) => r.addr)
+  }
+
+  addressToLine(addr: number): SourceLocation | undefined {
+    const r = this.records.find((rec) => rec.addr === addr)
+    return r ? { file: r.file, line: r.line } : undefined
+  }
+
+  lowestAddress(): number | undefined {
+    let min: number | undefined
+    for (const r of this.records) {
+      if (min === undefined || r.addr < min) min = r.addr
+    }
+    return min
+  }
 }

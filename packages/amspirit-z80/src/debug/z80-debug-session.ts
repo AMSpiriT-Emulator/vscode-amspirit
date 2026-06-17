@@ -20,7 +20,7 @@ import {
 import type { DebugProtocol } from "@vscode/debugprotocol"
 import { buildRegisterScopes } from "../registers-view.js"
 import { planStepOver, returnAddress } from "../step-targets.js"
-import { SjasmplusSldParser } from "../symbol-map/sjasmplus-sld.js"
+import { parseSymbolMap } from "../symbol-map/parse-symbol-map.js"
 import type { SymbolMap } from "../symbol-map/symbol-map.js"
 
 const THREAD_ID = 1
@@ -215,18 +215,22 @@ export class Z80DebugSession extends LoggingDebugSession {
     const mapPath = this.resolveMapPath(args)
     if (!mapPath) return
     try {
-      this.symbols = new SjasmplusSldParser().parse(this.readFile(mapPath))
+      this.symbols = parseSymbolMap(mapPath, this.readFile(mapPath))
     } catch {
       // No map: breakpoints stay unverified, frames fall back to addresses.
     }
   }
 
-  /** Explicit `mapFile`, else `<program-without-ext>.sld` / `<program>.sld`. */
+  /**
+   * Explicit `mapFile`, else auto-detect next to `program`: the sjasmplus SLD
+   * (`.sld`) or the rasm map (`.map`), with or without the source extension.
+   */
   private resolveMapPath(args: Z80DebugConfig): string | undefined {
     if (args.mapFile) return args.mapFile
     const program = args.program
     if (!program) return undefined
-    const candidates = [program.replace(/\.[^.]+$/, ".sld"), `${program}.sld`]
+    const stem = program.replace(/\.[^.]+$/, "")
+    const candidates = [`${stem}.sld`, `${program}.sld`, `${stem}.map`, `${program}.map`]
     return candidates.find((p) => this.fileExists(p))
   }
 

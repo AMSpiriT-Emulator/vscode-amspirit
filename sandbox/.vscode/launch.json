@@ -18,20 +18,30 @@
     {
       "type": "amspirit-z80",
       "request": "launch",
-      "name": "Launch Z80 (hello.asm)",
+      "name": "Launch Z80 — hello.asm (sjasmplus)",
       "program": "${workspaceFolder}/hello.asm",
-      "mapFile": "${workspaceFolder}/hello.sld",
       "binary": "${workspaceFolder}/hello.bin",
+      "mapFile": "${workspaceFolder}/hello.sld",
       "stopOnEntry": true,
       "port": 8765,
-      "preLaunchTask": "sjasmplus: assemble"
+      "preLaunchTask": "sjasmplus: assemble hello"
+    },
+    {
+      "type": "amspirit-z80",
+      "request": "launch",
+      "name": "Launch Z80 — hello-rasm.asm (rasm)",
+      "program": "${workspaceFolder}/hello-rasm.asm",
+      "binary": "${workspaceFolder}/hello-rasm.bin",
+      "mapFile": "${workspaceFolder}/hello-rasm.map",
+      "stopOnEntry": true,
+      "port": 8765,
+      "preLaunchTask": "rasm: assemble hello-rasm"
     },
     {
       "type": "amspirit-z80",
       "request": "attach",
-      "name": "Attach Z80 (hello.asm)",
-      "program": "${workspaceFolder}/hello.asm",
-      "mapFile": "${workspaceFolder}/hello.sld",
+      "name": "Attach Z80 (current file)",
+      "program": "${file}",
       "port": 8765,
       "stopOnEntry": false
     }

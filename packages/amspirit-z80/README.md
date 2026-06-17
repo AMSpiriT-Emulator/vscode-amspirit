@@ -19,9 +19,13 @@ assembly straight from VS Code.
 ## Requirements
 
 - An AMSpiriT Lite build that exposes the web-debug server (`--web-server`).
-- A symbol map produced by your assembler. v1 supports **sjasmplus SLD**
-  (`sjasmplus --sld=out.sld`). Point `mapFile` at it, or drop it next to the
-  program so it is auto-detected.
+- A symbol map produced by your assembler. Supported:
+  - **sjasmplus** — SLD (`sjasmplus --sld=out.sld`), a `.sld` file.
+  - **rasm** — the `-map` listing (`rasm src.asm -ob src.bin -map > src.map`), a
+    `.map` file.
+
+  Point `mapFile` at it, or drop it next to the program (`.sld`/`.map`) so it is
+  auto-detected; the adapter is chosen by file type.
 
 ## Getting started
 
