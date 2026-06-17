@@ -28,9 +28,16 @@
   Pure modules `call-stack`/`firmware-labels`/`disasm-window`/`step-landing` (TDD);
   shared `disassemble()` reused; sample `sandbox/vectors.asm`. **Uncommitted.**
   See `doc/sessions/2026-06-17-amspirit-z80-callstack-disasm-step.md`.
-- **Next step:** commit `feat/amspirit-z80` + push + open PR to `main`. Open
-  follow-ups: rasm's trailing-`ret` line-attribution quirk; code coverage via
-  `/api/codemap`; rasm SNA/DSK load modes via `/api/script`.
+- **Next step:** changeset (`amspirit-z80: minor`) + push `feat/amspirit-z80` +
+  open PR to `main` (session work committed `1541727`, gate green). DeZog parity
+  follow-ups now enumerated/prioritised in `doc/amspirit-z80-plan.md` §10 — the
+  cheap first win is a **memory view**: `readMemoryRequest` is already wired but
+  no UI provides a `memoryReference`, so expose one on the pointer registers
+  (HL/DE/BC/IX/IY/SP/PC) to unlock VS Code's native hex inspector. Then code
+  coverage (`/api/codemap`), SNA/DSK load (`/api/script`), conditional/hit-count
+  breakpoints + logpoints (client-side), then writeMemory / reverse-debug /
+  watchpoints (the last needs an emulator endpoint). rasm trailing-`ret` quirk
+  still open.
 - **Known emulator root cause (worked around in-extension, not fixed):** on
   `launch`, `POST /api/ram {exec}` does `Core_z80_Write_Register(PC, entry)` +
   `set_paused(false)` while the core is mid-instruction (emulator was running),
@@ -106,7 +113,13 @@
 | `stackTrace` resilience | ✅ | current-line frame 0 always emitted, even if the 64 KB call-stack snapshot read fails |
 | Push `amspirit-z80` + open PR to `main` | ⬜ | branch `feat/amspirit-z80`; changeset `amspirit-z80: minor`; no attribution trailer |
 | rasm trailing-`ret` line-attribution quirk | ⬜ | rasm maps a `ret` before a label/EOF to the previous line; parsed as-is, refine later |
-| `amspirit-z80` DeZog/CPC features | ⬜ | firmware jumpblock labels + call-stack reconstruction, code coverage (`/api/codemap`); rasm SNA/DSK load via `/api/script` |
+| Memory view (expose `memoryReference` on pointer regs) | ⬜ | quick win: `readMemoryRequest` already wired, just no UI entry point → add `memoryReference` (HL/DE/BC/IX/IY/SP/PC) in `registers-view.ts` to unlock the native hex inspector |
+| Code coverage via `/api/codemap` | ⬜ | DeZog parity |
+| rasm SNA/DSK load modes via `/api/script` | ⬜ | DeZog parity |
+| Conditional / hit-count breakpoints + logpoints | ⬜ | client-side (re-`continue` on unmet condition); logpoints via `OutputEvent` |
+| `writeMemory` (`supportsWriteMemoryRequest`) | ⬜ | needs a RAM-write endpoint |
+| Reverse-debug (`stepBack`/`reverseContinue`) | ⬜ | emulator already records Z80 history (`session_record_z80_history`); expose via API then wire |
+| Memory watchpoints (read/write) | ⬜ | **needs an emulator data-breakpoint endpoint** (none today) — costliest |
 
 ## Guardrail baseline
 

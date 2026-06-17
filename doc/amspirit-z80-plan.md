@@ -142,6 +142,36 @@ ligne (`PC` == adresse SLD), tester continue / stepIn / next / stepOut.
 
 - Vue registres/désassemblage en webview React (le slice disasm existe déjà côté
   `amspirit-basic` phase 2c — réutilisable).
-- Adapter `rasm` (v2).
+- Adapter `rasm` (v2). ✅ livré (`13bc03b`).
 - Step-over/out **natifs** côté émulateur + canal SSE (optimisations émulateur
   déjà identifiées, non bloquantes).
+
+## 10. Parité DeZog — follow-ups (priorisés)
+
+État : breakpoints source, step in/over/out, continue/pause, registres
+(Registers/Flags/Shadow/Interrupts), call-stack reconstruite, labels firmware,
+Disassembly View, et `readMemory`/`disassemble` au niveau DAP sont **livrés**.
+Écarts restants vis-à-vis de DeZog, du moins coûteux au plus lourd :
+
+1. **Vue mémoire — quick win (aucun travail émulateur).** `readMemoryRequest` +
+   `supportsReadMemoryRequest` existent déjà, mais **rien dans l'UI ne fournit de
+   `memoryReference`**, donc le hex inspector natif de VS Code n'a pas de point
+   d'entrée (seule la Disassembly View a son ancre). Exposer `memoryReference`
+   sur les registres pointeurs (HL, DE, BC, IX, IY, SP, PC) dans
+   `registers-view.ts` → "View Binary" ouvre l'éditeur hexa natif. TDD sur le
+   module pur.
+2. **Code coverage** via `GET /api/codemap` (déjà identifié dans STATUS).
+3. **Chargement SNA/DSK** (modes rasm) via `POST /api/script`.
+4. **`writeMemory`** (`supportsWriteMemoryRequest` + endpoint d'écriture RAM).
+5. **Breakpoints conditionnels / hit-count / logpoints** — réalisables
+   **côté client** (évaluer la condition à l'arrêt, re-`continue` sinon) sans
+   nouvel endpoint ; logpoints = `OutputEvent`.
+6. **Reverse-debugging** (`stepBack`/`reverseContinue`) — l'émulateur enregistre
+   déjà un historique Z80 (`session_record_z80_history`) ; à exposer via l'API
+   puis câbler. Plus lourd.
+7. **Watchpoints mémoire** (read/write) — **nécessite un endpoint émulateur**
+   (pas de breakpoint data côté core aujourd'hui). Le plus coûteux.
+8. **Vues sprites / écran ULA**, save/restore d'état — hors périmètre debugger.
+
+Quirk connu : attribution de ligne du `ret` final côté rasm (mappé sur la ligne
+précédente) — parsé tel quel, à raffiner.
