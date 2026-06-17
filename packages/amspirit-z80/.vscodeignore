@@ -1,0 +1,16 @@
+# The extension ships only the bundled host (out/extension.js) plus marketplace
+# assets. Exclude all sources, tests, tooling and dependencies.
+.vscode/**
+.vscode-test/**
+src/**
+tests/**
+coverage/**
+node_modules/**
+**/*.ts
+**/*.map
+**/*.tsbuildinfo
+tsconfig*.json
+vitest.config.*
+esbuild.mjs
+.gitignore
+.editorconfig

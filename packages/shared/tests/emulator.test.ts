@@ -289,6 +289,66 @@ describe("EmulatorClient", () => {
     })
   })
 
+  describe("setZ80Breakpoints", () => {
+    it("POSTs hex-encoded PC addresses to /api/z80_bp", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.setZ80Breakpoints([0x8000, 0x100, 0xffff])
+      const rec = fake.recorded.at(0)
+      expect(rec?.method).toBe("POST")
+      expect(rec?.url).toBe("/api/z80_bp")
+      expect(rec?.body).toBe("0x8000,0x100,0xffff")
+    })
+
+    it("sends an empty body to clear all breakpoints", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.setZ80Breakpoints([])
+      expect(fake.recorded.at(0)?.body).toBe("")
+    })
+  })
+
+  describe("writeRam", () => {
+    it("POSTs hex-encoded bytes to /api/ram as JSON", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.writeRam(0x8000, [0x3e, 0x01, 0xc9])
+      const rec = fake.recorded.at(0)
+      expect(rec?.method).toBe("POST")
+      expect(rec?.url).toBe("/api/ram")
+      expect(rec?.headers["content-type"]).toMatch(/application\/json/)
+      expect(JSON.parse(rec?.body ?? "{}")).toEqual({ addr: 0x8000, data: "3e01c9" })
+    })
+
+    it("adds exec + entry when asked to run after the write", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.writeRam(0x8000, [0x3e], { exec: true, entry: 0x8000 })
+      expect(JSON.parse(fake.recorded.at(0)?.body ?? "{}")).toEqual({
+        addr: 0x8000,
+        data: "3e",
+        exec: true,
+        entry: 0x8000,
+      })
+    })
+
+    it("throws when the emulator rejects the write", async () => {
+      fake.responder = (_req, res) => {
+        res.writeHead(200, { "Content-Type": "application/json" })
+        res.end('{"ok":false}')
+      }
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.writeRam(0, [0])).rejects.toThrow(/rejected RAM write/)
+    })
+  })
+
+  describe("step", () => {
+    it("POSTs an empty body to /api/step", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.step()
+      const rec = fake.recorded.at(0)
+      expect(rec?.method).toBe("POST")
+      expect(rec?.url).toBe("/api/step")
+      expect(rec?.body).toBe("")
+    })
+  })
+
   describe("basicRunTo", () => {
     it("POSTs ?line=N when given a line", async () => {
       const client = new EmulatorClient({ port: fake.port })
@@ -350,6 +410,8 @@ describe("EmulatorClient", () => {
         SP: 0x4000,
         A: 0xff,
         F: 0x40,
+        A2: 0x11,
+        F2: 0x22,
         IX: 0x1000,
         IY: 0x2000,
         I: 0x10,
@@ -363,6 +425,8 @@ describe("EmulatorClient", () => {
       expect(z.PC).toBe(0x1234)
       expect(z.IM).toBe(1)
       expect(z.IX).toBe(0x1000)
+      expect(z.A2).toBe(0x11)
+      expect(z.F2).toBe(0x22)
       expect(fake.recorded.at(0)?.method).toBe("GET")
       expect(fake.recorded.at(0)?.url).toBe("/api/z80")
     })

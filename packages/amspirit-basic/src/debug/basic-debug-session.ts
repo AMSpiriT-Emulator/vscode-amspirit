@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { basename } from "node:path"
-import type { EmulatorClient } from "@amspirit/shared"
+import { type EmulatorClient, StopPoller } from "@amspirit/shared"
 import {
   ContinuedEvent,
   InitializedEvent,
@@ -21,7 +21,6 @@ import {
   type StepRequest,
   stepByLine,
 } from "./dap-handlers.js"
-import { StopPoller } from "./stop-poller.js"
 
 const THREAD_ID = 1
 const VARS_REF = 1

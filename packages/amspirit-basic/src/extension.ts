@@ -1,17 +1,21 @@
 import { basename } from "node:path"
-import { EmulatorClient, errorMessage, spawnEmulator } from "@amspirit/shared"
+import {
+  type ConnectionState,
+  EmulatorClient,
+  EmulatorLauncher,
+  errorMessage,
+  PingService,
+  readSettingsWithWarnings,
+  spawnEmulator,
+} from "@amspirit/shared"
 import * as vscode from "vscode"
 
 import { resolveDocsUrl } from "./commands/docs.js"
 import { type InjectMode, performInject } from "./commands/inject.js"
 import { performPull } from "./commands/pull.js"
-import { readSettingsWithWarnings } from "./config/settings.js"
 import { vsCodeConfigReader } from "./config/vs-code-config-reader.js"
-import type { ConnectionState } from "./connection/ping-service.js"
-import { PingService } from "./connection/ping-service.js"
 import { BasicDebugSession } from "./debug/basic-debug-session.js"
 import { registerBasicDiagnostics } from "./diagnostics/register-basic-diagnostics.js"
-import { EmulatorLauncher } from "./lifecycle/emulator-launcher.js"
 import { StatusBarPresenter } from "./status-bar/status-bar-presenter.js"
 import { DebuggerPanel } from "./webview/debugger-panel.js"
 

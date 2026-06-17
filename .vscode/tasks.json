@@ -8,6 +8,14 @@
       "group": "build",
       "presentation": { "reveal": "silent", "panel": "dedicated" },
       "problemMatcher": []
+    },
+    {
+      "label": "build:amspirit-z80",
+      "type": "shell",
+      "command": "pnpm --filter amspirit-z80 compile",
+      "group": "build",
+      "presentation": { "reveal": "silent", "panel": "dedicated" },
+      "problemMatcher": []
     }
   ]
 }

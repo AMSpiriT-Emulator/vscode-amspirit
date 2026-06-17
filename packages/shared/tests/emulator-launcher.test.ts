@@ -1,7 +1,7 @@
 import type { ChildProcess } from "node:child_process"
 import { EventEmitter } from "node:events"
 import { describe, expect, it, vi } from "vitest"
-import { EmulatorLauncher } from "../../src/lifecycle/emulator-launcher.js"
+import { EmulatorLauncher } from "../src/emulator-launcher.js"
 
 function fakeChild(): ChildProcess & { triggerExit: (code: number | null) => void } {
   const emitter = new EventEmitter() as ChildProcess & {

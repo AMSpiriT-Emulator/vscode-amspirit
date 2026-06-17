@@ -1,0 +1,64 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "sjasmplus: assemble hello",
+      "detail": "Assemble hello.asm with sjasmplus -> hello.sld + hello.bin (SAVEBIN).",
+      "type": "shell",
+      "command": "sjasmplus --fullpath --sld=hello.sld hello.asm",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "presentation": { "reveal": "silent", "panel": "shared", "clear": true },
+      "problemMatcher": {
+        "owner": "z80-asm",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^(.*)\\((\\d+)\\):\\s+(error|warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "severity": 3,
+          "message": 4
+        }
+      }
+    },
+    {
+      "label": "sjasmplus: assemble vectors",
+      "detail": "Assemble vectors.asm with sjasmplus -> vectors.sld + vectors.bin (SAVEBIN).",
+      "type": "shell",
+      "command": "sjasmplus --fullpath --sld=vectors.sld vectors.asm",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "presentation": { "reveal": "silent", "panel": "shared", "clear": true },
+      "problemMatcher": {
+        "owner": "z80-asm",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^(.*)\\((\\d+)\\):\\s+(error|warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "severity": 3,
+          "message": 4
+        }
+      }
+    },
+    {
+      "label": "rasm: assemble hello-rasm",
+      "detail": "Assemble hello-rasm.asm with rasm -> hello-rasm.bin + hello-rasm.map (rasm -map).",
+      "type": "shell",
+      "command": "rasm hello-rasm.asm -ob hello-rasm.bin -map > hello-rasm.map",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "presentation": { "reveal": "silent", "panel": "shared", "clear": true },
+      "problemMatcher": {
+        "owner": "z80-asm",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^\\[(.+):(\\d+)\\]\\s+(.+)$",
+          "file": 1,
+          "line": 2,
+          "message": 3
+        }
+      }
+    }
+  ]
+}

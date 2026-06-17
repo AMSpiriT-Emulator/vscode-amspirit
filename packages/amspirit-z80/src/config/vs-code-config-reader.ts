@@ -2,10 +2,9 @@ import type { ConfigReader } from "@amspirit/shared"
 import * as vscode from "vscode"
 
 /**
- * Adapter that exposes VS Code's `WorkspaceConfiguration` through the
- * minimal `ConfigReader` interface used by `readSettings`. Kept in its
- * own module so the rest of the code can be unit-tested without
- * pulling in the `vscode` namespace.
+ * Adapter exposing VS Code's `WorkspaceConfiguration` through the minimal
+ * `ConfigReader` interface used by `readSettings`. Kept separate so the rest of
+ * the code stays unit-testable without the `vscode` namespace.
  */
 export function vsCodeConfigReader(section = "amspirit"): ConfigReader {
   return {

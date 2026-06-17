@@ -1,6 +1,6 @@
-export type { ConnectionState } from "../connection/ping-service.js"
+export type { ConnectionState } from "@amspirit/shared"
 
-import type { ConnectionState } from "../connection/ping-service.js"
+import type { ConnectionState } from "@amspirit/shared"
 
 export interface IndicatorView {
   text: string

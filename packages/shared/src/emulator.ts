@@ -82,6 +82,15 @@ export interface Z80Registers {
   E: number
   H: number
   L: number
+  /** Shadow (alternate) register set (`A'F'B'C'D'E'H'L'`). */
+  A2: number
+  F2: number
+  B2: number
+  C2: number
+  D2: number
+  E2: number
+  H2: number
+  L2: number
   IX: number
   IY: number
   I: number
@@ -171,6 +180,21 @@ export class EmulatorClient {
     await this.post("/api/basic_bp", addrs.join(","), "text/plain", this.debugTimeoutMs)
   }
 
+  /**
+   * Replace the Z80 PC breakpoint set via `/api/z80_bp`. Addresses are sent
+   * hex-encoded (`0x..`); the emulator stops with `PC == addr`, *before*
+   * executing the instruction. An empty array clears all breakpoints.
+   */
+  async setZ80Breakpoints(addrs: readonly number[]): Promise<void> {
+    const body = addrs.map((a) => `0x${a.toString(16)}`).join(",")
+    await this.post("/api/z80_bp", body, "text/plain", this.debugTimeoutMs)
+  }
+
+  /** Execute exactly one Z80 instruction, then re-pause, via `/api/step`. */
+  async step(): Promise<void> {
+    await this.post("/api/step", "", "text/plain", this.debugTimeoutMs)
+  }
+
   /** One-shot run-to: resume and pause at the given BASIC line or statement address. */
   async basicRunTo(target: { line: number } | { addr: number }): Promise<void> {
     const qs = "line" in target ? `line=${target.line}` : `addr=${target.addr}`
@@ -220,6 +244,35 @@ export class EmulatorClient {
       throw new Error(res.error ?? "RAM read failed")
     }
     return hexToBytes(res.hex)
+  }
+
+  /**
+   * Write `bytes` to CPC RAM at `addr` via `POST /api/ram`. With `exec`, the
+   * Z80 jumps to `entry` (default `addr`) after the write — used to load and run
+   * an assembled program. Throws if the emulator does not acknowledge.
+   */
+  async writeRam(
+    addr: number,
+    bytes: readonly number[],
+    opts: { exec?: boolean; entry?: number } = {},
+  ): Promise<void> {
+    const data = bytes.map((b) => (b & 0xff).toString(16).padStart(2, "0")).join("")
+    const body: { addr: number; data: string; exec?: boolean; entry?: number } = { addr, data }
+    if (opts.exec) body.exec = true
+    if (opts.entry !== undefined) body.entry = opts.entry
+    const res = await this.post(
+      "/api/ram",
+      JSON.stringify(body),
+      "application/json",
+      this.debugTimeoutMs,
+    )
+    let parsed: { ok?: boolean }
+    try {
+      parsed = JSON.parse(res) as { ok?: boolean }
+    } catch {
+      parsed = {}
+    }
+    if (!parsed.ok) throw new Error("Emulator rejected RAM write")
   }
 
   private async getJson<T>(path: string, timeoutMs: number): Promise<T> {
