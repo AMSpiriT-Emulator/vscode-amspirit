@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   buildMemoryRows,
   followBase,
+  memoryBanks,
   parseAddress,
   pointerMarks,
 } from "../src/memory-view/memory-model.js"
@@ -132,6 +133,26 @@ describe("pointerMarks", () => {
     expect(pointerMarks(regs, { base: 0xfff8, length: 256 })).toEqual([
       { offset: 0x10, registers: ["HL"] },
     ])
+  })
+})
+
+describe("memoryBanks", () => {
+  it("offers CPU view + main RAM on a stock machine (no expansion)", () => {
+    expect(memoryBanks(0)).toEqual([
+      { id: "cpu", label: "CPU view", bank: 0, cpuView: true },
+      { id: "ram", label: "Main RAM", bank: 0, cpuView: false },
+    ])
+  })
+
+  it("adds one extended bank per 64 KB of expansion RAM", () => {
+    const banks = memoryBanks(256)
+    expect(banks.map((b) => b.id)).toEqual(["cpu", "ram", "bank1", "bank2", "bank3", "bank4"])
+    expect(banks.at(-1)).toEqual({ id: "bank4", label: "Bank 4", bank: 4, cpuView: false })
+  })
+
+  it("treats partial/garbage sizes as no extra banks", () => {
+    expect(memoryBanks(32).map((b) => b.id)).toEqual(["cpu", "ram"])
+    expect(memoryBanks(-100).map((b) => b.id)).toEqual(["cpu", "ram"])
   })
 })
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import {
+  type BankOption,
   type MemoryRow,
   type PointerMark,
   parseAddress,
@@ -11,6 +12,12 @@ interface MemoryGridProps {
   rows: MemoryRow[] | null
   /** Pointer registers landing in the window, by byte offset (optional). */
   marks?: PointerMark[]
+  /** Selectable views/banks for the machine (empty hides the selector). */
+  banks?: BankOption[]
+  /** Id of the currently selected view/bank. */
+  selectedBankId?: string
+  /** Called when the user picks a different view/bank. */
+  onSelectBank?: (id: string) => void
   /** Whether the window currently tracks the program counter. */
   followPc?: boolean
   /** Called when the "Follow PC" checkbox is toggled. */
@@ -24,7 +31,16 @@ interface MemoryGridProps {
  * no multi-byte/float interpretation, unlike VS Code's native hex inspector.
  * Pure presentation; the panel feeds rows and acts on `onGoto`.
  */
-export function MemoryGrid({ rows, marks, followPc, onFollowPcChange, onGoto }: MemoryGridProps) {
+export function MemoryGrid({
+  rows,
+  marks,
+  banks,
+  selectedBankId,
+  onSelectBank,
+  followPc,
+  onFollowPcChange,
+  onGoto,
+}: MemoryGridProps) {
   const [input, setInput] = useState("")
 
   const submit = (e: React.FormEvent): void => {
@@ -76,6 +92,20 @@ export function MemoryGrid({ rows, marks, followPc, onFollowPcChange, onGoto }: 
           />
           <span>Follow PC</span>
         </label>
+        {banks && banks.length > 0 && (
+          <select
+            className={styles.bankSelect}
+            aria-label="Memory view"
+            value={selectedBankId ?? banks[0]?.id}
+            onChange={(e) => onSelectBank?.(e.target.value)}
+          >
+            {banks.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.label}
+              </option>
+            ))}
+          </select>
+        )}
       </form>
       {rows === null ? (
         <p className={styles.placeholder}>No data — connect to the emulator to inspect memory.</p>

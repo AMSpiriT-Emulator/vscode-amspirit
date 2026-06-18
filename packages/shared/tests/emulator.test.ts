@@ -396,10 +396,36 @@ describe("EmulatorClient", () => {
       expect(fake.recorded.at(0)?.url).toBe("/api/ram?addr=0&len=2&view=cpu")
     })
 
+    it("reads a specific memory bank (extended page) when asked", async () => {
+      fake.responder = jsonResponder({ addr: 0, len: 4, hex: "01020304" })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.readRam(0, 4, { bank: 1 })).resolves.toEqual([1, 2, 3, 4])
+      expect(fake.recorded.at(0)?.url).toBe("/api/ram?addr=0&len=4&bank=1")
+    })
+
     it("throws when the emulator reports an error", async () => {
       fake.responder = jsonResponder({ error: "ram unavailable" })
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.readRam(0, 16)).rejects.toThrow(/ram unavailable/)
+    })
+  })
+
+  describe("getConfig", () => {
+    it("GETs /api/config and maps the machine configuration", async () => {
+      fake.responder = jsonResponder({
+        cpc_model: 2,
+        crtc_type: 1,
+        extended_ram: 256,
+        rom_lang: "EN",
+      })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.getConfig()).resolves.toEqual({
+        cpcModel: 2,
+        crtcType: 1,
+        extendedRam: 256,
+        romLang: "EN",
+      })
+      expect(fake.recorded.at(0)?.url).toBe("/api/config")
     })
   })
 

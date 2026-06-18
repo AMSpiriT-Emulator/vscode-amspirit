@@ -3,8 +3,10 @@ import type { EmulatorClient } from "@amspirit/shared"
 import * as vscode from "vscode"
 import type { ExtToWebview, WebviewToExt } from "../../webview/messaging.js"
 import {
+  type BankOption,
   buildMemoryRows,
   followBase,
+  memoryBanks,
   type PointerMark,
   pointerMarks,
 } from "../memory-view/memory-model.js"
@@ -20,6 +22,9 @@ const DEFAULT_BASE = 0x4000
 /** Combine a hi/lo register byte pair into a 16-bit value. */
 const pair = (hi: number, lo: number): number => ((hi & 0xff) << 8) | (lo & 0xff)
 
+/** Default view before the machine config is known: the CPU-visible mapping. */
+const CPU_VIEW: BankOption = { id: "cpu", label: "CPU view", bank: 0, cpuView: true }
+
 /**
  * Singleton webview panel showing a live Z80 memory dump (React) — a hex+ASCII
  * grid tailored to the 8-bit machine, without the native inspector's multi-byte
@@ -33,6 +38,10 @@ export class MemoryPanel {
   private base = DEFAULT_BASE
   /** When set, each tick re-centres the window on the program counter. */
   private followPc = false
+  /** Selectable views/banks; populated once from `/api/config`. */
+  private banks: BankOption[] = []
+  /** The currently selected view (defaults to the CPU-visible mapping). */
+  private view: BankOption = CPU_VIEW
   private timer: ReturnType<typeof setInterval> | undefined
   /** Last snapshot posted, serialized — skip posting identical snapshots. */
   private lastPosted = ""
@@ -52,6 +61,9 @@ export class MemoryPanel {
           void this.tick()
         } else if (m.type === "followPc") {
           this.followPc = m.enabled
+          void this.tick()
+        } else if (m.type === "selectBank") {
+          this.view = this.banks.find((b) => b.id === m.id) ?? CPU_VIEW
           void this.tick()
         }
       }),
@@ -110,7 +122,17 @@ export class MemoryPanel {
   private async tick(): Promise<void> {
     const client = this.makeClient()
     const { rows, marks } = await this.readWindow(client)
-    this.post({ type: "snapshot", snapshot: { rows, marks } })
+    this.post({ type: "snapshot", snapshot: { rows, marks, banks: this.banks } })
+  }
+
+  /** Fetch the machine config once to learn how many banks exist. Best-effort. */
+  private async ensureBanks(client: EmulatorClient): Promise<void> {
+    if (this.banks.length > 0) return
+    try {
+      this.banks = memoryBanks((await client.getConfig()).extendedRam)
+    } catch {
+      // leave empty; retried next tick
+    }
   }
 
   /**
@@ -130,23 +152,32 @@ export class MemoryPanel {
     try {
       const { ok } = await client.pingState()
       if (!ok) return { rows: null, marks: [] }
+      await this.ensureBanks(client)
       const r = await client.getZ80()
       // Follow PC: re-centre the window on the program counter before reading.
       if (this.followPc) this.base = followBase(r.PC, WINDOW_BYTES, COLUMNS)
-      const bytes = await client.readRam(this.base, WINDOW_BYTES, { cpuView: true })
+      const bytes = await client.readRam(this.base, WINDOW_BYTES, {
+        cpuView: this.view.cpuView,
+        bank: this.view.bank,
+      })
       const rows = buildMemoryRows(bytes, { base: this.base, columns: COLUMNS })
-      const marks = pointerMarks(
-        {
-          BC: pair(r.B, r.C),
-          DE: pair(r.D, r.E),
-          HL: pair(r.H, r.L),
-          IX: r.IX,
-          IY: r.IY,
-          SP: r.SP,
-          PC: r.PC,
-        },
-        { base: this.base, length: WINDOW_BYTES },
-      )
+      // Pointer registers address the central bank; on an extended bank the
+      // same offsets aren't where the registers point, so omit the marks.
+      const marks =
+        this.view.bank === 0
+          ? pointerMarks(
+              {
+                BC: pair(r.B, r.C),
+                DE: pair(r.D, r.E),
+                HL: pair(r.H, r.L),
+                IX: r.IX,
+                IY: r.IY,
+                SP: r.SP,
+                PC: r.PC,
+              },
+              { base: this.base, length: WINDOW_BYTES },
+            )
+          : []
       return { rows, marks }
     } catch {
       return { rows: null, marks: [] }

@@ -100,6 +100,16 @@ export interface Z80Registers {
   IM: number
 }
 
+/** Machine configuration reported by `/api/config`. */
+export interface EmulatorConfig {
+  /** CPC model index (0=464, 1=664, 2=6128, …). */
+  cpcModel: number
+  crtcType: number
+  /** Expansion RAM in KB beyond the base machine (0 on a stock machine). */
+  extendedRam: number
+  romLang: string
+}
+
 /** Line number `0xFFFF` reported by the emulator when no program is running. */
 export const DIRECT_MODE_LINE = 0xffff
 
@@ -234,16 +244,40 @@ export class EmulatorClient {
    * RAM; with `cpuView`, reads memory as the Z80 sees it (ROM/RAM mapping
    * applied) — use this to disassemble around PC, which often points into ROM.
    */
-  async readRam(addr: number, len: number, opts: { cpuView?: boolean } = {}): Promise<number[]> {
-    const view = opts.cpuView ? "&view=cpu" : ""
+  async readRam(
+    addr: number,
+    len: number,
+    opts: { cpuView?: boolean; bank?: number } = {},
+  ): Promise<number[]> {
+    const params = [`addr=${addr}`, `len=${len}`]
+    // bank 0 = central RAM, 1..N = extended page N-1; the CPU-visible view (ROM
+    // mapped in) only applies to the central bank.
+    if (opts.bank) params.push(`bank=${opts.bank}`)
+    if (opts.cpuView) params.push("view=cpu")
     const res = await this.getJson<{ hex?: string; error?: string }>(
-      `/api/ram?addr=${addr}&len=${len}${view}`,
+      `/api/ram?${params.join("&")}`,
       this.debugTimeoutMs,
     )
     if (res.error !== undefined || res.hex === undefined) {
       throw new Error(res.error ?? "RAM read failed")
     }
     return hexToBytes(res.hex)
+  }
+
+  /** Machine configuration via `GET /api/config` (model, CRTC, expansion RAM). */
+  async getConfig(): Promise<EmulatorConfig> {
+    const raw = await this.getJson<{
+      cpc_model?: number
+      crtc_type?: number
+      extended_ram?: number
+      rom_lang?: string
+    }>("/api/config", this.debugTimeoutMs)
+    return {
+      cpcModel: raw.cpc_model ?? 0,
+      crtcType: raw.crtc_type ?? 0,
+      extendedRam: raw.extended_ram ?? 0,
+      romLang: raw.rom_lang ?? "",
+    }
   }
 
   /**

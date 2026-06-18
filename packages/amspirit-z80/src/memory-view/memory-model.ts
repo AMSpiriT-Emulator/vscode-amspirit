@@ -31,6 +31,36 @@ export function parseAddress(input: string): number | undefined {
 
 /** Bare, upper-case, 4-digit hex (no `0x`/`&` prefix) for display. */
 const hex16 = (n: number): string => (n & 0xffff).toString(16).toUpperCase().padStart(4, "0")
+
+/** One entry in the Memory View's bank/view selector. */
+export interface BankOption {
+  /** Stable id used as the `<select>` value and `selectBank` message payload. */
+  id: string
+  /** Human label shown in the dropdown. */
+  label: string
+  /** `/api/ram` bank: 0 = central RAM, 1..N = extended page N-1. */
+  bank: number
+  /** Read the CPU-visible mapping (ROM mapped in) rather than the raw bank. */
+  cpuView: boolean
+}
+
+/**
+ * The memory views selectable for a machine with `extendedRamKb` of expansion
+ * RAM: always the CPU-visible view and the raw main 64 KB, plus one extended
+ * bank per 64 KB of expansion. Pure; the panel derives `extendedRamKb` from
+ * `/api/config` so the bank count matches the actual machine.
+ */
+export function memoryBanks(extendedRamKb: number): BankOption[] {
+  const banks: BankOption[] = [
+    { id: "cpu", label: "CPU view", bank: 0, cpuView: true },
+    { id: "ram", label: "Main RAM", bank: 0, cpuView: false },
+  ]
+  const pages = Math.max(0, Math.floor(extendedRamKb / 64))
+  for (let p = 1; p <= pages; p += 1) {
+    banks.push({ id: `bank${p}`, label: `Bank ${p}`, bank: p, cpuView: false })
+  }
+  return banks
+}
 const byteHex = (n: number): string => (n & 0xff).toString(16).padStart(2, "0")
 const asciiChar = (n: number): string => (n >= 0x20 && n < 0x7f ? String.fromCharCode(n) : ".")
 

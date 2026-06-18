@@ -58,6 +58,17 @@
   cursor: pointer;
 }
 
+.bankSelect {
+  margin-left: auto;
+  font-family: inherit;
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, transparent);
+  border-radius: 3px;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
 .placeholder {
   opacity: 0.7;
   font-style: italic;

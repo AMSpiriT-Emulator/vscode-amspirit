@@ -63,6 +63,34 @@ describe("<MemoryGrid />", () => {
     expect(screen.getAllByText("48").length).toBeGreaterThan(0)
   })
 
+  it("renders the bank selector and reports a change", () => {
+    const onSelectBank = vi.fn()
+    const banks = [
+      { id: "cpu", label: "CPU view", bank: 0, cpuView: true },
+      { id: "ram", label: "Main RAM", bank: 0, cpuView: false },
+      { id: "bank1", label: "Bank 1", bank: 1, cpuView: false },
+    ]
+    render(
+      <MemoryGrid
+        rows={rows}
+        banks={banks}
+        selectedBankId="cpu"
+        onSelectBank={onSelectBank}
+        onGoto={vi.fn()}
+      />,
+    )
+    const select = screen.getByRole("combobox", { name: /memory view/i }) as HTMLSelectElement
+    expect(select.value).toBe("cpu")
+    expect(screen.getByRole("option", { name: "Bank 1" })).toBeDefined()
+    fireEvent.change(select, { target: { value: "bank1" } })
+    expect(onSelectBank).toHaveBeenCalledWith("bank1")
+  })
+
+  it("hides the bank selector when no banks are known", () => {
+    render(<MemoryGrid rows={rows} banks={[]} onGoto={vi.fn()} />)
+    expect(screen.queryByRole("combobox")).toBeNull()
+  })
+
   it("renders a Follow PC checkbox reflecting its state and toggling it", () => {
     const onFollowPcChange = vi.fn()
     render(
