@@ -54,9 +54,8 @@ export function MemoryGrid({
   useEffect(() => {
     const next = new Map<number, string>()
     for (const row of rows ?? []) {
-      const rowAddr = Number(row.address)
       row.hex.forEach((b, i) => {
-        next.set(rowAddr + i, b)
+        next.set(row.addr + i, b)
       })
     }
     prev.current = next
@@ -69,7 +68,7 @@ export function MemoryGrid({
         <input
           id="goto-addr"
           type="text"
-          placeholder="&C000"
+          placeholder="C000"
           value={input}
           onChange={(e) => setInput(e.target.value)}
         />
@@ -92,7 +91,7 @@ export function MemoryGrid({
             {rows.map((row, rowIndex) => {
               // Offset of this row's first byte: rows before it are full-width.
               const rowOffset = rows.slice(0, rowIndex).reduce((n, r) => n + r.hex.length, 0)
-              const rowAddr = Number(row.address)
+              const rowAddr = row.addr
               return (
                 <tr key={row.address}>
                   <th className="mem-addr">{row.address}</th>

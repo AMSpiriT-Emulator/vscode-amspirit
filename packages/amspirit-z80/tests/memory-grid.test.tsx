@@ -7,15 +7,15 @@ import { MemoryGrid } from "../webview/components/memory-grid.js"
 afterEach(cleanup)
 
 const rows: MemoryRow[] = [
-  { address: "0xC000", hex: ["48", "65", "6c", "6c", "6f"], ascii: "Hello" },
-  { address: "0xC010", hex: ["00", "ff"], ascii: ".." },
+  { addr: 0xc000, address: "C000", hex: ["48", "65", "6c", "6c", "6f"], ascii: "Hello" },
+  { addr: 0xc010, address: "C010", hex: ["00", "ff"], ascii: ".." },
 ]
 
 describe("<MemoryGrid />", () => {
   it("renders a row per line with its address, hex bytes and ascii", () => {
     render(<MemoryGrid rows={rows} onGoto={vi.fn()} />)
-    expect(screen.getByText("0xC000")).toBeDefined()
-    expect(screen.getByText("0xC010")).toBeDefined()
+    expect(screen.getByText("C000")).toBeDefined()
+    expect(screen.getByText("C010")).toBeDefined()
     expect(screen.getByText("Hello")).toBeDefined()
     // a hex byte cell is present
     expect(screen.getAllByText("48").length).toBeGreaterThan(0)
@@ -64,8 +64,8 @@ describe("<MemoryGrid />", () => {
   })
 
   it("shows the current window base address in a header", () => {
-    render(<MemoryGrid rows={rows} base="0x4000" onGoto={vi.fn()} />)
-    expect(screen.getByText(/0x4000/)).toBeDefined()
+    render(<MemoryGrid rows={rows} base="4000" onGoto={vi.fn()} />)
+    expect(screen.getByText(/4000/)).toBeDefined()
   })
 
   it("renders a Follow PC checkbox reflecting its state and toggling it", () => {
@@ -102,8 +102,8 @@ describe("<MemoryGrid />", () => {
   })
 
   it("flashes a byte that changed value since the last render, not its neighbours", () => {
-    const before: MemoryRow[] = [{ address: "0xC000", hex: ["48", "65"], ascii: "He" }]
-    const after: MemoryRow[] = [{ address: "0xC000", hex: ["49", "65"], ascii: "Ie" }]
+    const before: MemoryRow[] = [{ addr: 0xc000, address: "C000", hex: ["48", "65"], ascii: "He" }]
+    const after: MemoryRow[] = [{ addr: 0xc000, address: "C000", hex: ["49", "65"], ascii: "Ie" }]
     const { rerender } = render(<MemoryGrid rows={before} onGoto={vi.fn()} />)
     rerender(<MemoryGrid rows={after} onGoto={vi.fn()} />)
     expect(screen.getByText("49").className).toContain("valflash")
@@ -111,8 +111,8 @@ describe("<MemoryGrid />", () => {
   })
 
   it("does not flash when the window moves to a new base address", () => {
-    const before: MemoryRow[] = [{ address: "0xC000", hex: ["48"], ascii: "H" }]
-    const after: MemoryRow[] = [{ address: "0x8000", hex: ["49"], ascii: "I" }]
+    const before: MemoryRow[] = [{ addr: 0xc000, address: "C000", hex: ["48"], ascii: "H" }]
+    const after: MemoryRow[] = [{ addr: 0x8000, address: "8000", hex: ["49"], ascii: "I" }]
     const { rerender } = render(<MemoryGrid rows={before} onGoto={vi.fn()} />)
     rerender(<MemoryGrid rows={after} onGoto={vi.fn()} />)
     expect(screen.getByText("49").className).not.toContain("valflash")

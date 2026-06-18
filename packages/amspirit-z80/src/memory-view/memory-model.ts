@@ -8,7 +8,9 @@ export interface MemoryRowsOptions {
 
 /** One rendered row of the memory view (rendering-agnostic: React/HTML consume it). */
 export interface MemoryRow {
-  /** `0x`-prefixed, upper-case, 4-digit hex address of the row's first byte. */
+  /** 16-bit address of the row's first byte (for offset/flash math). */
+  addr: number
+  /** Display form of {@link addr}: bare, upper-case, 4-digit hex (no prefix). */
   address: string
   /** Lower-case two-digit hex for each byte in the row. */
   hex: string[]
@@ -27,8 +29,8 @@ export function parseAddress(input: string): number | undefined {
   return Number.parseInt(trimmed, 16) & 0xffff
 }
 
-const rowAddr = (n: number): string =>
-  `0x${(n & 0xffff).toString(16).toUpperCase().padStart(4, "0")}`
+/** Bare, upper-case, 4-digit hex (no `0x`/`&` prefix) for display. */
+export const hex16 = (n: number): string => (n & 0xffff).toString(16).toUpperCase().padStart(4, "0")
 const byteHex = (n: number): string => (n & 0xff).toString(16).padStart(2, "0")
 const asciiChar = (n: number): string => (n >= 0x20 && n < 0x7f ? String.fromCharCode(n) : ".")
 
@@ -104,8 +106,10 @@ export function buildMemoryRows(bytes: readonly number[], opts: MemoryRowsOption
   const rows: MemoryRow[] = []
   for (let offset = 0; offset < bytes.length; offset += columns) {
     const slice = bytes.slice(offset, offset + columns)
+    const addr = (base + offset) & 0xffff
     rows.push({
-      address: rowAddr(base + offset),
+      addr,
+      address: hex16(addr),
       hex: slice.map(byteHex),
       ascii: slice.map(asciiChar).join(""),
     })

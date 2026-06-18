@@ -40,7 +40,8 @@ describe("buildMemoryRows", () => {
     const rows = buildMemoryRows(bytes, { base: 0xc000, columns: 16 })
     expect(rows).toHaveLength(1)
     expect(rows[0]).toEqual({
-      address: "0xC000",
+      addr: 0xc000,
+      address: "C000",
       hex: [
         "48",
         "65",
@@ -68,8 +69,8 @@ describe("buildMemoryRows", () => {
     const bytes = Array.from({ length: 20 }, (_, i) => i)
     const rows = buildMemoryRows(bytes, { base: 0x8000, columns: 16 })
     expect(rows).toHaveLength(2)
-    expect(rows[0]?.address).toBe("0x8000")
-    expect(rows[1]?.address).toBe("0x8010")
+    expect(rows[0]?.address).toBe("8000")
+    expect(rows[1]?.address).toBe("8010")
     expect(rows[1]?.hex).toEqual(["10", "11", "12", "13"])
     expect(rows[1]?.ascii).toBe("....")
   })
@@ -77,20 +78,20 @@ describe("buildMemoryRows", () => {
   it("wraps the 16-bit address space", () => {
     const bytes = Array.from({ length: 16 }, () => 0)
     const rows = buildMemoryRows(bytes, { base: 0xfff8, columns: 16 })
-    expect(rows[0]?.address).toBe("0xFFF8")
+    expect(rows[0]?.address).toBe("FFF8")
     // second row would start at 0x10008 -> wraps to 0x0008
     const rows2 = buildMemoryRows(
       Array.from({ length: 24 }, () => 0),
       { base: 0xfff8, columns: 16 },
     )
-    expect(rows2[1]?.address).toBe("0x0008")
+    expect(rows2[1]?.address).toBe("0008")
   })
 
   it("honours a non-default column width", () => {
     const bytes = Array.from({ length: 16 }, (_, i) => i)
     const rows = buildMemoryRows(bytes, { base: 0x4000, columns: 8 })
     expect(rows).toHaveLength(2)
-    expect(rows[1]?.address).toBe("0x4008")
+    expect(rows[1]?.address).toBe("4008")
   })
 })
 

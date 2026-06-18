@@ -5,6 +5,7 @@ import type { ExtToWebview, WebviewToExt } from "../../webview/messaging.js"
 import {
   buildMemoryRows,
   followBase,
+  hex16,
   type PointerMark,
   pointerMarks,
 } from "../memory-view/memory-model.js"
@@ -17,8 +18,6 @@ const WINDOW_BYTES = COLUMNS * ROWS
 /** Default window start: the common Amstrad user-program area. */
 const DEFAULT_BASE = 0x4000
 
-const addrHex = (n: number): string =>
-  `0x${(n & 0xffff).toString(16).toUpperCase().padStart(4, "0")}`
 /** Combine a hi/lo register byte pair into a 16-bit value. */
 const pair = (hi: number, lo: number): number => ((hi & 0xff) << 8) | (lo & 0xff)
 
@@ -112,7 +111,7 @@ export class MemoryPanel {
   private async tick(): Promise<void> {
     const client = this.makeClient()
     const { rows, marks } = await this.readWindow(client)
-    this.post({ type: "snapshot", snapshot: { base: addrHex(this.base), rows, marks } })
+    this.post({ type: "snapshot", snapshot: { base: hex16(this.base), rows, marks } })
   }
 
   /**
