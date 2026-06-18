@@ -107,14 +107,21 @@ export class MemoryPanel {
 
   /**
    * Read the current window as the CPU sees it, plus the pointer registers that
-   * land in it. `rows: null` when not paused/reachable; `marks` is empty then.
+   * land in it. `rows: null` when the emulator is unreachable; `marks` empty then.
+   *
+   * Gated on reachability (`ok`), not `emu.paused`: `/api/ping`'s pause flag is
+   * unreliable (the documented response is `{"ok":true}` only, and step landing
+   * is detected by PC-polling, not the flag), so gating on it left the view
+   * blank even while stopped at a breakpoint. Memory is most meaningful while
+   * paused, but showing the live snapshot whenever reachable is strictly better
+   * than "No data" at a breakpoint, and `readRam` succeeds in both states.
    */
   private async readWindow(
     client: EmulatorClient,
   ): Promise<{ rows: ReturnType<typeof buildMemoryRows> | null; marks: PointerMark[] }> {
     try {
-      const { paused } = await client.pingState()
-      if (!paused) return { rows: null, marks: [] }
+      const { ok } = await client.pingState()
+      if (!ok) return { rows: null, marks: [] }
       const bytes = await client.readRam(this.base, WINDOW_BYTES, { cpuView: true })
       const rows = buildMemoryRows(bytes, { base: this.base, columns: COLUMNS })
       const r = await client.getZ80()

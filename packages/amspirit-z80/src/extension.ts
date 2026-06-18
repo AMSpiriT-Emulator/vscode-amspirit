@@ -43,6 +43,24 @@ export function activate(context: vscode.ExtensionContext): void {
     statusBar.setPort(client.port)
   }
 
+  // The Memory View must talk to whichever emulator the active debug session is
+  // attached to (its launch config may override host/port); fall back to the
+  // status-bar client when no Z80 session is running.
+  function debugAwareClient(): EmulatorClient {
+    const cfg = vscode.debug.activeDebugSession?.configuration as
+      | { type?: string; host?: string; port?: number }
+      | undefined
+    if (cfg?.type !== DEBUG_TYPE) return client
+    if ((cfg.host ?? client.host) === client.host && (cfg.port ?? client.port) === client.port) {
+      return client
+    }
+    return new EmulatorClient(
+      cfg.host !== undefined
+        ? { host: cfg.host, port: cfg.port ?? client.port }
+        : { port: cfg.port ?? client.port },
+    )
+  }
+
   async function cmdLaunch(): Promise<void> {
     settings = loadSettings()
     let binaryPath = settings.emulatorPath
@@ -100,7 +118,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("amspirit.z80.launch", cmdLaunch),
     vscode.commands.registerCommand("amspirit.z80.connect", cmdConnect),
     vscode.commands.registerCommand("amspirit.z80.memoryView", () =>
-      MemoryPanel.show(context.extensionUri, () => client),
+      MemoryPanel.show(context.extensionUri, debugAwareClient),
     ),
   )
 

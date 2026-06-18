@@ -60,7 +60,7 @@ export function MemoryGrid({ rows, marks, onGoto }: MemoryGridProps) {
         <button type="submit">Go</button>
       </form>
       {rows === null ? (
-        <p className="placeholder">No data — pause the emulator to inspect memory.</p>
+        <p className="placeholder">No data — connect to the emulator to inspect memory.</p>
       ) : (
         <table className="mem-table">
           <tbody>
