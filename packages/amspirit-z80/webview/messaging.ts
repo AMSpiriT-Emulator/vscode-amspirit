@@ -18,3 +18,4 @@ export type WebviewToExt =
   | { type: "goto"; address: number }
   | { type: "followPc"; enabled: boolean }
   | { type: "selectBank"; id: string }
+  | { type: "disassemble"; start: number; end: number }

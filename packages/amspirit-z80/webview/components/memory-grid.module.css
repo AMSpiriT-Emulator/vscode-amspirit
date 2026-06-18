@@ -97,6 +97,13 @@
 .byte {
   padding: 0 0.22rem;
   text-align: center;
+  cursor: pointer;
+}
+
+/* A byte inside the current selection (for range disassembly). */
+.byte[data-selected] {
+  background: var(--vscode-editor-selectionBackground, rgba(88, 166, 255, 0.35));
+  color: var(--vscode-editor-foreground, inherit);
 }
 
 /* Split each 16-byte row into two octets for readability. */

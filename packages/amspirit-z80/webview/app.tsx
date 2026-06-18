@@ -29,6 +29,7 @@ export function App() {
         followPc={followPc}
         onFollowPcChange={changeFollowPc}
         onGoto={(address) => postToExt({ type: "goto", address })}
+        onDisassemble={(start, end) => postToExt({ type: "disassemble", start, end })}
       />
     </main>
   )

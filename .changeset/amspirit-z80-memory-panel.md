@@ -12,4 +12,5 @@ and bytes that change between paused ticks flash briefly. A **Follow PC**
 checkbox keeps the window centred on the program counter as you step, and a
 **view selector** switches between the CPU-visible mapping, the raw main RAM and
 each extended bank — the bank count is derived from the machine's expansion RAM
-(`/api/config`). Addresses and input are bare hex (no `0x`/`&` prefix).
+(`/api/config`). Addresses and input are bare hex (no `0x`/`&` prefix). Select a
+byte range (click + shift-click) and **Disassemble** it to a new `.asm` listing.

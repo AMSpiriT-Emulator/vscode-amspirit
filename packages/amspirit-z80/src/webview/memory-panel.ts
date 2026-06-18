@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto"
-import type { EmulatorClient } from "@amspirit/shared"
+import { disassemble, type EmulatorClient } from "@amspirit/shared"
 import * as vscode from "vscode"
 import type { ExtToWebview, WebviewToExt } from "../../webview/messaging.js"
+import { formatDisassembly } from "../memory-view/disasm-export.js"
 import {
   type BankOption,
   buildMemoryRows,
@@ -18,6 +19,8 @@ const ROWS = 16
 const WINDOW_BYTES = COLUMNS * ROWS
 /** Default window start: the common Amstrad user-program area. */
 const DEFAULT_BASE = 0x4000
+/** Extra bytes read past a disassembly selection so the last instruction (≤4 bytes) is whole. */
+const MAX_INSTR_PAD = 3
 
 /** Combine a hi/lo register byte pair into a 16-bit value. */
 const pair = (hi: number, lo: number): number => ((hi & 0xff) << 8) | (lo & 0xff)
@@ -65,6 +68,8 @@ export class MemoryPanel {
         } else if (m.type === "selectBank") {
           this.view = this.banks.find((b) => b.id === m.id) ?? CPU_VIEW
           void this.tick()
+        } else if (m.type === "disassemble") {
+          void this.disassembleRange(m.start, m.end)
         }
       }),
       // Don't poll a hidden panel; resume when it comes back into view.
@@ -123,6 +128,31 @@ export class MemoryPanel {
     const client = this.makeClient()
     const { rows, marks } = await this.readWindow(client)
     this.post({ type: "snapshot", snapshot: { rows, marks, banks: this.banks } })
+  }
+
+  /**
+   * Read the selected byte range from the current view, disassemble it and open
+   * the listing in a new editor (an `.asm`-shaped untitled document the user can
+   * save). Reads a few extra bytes so the last instruction isn't truncated, then
+   * keeps only instructions that start inside the selection.
+   */
+  private async disassembleRange(start: number, end: number): Promise<void> {
+    const client = this.makeClient()
+    const span = (end - start) & 0xffff
+    try {
+      const bytes = await client.readRam(start, span + 1 + MAX_INSTR_PAD, {
+        cpuView: this.view.cpuView,
+        bank: this.view.bank,
+      })
+      const instructions = disassemble(bytes, start, span + 1).filter(
+        (ins) => ((ins.address - start) & 0xffff) <= span,
+      )
+      const content = formatDisassembly(instructions, { start, end })
+      const doc = await vscode.workspace.openTextDocument({ content, language: "plaintext" })
+      await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside)
+    } catch {
+      void vscode.window.showWarningMessage("AMSpiriT Z80: could not disassemble the selection.")
+    }
   }
 
   /** Fetch the machine config once to learn how many banks exist. Best-effort. */

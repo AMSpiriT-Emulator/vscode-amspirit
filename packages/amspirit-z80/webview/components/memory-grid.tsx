@@ -24,7 +24,11 @@ interface MemoryGridProps {
   onFollowPcChange?: (enabled: boolean) => void
   /** Called with a 16-bit address when the user submits the "Go to" field. */
   onGoto: (address: number) => void
+  /** Called with the inclusive [start, end] of the selected byte range. */
+  onDisassemble?: (start: number, end: number) => void
 }
+
+const hex4 = (n: number): string => (n & 0xffff).toString(16).toUpperCase().padStart(4, "0")
 
 /**
  * Z80 memory view: a "Go to" address field over a hex+ASCII dump. Octets only —
@@ -40,8 +44,14 @@ export function MemoryGrid({
   followPc,
   onFollowPcChange,
   onGoto,
+  onDisassemble,
 }: MemoryGridProps) {
   const [input, setInput] = useState("")
+  // Byte-range selection: anchor + focus addresses (null = nothing selected).
+  const [selAnchor, setSelAnchor] = useState<number | null>(null)
+  const [selFocus, setSelFocus] = useState<number | null>(null)
+  const selLo = selAnchor !== null && selFocus !== null ? Math.min(selAnchor, selFocus) : null
+  const selHi = selAnchor !== null && selFocus !== null ? Math.max(selAnchor, selFocus) : null
 
   const submit = (e: React.FormEvent): void => {
     e.preventDefault()
@@ -50,6 +60,14 @@ export function MemoryGrid({
     // Navigating manually leaves "follow PC" mode so the address sticks.
     if (followPc) onFollowPcChange?.(false)
     onGoto(addr)
+  }
+
+  const clickByte = (addr: number, extend: boolean): void => {
+    if (extend && selAnchor !== null) setSelFocus(addr)
+    else {
+      setSelAnchor(addr)
+      setSelFocus(addr)
+    }
   }
 
   // Byte offsets accumulate across rows; resolve each to its pointer label.
@@ -92,6 +110,11 @@ export function MemoryGrid({
           />
           <span>Follow PC</span>
         </label>
+        {selLo !== null && selHi !== null && (
+          <button className={styles.go} type="button" onClick={() => onDisassemble?.(selLo, selHi)}>
+            Disassemble {hex4(selLo)}-{hex4(selHi)} →
+          </button>
+        )}
         {banks && banks.length > 0 && (
           <select
             className={styles.bankSelect}
@@ -120,10 +143,13 @@ export function MemoryGrid({
                 <tr key={row.address}>
                   <th className={styles.addr}>{row.address}</th>
                   {row.hex.map((b, i) => {
+                    const addr = rowAddr + i
                     const label = labelByOffset.get(rowOffset + i)
-                    const before = previous.get(rowAddr + i)
+                    const before = previous.get(addr)
                     const changed = before !== undefined && before !== b
+                    const sel = selLo !== null && selHi !== null && addr >= selLo && addr <= selHi
                     return (
+                      // biome-ignore lint/a11y/useKeyWithClickEvents: byte grid; click-to-select, keyboard nav out of scope
                       <td
                         // Re-key on value so the flash animation replays on change;
                         // the column index keeps it unique within the row.
@@ -133,6 +159,8 @@ export function MemoryGrid({
                         title={label}
                         data-pointer={label ? "true" : undefined}
                         data-flash={changed ? "true" : undefined}
+                        data-selected={sel ? "true" : undefined}
+                        onClick={(e) => clickByte(addr, e.shiftKey)}
                       >
                         {b}
                       </td>

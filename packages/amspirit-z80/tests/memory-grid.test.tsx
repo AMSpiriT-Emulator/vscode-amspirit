@@ -91,6 +91,20 @@ describe("<MemoryGrid />", () => {
     expect(screen.queryByRole("combobox")).toBeNull()
   })
 
+  it("selects a byte range (click + shift-click) and disassembles it", () => {
+    const onDisassemble = vi.fn()
+    render(<MemoryGrid rows={rows} onGoto={vi.fn()} onDisassemble={onDisassemble} />)
+    // no selection yet -> no disassemble button
+    expect(screen.queryByRole("button", { name: /disassemble/i })).toBeNull()
+    // click "48" (0xC000), shift-click "6f" (0xC004) -> range C000..C004
+    fireEvent.click(screen.getByText("48"))
+    fireEvent.click(screen.getByText("6f"), { shiftKey: true })
+    expect(screen.getByText("48").getAttribute("data-selected")).toBe("true")
+    const btn = screen.getByRole("button", { name: /disassemble C000-C004/i })
+    fireEvent.click(btn)
+    expect(onDisassemble).toHaveBeenCalledWith(0xc000, 0xc004)
+  })
+
   it("renders a Follow PC checkbox reflecting its state and toggling it", () => {
     const onFollowPcChange = vi.fn()
     render(
