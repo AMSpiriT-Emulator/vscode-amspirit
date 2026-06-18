@@ -13,3 +13,22 @@
 export function stepSettled(prePc: number, pc: number, prevPc: number | undefined): boolean {
   return pc !== prePc && pc === prevPc
 }
+
+/**
+ * Whether a launch-entry step sequence has advanced far enough: the PC has moved
+ * at least `instrLen` bytes forward from the entry `startPc` (16-bit wrap).
+ *
+ * The launch `exec` (PC override + unpause mid-instruction) leaves a dirty
+ * prefetch latch, so the first one or two raw steps land mid-instruction before
+ * the PC re-syncs to real boundaries. Stepping (bounded) until this returns
+ * `true` lands on the next real instruction boundary without the runaway risk of
+ * a free-running temp breakpoint — which escapes into firmware on the rare run
+ * where the latch shifts boundaries so the temp address is never hit.
+ *
+ * @param startPc  the launch entry address (PC at stop-on-entry)
+ * @param instrLen byte length of the entry instruction
+ * @param pc       the current (settled) PC
+ */
+export function launchEntryReached(startPc: number, instrLen: number, pc: number): boolean {
+  return ((pc - startPc) & 0xffff) >= instrLen
+}
