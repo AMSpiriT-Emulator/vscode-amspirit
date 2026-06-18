@@ -87,3 +87,18 @@ h1 {
   border-left: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
   white-space: pre;
 }
+
+/* Briefly flash a byte that changed value between two paused ticks. */
+@keyframes valflash {
+  from {
+    background: #6a6a1a;
+    color: #fff;
+  }
+  to {
+    background: transparent;
+  }
+}
+
+.mem-byte.valflash {
+  animation: valflash 1.1s ease-out;
+}

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   type MemoryRow,
   type PointerMark,
@@ -31,6 +31,21 @@ export function MemoryGrid({ rows, marks, onGoto }: MemoryGridProps) {
   // Byte offsets accumulate across rows; resolve each to its pointer label.
   const labelByOffset = new Map((marks ?? []).map((m) => [m.offset, m.registers.join(", ")]))
 
+  // Previous byte value per absolute address, to flash bytes that changed this
+  // tick. Keyed by address (not offset) so moving the window doesn't flash.
+  const prev = useRef<Map<number, string>>(new Map())
+  const previous = prev.current
+  useEffect(() => {
+    const next = new Map<number, string>()
+    for (const row of rows ?? []) {
+      const rowAddr = Number(row.address)
+      row.hex.forEach((b, i) => {
+        next.set(rowAddr + i, b)
+      })
+    }
+    prev.current = next
+  })
+
   return (
     <div className="memory-view">
       <form className="goto" aria-label="Go to address" onSubmit={submit}>
@@ -52,15 +67,20 @@ export function MemoryGrid({ rows, marks, onGoto }: MemoryGridProps) {
             {rows.map((row, rowIndex) => {
               // Offset of this row's first byte: rows before it are full-width.
               const rowOffset = rows.slice(0, rowIndex).reduce((n, r) => n + r.hex.length, 0)
+              const rowAddr = Number(row.address)
               return (
                 <tr key={row.address}>
                   <th className="mem-addr">{row.address}</th>
                   {row.hex.map((b, i) => {
                     const label = labelByOffset.get(rowOffset + i)
+                    const before = previous.get(rowAddr + i)
+                    const changed = before !== undefined && before !== b
+                    const className = `mem-byte${label ? " pointer" : ""}${changed ? " valflash" : ""}`
                     return (
-                      // Bytes within a row have no stable id; index is the position.
-                      // biome-ignore lint/suspicious/noArrayIndexKey: fixed-width hex column
-                      <td key={i} className={label ? "mem-byte pointer" : "mem-byte"} title={label}>
+                      // Re-key on value so the flash animation replays on change;
+                      // the column index keeps it unique within the row.
+                      // biome-ignore lint/suspicious/noArrayIndexKey: composite key, value drives remount
+                      <td key={`${i}:${b}`} className={className} title={label}>
                         {b}
                       </td>
                     )

@@ -7,4 +7,5 @@ Memory View**) showing a hex + ASCII dump tailored to the 8-bit machine — octe
 only, no multi-byte/float widgets like VS Code's native hex inspector. It polls
 the emulator while paused, refreshes live, and has a "Go to" field accepting
 hex/`0x`/`&`-prefixed addresses. Bytes targeted by a pointer register
-(BC/DE/HL/IX/IY/SP/PC) are highlighted, with the register name(s) in a tooltip.
+(BC/DE/HL/IX/IY/SP/PC) are highlighted, with the register name(s) in a tooltip,
+and bytes that change between paused ticks flash briefly.

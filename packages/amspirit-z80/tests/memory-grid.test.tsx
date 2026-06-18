@@ -62,4 +62,21 @@ describe("<MemoryGrid />", () => {
     render(<MemoryGrid rows={rows} onGoto={vi.fn()} />)
     expect(screen.getAllByText("48").length).toBeGreaterThan(0)
   })
+
+  it("flashes a byte that changed value since the last render, not its neighbours", () => {
+    const before: MemoryRow[] = [{ address: "0xC000", hex: ["48", "65"], ascii: "He" }]
+    const after: MemoryRow[] = [{ address: "0xC000", hex: ["49", "65"], ascii: "Ie" }]
+    const { rerender } = render(<MemoryGrid rows={before} onGoto={vi.fn()} />)
+    rerender(<MemoryGrid rows={after} onGoto={vi.fn()} />)
+    expect(screen.getByText("49").className).toContain("valflash")
+    expect(screen.getByText("65").className).not.toContain("valflash")
+  })
+
+  it("does not flash when the window moves to a new base address", () => {
+    const before: MemoryRow[] = [{ address: "0xC000", hex: ["48"], ascii: "H" }]
+    const after: MemoryRow[] = [{ address: "0x8000", hex: ["49"], ascii: "I" }]
+    const { rerender } = render(<MemoryGrid rows={before} onGoto={vi.fn()} />)
+    rerender(<MemoryGrid rows={after} onGoto={vi.fn()} />)
+    expect(screen.getByText("49").className).not.toContain("valflash")
+  })
 })
