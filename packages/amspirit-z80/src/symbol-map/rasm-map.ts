@@ -1,4 +1,5 @@
 import {
+  type LabelRecord,
   type SymbolMap,
   type SymbolMapParser,
   type TraceRecord,
@@ -13,6 +14,14 @@ import {
  * `EQU`, `ORG` and banner lines do not, so matching on it filters them out.
  */
 const INSTRUCTION = /^\s*\d+\|\s*([0-9A-Fa-f]+)\s*\|.*\(L(\d+):([^)]+)\)\s*$/
+
+/**
+ * A label line of `rasm … -map` stdout:
+ *   `000|800B     |                 DELAY:`
+ * i.e. `<bank>|<hex address>     | <whitespace> <NAME>:` with no bytecode and no
+ * trailing `(L<line>:<file>)` marker. EQU/banner lines have no address column.
+ */
+const LABEL = /^\s*\d+\|\s*([0-9A-Fa-f]+)\s*\|\s*([A-Za-z_][\w.]*):\s*$/
 
 // rasm colours its `-map` stdout, so the captured file is full of SGR escapes
 // (`ESC [ … m`). Strip them before matching. The control char is built at
@@ -34,11 +43,24 @@ function parseRasmRecords(content: string): TraceRecord[] {
   return records
 }
 
+function parseRasmLabels(content: string): LabelRecord[] {
+  const labels: LabelRecord[] = []
+  for (const raw of content.replace(ANSI_SGR, "").split(/\r?\n/)) {
+    const m = LABEL.exec(raw)
+    if (!m) continue
+    const [, hex, name] = m
+    const addr = Number.parseInt(hex ?? "", 16)
+    if (!Number.isFinite(addr) || !name) continue
+    labels.push({ name, addr })
+  }
+  return labels
+}
+
 /** Parses the `rasm … -map` stdout listing into a {@link SymbolMap}. */
 export class RasmMapParser implements SymbolMapParser {
   readonly id = "rasm-map"
 
   parse(content: string): SymbolMap {
-    return new TraceSymbolMap(parseRasmRecords(content))
+    return new TraceSymbolMap(parseRasmRecords(content), parseRasmLabels(content))
   }
 }

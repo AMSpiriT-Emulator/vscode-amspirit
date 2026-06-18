@@ -388,6 +388,7 @@ export class Z80DebugSession extends LoggingDebugSession {
           name: v.name,
           value: v.value,
           variablesReference: 0,
+          ...(v.memoryReference ? { memoryReference: v.memoryReference } : {}),
         }))
       } catch {
         // empty

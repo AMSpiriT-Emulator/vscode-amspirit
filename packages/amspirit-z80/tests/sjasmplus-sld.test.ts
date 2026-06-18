@@ -101,6 +101,28 @@ test.asm|10||0|2|32777|T|
     expect(map.addressToLine(32775)).toEqual({ file: "test.asm", line: 7 }) // ret
   })
 
+  describe("labelToAddress", () => {
+    it("resolves a label name to its address (from the L record)", () => {
+      expect(parse().labelToAddress("start")).toBe(32768)
+      expect(parse().labelToAddress("label")).toBe(32790)
+    })
+
+    it("matches case-insensitively (CPC users type uppercase)", () => {
+      expect(parse().labelToAddress("START")).toBe(32768)
+    })
+
+    it("joins a qualified label with a dot (module/local)", () => {
+      const map = new SjasmplusSldParser().parse(
+        "main.asm|19||0|2|32781|L|,delay,wait,+local,+used\n",
+      )
+      expect(map.labelToAddress("delay.wait")).toBe(32781)
+    })
+
+    it("returns undefined for an unknown label", () => {
+      expect(parse().labelToAddress("nope")).toBeUndefined()
+    })
+  })
+
   describe("lowestAddress", () => {
     it("returns the lowest instruction address (program origin)", () => {
       expect(parse().lowestAddress()).toBe(32768)

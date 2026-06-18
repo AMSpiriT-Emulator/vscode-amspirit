@@ -6,11 +6,12 @@
 
 ## Where we are
 
-- **Branch:** `feat/amspirit-z80` — the **new `amspirit-z80` extension** (Z80
-  assembler DAP debugger). **Committed** (`616b93f` phase 1, `13bc03b` rasm
-  adapter), full gate green, **live-validated on a real emulator** (stepping +
-  current line confirmed for both sjasmplus and rasm). **Not pushed / no PR yet.**
-  See `doc/sessions/2026-06-16-amspirit-z80-phase1.md` and `doc/amspirit-z80-plan.md`.
+- **Branch:** `main` — the **`amspirit-z80` extension** (Z80 assembler DAP
+  debugger) is **merged** via **PR #5** (merge commit `65ac1d5`). Full gate
+  green, **live-validated on a real emulator** (stepping + current line confirmed
+  for both sjasmplus and rasm). Two changesets pending release (`amspirit-z80:
+  minor` × 2). See `doc/sessions/2026-06-16-amspirit-z80-phase1.md` and
+  `doc/amspirit-z80-plan.md`.
 - **What works:** `attach` to a running program, and `launch` (load the `.bin`
   into RAM via `/api/ram` + run, stop-on-entry); source-level breakpoints,
   current-line highlight, step in/over/out (temp breakpoints); Z80 registers view
@@ -21,23 +22,30 @@
 - **Tooling installed locally** (for the sandbox assemble tasks): **sjasmplus
   v1.23.1** and **rasm v3.0.8** (both on PATH). Emulator: build amspirit-lite
   `feat/z80-breakpoints` and run from `amspirit-lite/src` (ROMs are CWD-relative).
-- **Latest (2026-06-17):** call-stack reconstruction + firmware jumpblock labels
-  shipped; VS Code Disassembly View made to work (`instructionPointerReference`
-  anchor + real backward decode); step robustness (PC-settle wait + launch
-  stop-on-entry phantom-step workaround) all **live-validated by the user**.
-  Pure modules `call-stack`/`firmware-labels`/`disasm-window`/`step-landing` (TDD);
-  shared `disassemble()` reused; sample `sandbox/vectors.asm`. **Uncommitted.**
-  See `doc/sessions/2026-06-17-amspirit-z80-callstack-disasm-step.md`.
-- **Next step:** changeset (`amspirit-z80: minor`) + push `feat/amspirit-z80` +
-  open PR to `main` (session work committed `1541727`, gate green). DeZog parity
-  follow-ups now enumerated/prioritised in `doc/amspirit-z80-plan.md` §10 — the
-  cheap first win is a **memory view**: `readMemoryRequest` is already wired but
-  no UI provides a `memoryReference`, so expose one on the pointer registers
-  (HL/DE/BC/IX/IY/SP/PC) to unlock VS Code's native hex inspector. Then code
-  coverage (`/api/codemap`), SNA/DSK load (`/api/script`), conditional/hit-count
-  breakpoints + logpoints (client-side), then writeMemory / reverse-debug /
-  watchpoints (the last needs an emulator endpoint). rasm trailing-`ret` quirk
-  still open.
+- **Latest (2026-06-18):** **dedicated Z80 Memory View** shipped — the first
+  React webview in `amspirit-z80`. A hex+ASCII dump tailored to the 8-bit machine
+  (octets only, none of the native inspector's multi-byte/float widgets), opened
+  via command **AMSpiriT Z80: Open Memory View**. Pure `memory-view/memory-model`
+  (`buildMemoryRows`/`parseAddress`, TDD) + RTL `memory-grid.tsx`; thin
+  `webview/memory-panel.ts` polls `readRam` while paused, "Go to" field accepts
+  hex/`0x`/`&`. Reuses the `amspirit-basic` Vite+CSP webview pattern (added Vite
+  to this package). Full gate green; changeset `amspirit-z80-memory-panel.md`
+  (`minor`). **Uncommitted, on `main`.** See
+  `doc/sessions/2026-06-18-amspirit-z80-memory-panel.md`.
+- **Prior (2026-06-17):** memory-view quick win — pointer regs (BC/DE/HL/IX/IY/SP/PC)
+  expose a `memoryReference` in `registers-view.ts` so "View Binary Data" opens
+  the native hex inspector at the held address. TDD; changeset
+  `amspirit-z80-memory-view.md` (`minor`). **Also uncommitted, on `main`.** See
+  `doc/sessions/2026-06-17-amspirit-z80-memory-view.md`. (Prior 2026-06-17 slice —
+  call-stack + firmware labels + Disassembly View + step robustness — is **merged
+  in PR #5**; see `doc/sessions/2026-06-17-amspirit-z80-callstack-disasm-step.md`.)
+- **Next step:** commit + branch the working tree (**2 pending changesets**: the
+  two memory ones above), live-validate the Memory View on a real
+  emulator, then continue parity follow-ups: pointer-register highlight + diff-flash
+  + label-aware "Go to" in the new panel, then code coverage via `/api/codemap`,
+  SNA/DSK load via `/api/script`, conditional/hit-count breakpoints + logpoints,
+  then writeMemory / reverse-debug / watchpoints (the last needs an emulator
+  endpoint). rasm trailing-`ret` quirk still open.
 - **Known emulator root cause (worked around in-extension, not fixed):** on
   `launch`, `POST /api/ram {exec}` does `Core_z80_Write_Register(PC, entry)` +
   `set_paused(false)` while the core is mid-instruction (emulator was running),
@@ -111,9 +119,10 @@
 | VS Code Disassembly View working | ✅ | `instructionPointerReference` anchor (was blank without it) + pure `disasm-window` (real backward decode, PC centred); reuses shared `disassemble()`. TDD |
 | Step robustness | ✅ | `step-landing.stepSettled` (PC moves + stable) replaces fixed settle; launch stop-on-entry phantom step worked around (first step = run-to-boundary). Live-validated |
 | `stackTrace` resilience | ✅ | current-line frame 0 always emitted, even if the 64 KB call-stack snapshot read fails |
-| Push `amspirit-z80` + open PR to `main` | ⬜ | branch `feat/amspirit-z80`; changeset `amspirit-z80: minor`; no attribution trailer |
+| Push `amspirit-z80` + open PR to `main` | ✅ | **PR #5 merged** (`65ac1d5`); 2 changesets `amspirit-z80: minor` pending release |
 | rasm trailing-`ret` line-attribution quirk | ⬜ | rasm maps a `ret` before a label/EOF to the previous line; parsed as-is, refine later |
-| Memory view (expose `memoryReference` on pointer regs) | ⬜ | quick win: `readMemoryRequest` already wired, just no UI entry point → add `memoryReference` (HL/DE/BC/IX/IY/SP/PC) in `registers-view.ts` to unlock the native hex inspector |
+| Memory view (expose `memoryReference` on pointer regs) | ✅ | `registers-view.ts` sets `memoryReference` on BC/DE/HL/IX/IY/SP/PC (reusing the hex-word value); `variablesRequest` forwards it → "View Binary Data" opens the native hex inspector. TDD; changeset `minor`. Not yet live-validated |
+| Dedicated Memory View React webview panel | ✅ | first React webview in `amspirit-z80` (Vite + CSP, mirrors `amspirit-basic`); octets-only hex+ASCII grid, "Go to" (hex/`0x`/`&`); pure `memory-model` (TDD) + RTL `memory-grid`; `memory-panel` polls `readRam` while paused. Command `amspirit.z80.memoryView`. Changeset `minor`. Not yet live-validated. Follow-ups: pointer highlight, diff-flash, label-aware goto |
 | Code coverage via `/api/codemap` | ⬜ | DeZog parity |
 | rasm SNA/DSK load modes via `/api/script` | ⬜ | DeZog parity |
 | Conditional / hit-count breakpoints + logpoints | ⬜ | client-side (re-`continue` on unmet condition); logpoints via `OutputEvent` |

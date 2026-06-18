@@ -1,0 +1,80 @@
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: var(--vscode-editor-font-size, 13px);
+  color: var(--vscode-foreground);
+}
+
+h1 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+
+.goto {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.goto label {
+  opacity: 0.8;
+}
+
+.goto input {
+  width: 7rem;
+  font-family: inherit;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  padding: 2px 4px;
+}
+
+.goto button {
+  font-family: inherit;
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  border: none;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.goto button:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.placeholder {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.mem-table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mem-addr {
+  text-align: right;
+  padding-right: 0.75rem;
+  opacity: 0.7;
+  font-weight: 600;
+  user-select: none;
+}
+
+.mem-byte {
+  padding: 0 0.2rem;
+}
+
+.mem-ascii {
+  padding-left: 0.75rem;
+  opacity: 0.85;
+  border-left: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
+  white-space: pre;
+}

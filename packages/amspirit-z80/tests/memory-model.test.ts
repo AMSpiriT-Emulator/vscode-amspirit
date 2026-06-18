@@ -1,0 +1,85 @@
+import { describe, expect, it } from "vitest"
+import { buildMemoryRows, parseAddress } from "../src/memory-view/memory-model.js"
+
+describe("parseAddress", () => {
+  it("parses bare hex", () => {
+    expect(parseAddress("C000")).toBe(0xc000)
+  })
+  it("parses 0x-prefixed and &-prefixed (Amstrad) hex, case-insensitively", () => {
+    expect(parseAddress("0xc000")).toBe(0xc000)
+    expect(parseAddress("&C000")).toBe(0xc000)
+  })
+  it("trims surrounding whitespace", () => {
+    expect(parseAddress("  4000  ")).toBe(0x4000)
+  })
+  it("masks to the 16-bit space", () => {
+    expect(parseAddress("1FFFF")).toBe(0xffff)
+  })
+  it("returns undefined for non-hex input", () => {
+    expect(parseAddress("")).toBeUndefined()
+    expect(parseAddress("xyz")).toBeUndefined()
+  })
+})
+
+describe("buildMemoryRows", () => {
+  it("renders one full row of 16 bytes with address, hex and ascii", () => {
+    const bytes = [
+      0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x00, 0x01, 0x02, 0xff, 0xfe, 0x41, 0x42, 0x43, 0x44, 0x45,
+      0x46,
+    ]
+    const rows = buildMemoryRows(bytes, { base: 0xc000, columns: 16 })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toEqual({
+      address: "0xC000",
+      hex: [
+        "48",
+        "65",
+        "6c",
+        "6c",
+        "6f",
+        "00",
+        "01",
+        "02",
+        "ff",
+        "fe",
+        "41",
+        "42",
+        "43",
+        "44",
+        "45",
+        "46",
+      ],
+      // non-printable bytes (< 0x20 or >= 0x7f) render as '.'  (0x00 0x01 0x02 0xff 0xfe -> 5 dots)
+      ascii: "Hello.....ABCDEF",
+    })
+  })
+
+  it("splits into multiple rows, advancing the address by the column count", () => {
+    const bytes = Array.from({ length: 20 }, (_, i) => i)
+    const rows = buildMemoryRows(bytes, { base: 0x8000, columns: 16 })
+    expect(rows).toHaveLength(2)
+    expect(rows[0]?.address).toBe("0x8000")
+    expect(rows[1]?.address).toBe("0x8010")
+    expect(rows[1]?.hex).toEqual(["10", "11", "12", "13"])
+    expect(rows[1]?.ascii).toBe("....")
+  })
+
+  it("wraps the 16-bit address space", () => {
+    const bytes = Array.from({ length: 16 }, () => 0)
+    const rows = buildMemoryRows(bytes, { base: 0xfff8, columns: 16 })
+    expect(rows[0]?.address).toBe("0xFFF8")
+    // second row would start at 0x10008 -> wraps to 0x0008
+    const rows2 = buildMemoryRows(
+      Array.from({ length: 24 }, () => 0),
+      { base: 0xfff8, columns: 16 },
+    )
+    expect(rows2[1]?.address).toBe("0x0008")
+  })
+
+  it("honours a non-default column width", () => {
+    const bytes = Array.from({ length: 16 }, (_, i) => i)
+    const rows = buildMemoryRows(bytes, { base: 0x4000, columns: 8 })
+    expect(rows).toHaveLength(2)
+    expect(rows[1]?.address).toBe("0x4008")
+  })
+})

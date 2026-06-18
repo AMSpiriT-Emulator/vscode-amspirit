@@ -10,6 +10,7 @@ import * as vscode from "vscode"
 import { vsCodeConfigReader } from "./config/vs-code-config-reader.js"
 import { Z80DebugSession } from "./debug/z80-debug-session.js"
 import { Z80StatusBar } from "./status-bar/z80-status-bar.js"
+import { MemoryPanel } from "./webview/memory-panel.js"
 
 const DEBUG_TYPE = "amspirit-z80"
 
@@ -98,6 +99,9 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("amspirit.z80.launch", cmdLaunch),
     vscode.commands.registerCommand("amspirit.z80.connect", cmdConnect),
+    vscode.commands.registerCommand("amspirit.z80.memoryView", () =>
+      MemoryPanel.show(context.extensionUri, () => client),
+    ),
   )
 
   const debugFactory: vscode.DebugAdapterDescriptorFactory = {
