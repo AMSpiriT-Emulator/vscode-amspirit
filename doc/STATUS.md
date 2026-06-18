@@ -49,9 +49,8 @@
   `doc/sessions/2026-06-17-amspirit-z80-memory-view.md`. (Prior 2026-06-17 slice —
   call-stack + firmware labels + Disassembly View + step robustness — is **merged
   in PR #5**; see `doc/sessions/2026-06-17-amspirit-z80-callstack-disasm-step.md`.)
-- **Next step:** push `feat/amspirit-z80-memory-view` + open a PR (3 commits, **2
-  pending changesets**), live-validate the Memory View on a real emulator
-  (panel + pointer highlight + flash + "Go to"), then the remaining panel
+- **Next step:** push `feat/amspirit-z80-memory-view` + open a PR (Memory View is
+  now **live-validated**; 2 pending changesets). Then the remaining panel
   follow-up **label-aware "Go to"** (resolve firmware/symbol-map labels — crosses
   the webview↔extension boundary). Then code coverage via `/api/codemap`,
   SNA/DSK load via `/api/script`, conditional/hit-count breakpoints + logpoints,
@@ -136,6 +135,7 @@
 | Dedicated Memory View React webview panel | ✅ | first React webview in `amspirit-z80` (Vite + CSP, mirrors `amspirit-basic`); octets-only hex+ASCII grid, "Go to" (hex/`0x`/`&`); pure `memory-model` (TDD) + RTL `memory-grid`; `memory-panel` polls `readRam` while paused. Command `amspirit.z80.memoryView`. Changeset `minor`. Not yet live-validated |
 | Memory View — pointer-register highlight | ✅ | pure `pointerMarks(regs,window)` (TDD); byte a pointer reg (BC/DE/HL/IX/IY/SP/PC) targets highlighted + named in tooltip; panel fetches `getZ80()` each paused tick. On branch `feat/amspirit-z80-memory-view` |
 | Memory View — diff-flash changed bytes | ✅ | `.valflash` on bytes that change between paused ticks; keyed by absolute address so a "Go to" doesn't flash everything. RTL. On branch |
+| Memory View — **live-validated** vs real emulator | ✅ | confirmed on `amspirit-lite-qt` 1.11.0 (port 8765): dump + "Go to" + header render. Fixed the blank-at-breakpoint bug: gate on reachability (`ok`), not `pingState().paused` — the QT build wires `p_freeze=&s_paused` but the flag was fragile; `readRam` works whenever reachable. Panel now also targets the active debug session's host/port. Added a `Window: 0xXXXX` header (a zeroed window read as "empty") |
 | Memory View — label-aware "Go to" | ⬜ | resolve firmware/symbol-map labels in the goto field (crosses webview↔extension boundary) |
 | Code coverage via `/api/codemap` | ⬜ | DeZog parity |
 | rasm SNA/DSK load modes via `/api/script` | ⬜ | DeZog parity |
