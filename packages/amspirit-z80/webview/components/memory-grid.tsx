@@ -8,6 +8,8 @@ import {
 interface MemoryGridProps {
   /** Rows to render, or `null` when memory is unavailable (running/detached). */
   rows: MemoryRow[] | null
+  /** Address of the first byte of the window (`0x`-prefixed), shown in the header. */
+  base?: string | undefined
   /** Pointer registers landing in the window, by byte offset (optional). */
   marks?: PointerMark[]
   /** Called with a 16-bit address when the user submits the "Go to" field. */
@@ -19,7 +21,7 @@ interface MemoryGridProps {
  * no multi-byte/float interpretation, unlike VS Code's native hex inspector.
  * Pure presentation; the panel feeds rows and acts on `onGoto`.
  */
-export function MemoryGrid({ rows, marks, onGoto }: MemoryGridProps) {
+export function MemoryGrid({ rows, base, marks, onGoto }: MemoryGridProps) {
   const [input, setInput] = useState("")
 
   const submit = (e: React.FormEvent): void => {
@@ -58,6 +60,7 @@ export function MemoryGrid({ rows, marks, onGoto }: MemoryGridProps) {
           onChange={(e) => setInput(e.target.value)}
         />
         <button type="submit">Go</button>
+        {base !== undefined && <span className="window-base">Window: {base}</span>}
       </form>
       {rows === null ? (
         <p className="placeholder">No data — connect to the emulator to inspect memory.</p>

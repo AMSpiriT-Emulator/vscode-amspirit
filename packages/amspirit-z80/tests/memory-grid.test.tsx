@@ -63,6 +63,11 @@ describe("<MemoryGrid />", () => {
     expect(screen.getAllByText("48").length).toBeGreaterThan(0)
   })
 
+  it("shows the current window base address in a header", () => {
+    render(<MemoryGrid rows={rows} base="0x4000" onGoto={vi.fn()} />)
+    expect(screen.getByText(/0x4000/)).toBeDefined()
+  })
+
   it("flashes a byte that changed value since the last render, not its neighbours", () => {
     const before: MemoryRow[] = [{ address: "0xC000", hex: ["48", "65"], ascii: "He" }]
     const after: MemoryRow[] = [{ address: "0xC000", hex: ["49", "65"], ascii: "Ie" }]

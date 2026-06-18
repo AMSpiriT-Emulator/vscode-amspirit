@@ -49,6 +49,12 @@ h1 {
   background: var(--vscode-button-hoverBackground);
 }
 
+.window-base {
+  margin-left: auto;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
 .placeholder {
   opacity: 0.7;
   font-style: italic;

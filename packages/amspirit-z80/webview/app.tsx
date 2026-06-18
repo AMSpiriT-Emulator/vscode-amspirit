@@ -9,6 +9,7 @@ export function App() {
       <h1>Z80 Memory</h1>
       <MemoryGrid
         rows={snapshot?.rows ?? null}
+        base={snapshot?.base}
         marks={snapshot?.marks ?? []}
         onGoto={(address) => postToExt({ type: "goto", address })}
       />
