@@ -6,10 +6,12 @@
 
 ## Where we are
 
-- **Branch:** `main` — the **`amspirit-z80` extension** (Z80 assembler DAP
-  debugger) is **merged** via **PR #5** (merge commit `65ac1d5`). Full gate
-  green, **live-validated on a real emulator** (stepping + current line confirmed
-  for both sjasmplus and rasm). Two changesets pending release (`amspirit-z80:
+- **Branch:** `feat/amspirit-z80-memory-view` — the Memory View slices that were
+  uncommitted on `main` are now committed here (3 commits ahead of `main`, not
+  pushed). The **`amspirit-z80` extension** (Z80 assembler DAP debugger) is
+  **merged** via **PR #5** (merge commit `65ac1d5`). Full gate green,
+  **live-validated on a real emulator** (stepping + current line confirmed for
+  both sjasmplus and rasm). Two changesets pending release (`amspirit-z80:
   minor` × 2). See `doc/sessions/2026-06-16-amspirit-z80-phase1.md` and
   `doc/amspirit-z80-plan.md`.
 - **What works:** `attach` to a running program, and `launch` (load the `.bin`
@@ -22,15 +24,23 @@
 - **Tooling installed locally** (for the sandbox assemble tasks): **sjasmplus
   v1.23.1** and **rasm v3.0.8** (both on PATH). Emulator: build amspirit-lite
   `feat/z80-breakpoints` and run from `amspirit-lite/src` (ROMs are CWD-relative).
-- **Latest (2026-06-18):** **dedicated Z80 Memory View** shipped — the first
+- **Latest (2026-06-18, branch `feat/amspirit-z80-memory-view`):** committed the
+  Memory View off `main` and added two parity follow-ups to the panel —
+  **pointer-register highlight** (each byte a pointer reg BC/DE/HL/IX/IY/SP/PC
+  targets is highlighted + named in a tooltip; pure `pointerMarks`, TDD) and
+  **diff-flash** (bytes that change between paused ticks flash, keyed by absolute
+  address so a "Go to" doesn't flash everything). 3 commits (`40d8961` panel +
+  memoryReference, `646a8df` pointer highlight, `7ca3683` flash). Full gate green
+  (z80 104 tests, 98.06% stmts). See
+  `doc/sessions/2026-06-18-amspirit-z80-memory-pointer-flash.md`.
+- **Prior (2026-06-18):** **dedicated Z80 Memory View** shipped — the first
   React webview in `amspirit-z80`. A hex+ASCII dump tailored to the 8-bit machine
   (octets only, none of the native inspector's multi-byte/float widgets), opened
   via command **AMSpiriT Z80: Open Memory View**. Pure `memory-view/memory-model`
   (`buildMemoryRows`/`parseAddress`, TDD) + RTL `memory-grid.tsx`; thin
   `webview/memory-panel.ts` polls `readRam` while paused, "Go to" field accepts
   hex/`0x`/`&`. Reuses the `amspirit-basic` Vite+CSP webview pattern (added Vite
-  to this package). Full gate green; changeset `amspirit-z80-memory-panel.md`
-  (`minor`). **Uncommitted, on `main`.** See
+  to this package). Changeset `amspirit-z80-memory-panel.md` (`minor`). See
   `doc/sessions/2026-06-18-amspirit-z80-memory-panel.md`.
 - **Prior (2026-06-17):** memory-view quick win — pointer regs (BC/DE/HL/IX/IY/SP/PC)
   expose a `memoryReference` in `registers-view.ts` so "View Binary Data" opens
@@ -39,10 +49,11 @@
   `doc/sessions/2026-06-17-amspirit-z80-memory-view.md`. (Prior 2026-06-17 slice —
   call-stack + firmware labels + Disassembly View + step robustness — is **merged
   in PR #5**; see `doc/sessions/2026-06-17-amspirit-z80-callstack-disasm-step.md`.)
-- **Next step:** commit + branch the working tree (**2 pending changesets**: the
-  two memory ones above), live-validate the Memory View on a real
-  emulator, then continue parity follow-ups: pointer-register highlight + diff-flash
-  + label-aware "Go to" in the new panel, then code coverage via `/api/codemap`,
+- **Next step:** push `feat/amspirit-z80-memory-view` + open a PR (3 commits, **2
+  pending changesets**), live-validate the Memory View on a real emulator
+  (panel + pointer highlight + flash + "Go to"), then the remaining panel
+  follow-up **label-aware "Go to"** (resolve firmware/symbol-map labels — crosses
+  the webview↔extension boundary). Then code coverage via `/api/codemap`,
   SNA/DSK load via `/api/script`, conditional/hit-count breakpoints + logpoints,
   then writeMemory / reverse-debug / watchpoints (the last needs an emulator
   endpoint). rasm trailing-`ret` quirk still open.
@@ -122,7 +133,10 @@
 | Push `amspirit-z80` + open PR to `main` | ✅ | **PR #5 merged** (`65ac1d5`); 2 changesets `amspirit-z80: minor` pending release |
 | rasm trailing-`ret` line-attribution quirk | ⬜ | rasm maps a `ret` before a label/EOF to the previous line; parsed as-is, refine later |
 | Memory view (expose `memoryReference` on pointer regs) | ✅ | `registers-view.ts` sets `memoryReference` on BC/DE/HL/IX/IY/SP/PC (reusing the hex-word value); `variablesRequest` forwards it → "View Binary Data" opens the native hex inspector. TDD; changeset `minor`. Not yet live-validated |
-| Dedicated Memory View React webview panel | ✅ | first React webview in `amspirit-z80` (Vite + CSP, mirrors `amspirit-basic`); octets-only hex+ASCII grid, "Go to" (hex/`0x`/`&`); pure `memory-model` (TDD) + RTL `memory-grid`; `memory-panel` polls `readRam` while paused. Command `amspirit.z80.memoryView`. Changeset `minor`. Not yet live-validated. Follow-ups: pointer highlight, diff-flash, label-aware goto |
+| Dedicated Memory View React webview panel | ✅ | first React webview in `amspirit-z80` (Vite + CSP, mirrors `amspirit-basic`); octets-only hex+ASCII grid, "Go to" (hex/`0x`/`&`); pure `memory-model` (TDD) + RTL `memory-grid`; `memory-panel` polls `readRam` while paused. Command `amspirit.z80.memoryView`. Changeset `minor`. Not yet live-validated |
+| Memory View — pointer-register highlight | ✅ | pure `pointerMarks(regs,window)` (TDD); byte a pointer reg (BC/DE/HL/IX/IY/SP/PC) targets highlighted + named in tooltip; panel fetches `getZ80()` each paused tick. On branch `feat/amspirit-z80-memory-view` |
+| Memory View — diff-flash changed bytes | ✅ | `.valflash` on bytes that change between paused ticks; keyed by absolute address so a "Go to" doesn't flash everything. RTL. On branch |
+| Memory View — label-aware "Go to" | ⬜ | resolve firmware/symbol-map labels in the goto field (crosses webview↔extension boundary) |
 | Code coverage via `/api/codemap` | ⬜ | DeZog parity |
 | rasm SNA/DSK load modes via `/api/script` | ⬜ | DeZog parity |
 | Conditional / hit-count breakpoints + logpoints | ⬜ | client-side (re-`continue` on unmet condition); logpoints via `OutputEvent` |
