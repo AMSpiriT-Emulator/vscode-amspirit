@@ -1,9 +1,15 @@
 import { useState } from "react"
-import { type MemoryRow, parseAddress } from "../../src/memory-view/memory-model.js"
+import {
+  type MemoryRow,
+  type PointerMark,
+  parseAddress,
+} from "../../src/memory-view/memory-model.js"
 
 interface MemoryGridProps {
   /** Rows to render, or `null` when memory is unavailable (running/detached). */
   rows: MemoryRow[] | null
+  /** Pointer registers landing in the window, by byte offset (optional). */
+  marks?: PointerMark[]
   /** Called with a 16-bit address when the user submits the "Go to" field. */
   onGoto: (address: number) => void
 }
@@ -13,7 +19,7 @@ interface MemoryGridProps {
  * no multi-byte/float interpretation, unlike VS Code's native hex inspector.
  * Pure presentation; the panel feeds rows and acts on `onGoto`.
  */
-export function MemoryGrid({ rows, onGoto }: MemoryGridProps) {
+export function MemoryGrid({ rows, marks, onGoto }: MemoryGridProps) {
   const [input, setInput] = useState("")
 
   const submit = (e: React.FormEvent): void => {
@@ -21,6 +27,9 @@ export function MemoryGrid({ rows, onGoto }: MemoryGridProps) {
     const addr = parseAddress(input)
     if (addr !== undefined) onGoto(addr)
   }
+
+  // Byte offsets accumulate across rows; resolve each to its pointer label.
+  const labelByOffset = new Map((marks ?? []).map((m) => [m.offset, m.registers.join(", ")]))
 
   return (
     <div className="memory-view">
@@ -40,19 +49,26 @@ export function MemoryGrid({ rows, onGoto }: MemoryGridProps) {
       ) : (
         <table className="mem-table">
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.address}>
-                <th className="mem-addr">{row.address}</th>
-                {row.hex.map((b, i) => (
-                  // Bytes within a row have no stable id; index is the position.
-                  // biome-ignore lint/suspicious/noArrayIndexKey: fixed-width hex column
-                  <td key={i} className="mem-byte">
-                    {b}
-                  </td>
-                ))}
-                <td className="mem-ascii">{row.ascii}</td>
-              </tr>
-            ))}
+            {rows.map((row, rowIndex) => {
+              // Offset of this row's first byte: rows before it are full-width.
+              const rowOffset = rows.slice(0, rowIndex).reduce((n, r) => n + r.hex.length, 0)
+              return (
+                <tr key={row.address}>
+                  <th className="mem-addr">{row.address}</th>
+                  {row.hex.map((b, i) => {
+                    const label = labelByOffset.get(rowOffset + i)
+                    return (
+                      // Bytes within a row have no stable id; index is the position.
+                      // biome-ignore lint/suspicious/noArrayIndexKey: fixed-width hex column
+                      <td key={i} className={label ? "mem-byte pointer" : "mem-byte"} title={label}>
+                        {b}
+                      </td>
+                    )
+                  })}
+                  <td className="mem-ascii">{row.ascii}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       )}

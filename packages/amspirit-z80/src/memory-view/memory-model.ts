@@ -32,6 +32,59 @@ const rowAddr = (n: number): string =>
 const byteHex = (n: number): string => (n & 0xff).toString(16).padStart(2, "0")
 const asciiChar = (n: number): string => (n >= 0x20 && n < 0x7f ? String.fromCharCode(n) : ".")
 
+/** The 16-bit pointer registers whose target byte can be highlighted in the grid. */
+export interface PointerRegisterValues {
+  BC: number
+  DE: number
+  HL: number
+  IX: number
+  IY: number
+  SP: number
+  PC: number
+}
+
+/** One highlighted byte: the register(s) pointing at it, by window offset. */
+export interface PointerMark {
+  /** 0-based byte offset into the window. */
+  offset: number
+  /** Register names pointing at this byte, in canonical order. */
+  registers: string[]
+}
+
+/** Canonical render order for the pointer registers (matches the Registers view). */
+const POINTER_ORDER: readonly (keyof PointerRegisterValues)[] = [
+  "BC",
+  "DE",
+  "HL",
+  "IX",
+  "IY",
+  "SP",
+  "PC",
+]
+
+/**
+ * Map the pointer registers that fall inside the `[base, base + length)` window
+ * (16-bit wrapping) to their byte offset, grouping registers that share a byte.
+ * Pure; the grid renders a highlight + tooltip per returned offset.
+ */
+export function pointerMarks(
+  regs: PointerRegisterValues,
+  opts: { base: number; length: number },
+): PointerMark[] {
+  const { base, length } = opts
+  const byOffset = new Map<number, string[]>()
+  for (const name of POINTER_ORDER) {
+    const offset = (regs[name] - base) & 0xffff
+    if (offset >= length) continue
+    const at = byOffset.get(offset)
+    if (at) at.push(name)
+    else byOffset.set(offset, [name])
+  }
+  return [...byOffset.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([offset, registers]) => ({ offset, registers }))
+}
+
 /**
  * Lay a flat byte buffer out into `columns`-wide rows starting at `base`.
  * Pure and rendering-agnostic; the row address wraps the 16-bit space.

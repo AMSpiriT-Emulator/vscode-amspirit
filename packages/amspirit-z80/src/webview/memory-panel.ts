@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto"
 import type { EmulatorClient } from "@amspirit/shared"
 import * as vscode from "vscode"
 import type { ExtToWebview, WebviewToExt } from "../../webview/messaging.js"
-import { buildMemoryRows } from "../memory-view/memory-model.js"
+import { buildMemoryRows, type PointerMark, pointerMarks } from "../memory-view/memory-model.js"
 import { buildWebviewHtml } from "./html.js"
 
 const POLL_INTERVAL_MS = 500
@@ -14,6 +14,8 @@ const DEFAULT_BASE = 0x4000
 
 const addrHex = (n: number): string =>
   `0x${(n & 0xffff).toString(16).toUpperCase().padStart(4, "0")}`
+/** Combine a hi/lo register byte pair into a 16-bit value. */
+const pair = (hi: number, lo: number): number => ((hi & 0xff) << 8) | (lo & 0xff)
 
 /**
  * Singleton webview panel showing a live Z80 memory dump (React) — a hex+ASCII
@@ -99,19 +101,38 @@ export class MemoryPanel {
 
   private async tick(): Promise<void> {
     const client = this.makeClient()
-    const rows = await this.readWindow(client)
-    this.post({ type: "snapshot", snapshot: { base: addrHex(this.base), rows } })
+    const { rows, marks } = await this.readWindow(client)
+    this.post({ type: "snapshot", snapshot: { base: addrHex(this.base), rows, marks } })
   }
 
-  /** Read the current window as the CPU sees it, or `null` when not paused/reachable. */
-  private async readWindow(client: EmulatorClient) {
+  /**
+   * Read the current window as the CPU sees it, plus the pointer registers that
+   * land in it. `rows: null` when not paused/reachable; `marks` is empty then.
+   */
+  private async readWindow(
+    client: EmulatorClient,
+  ): Promise<{ rows: ReturnType<typeof buildMemoryRows> | null; marks: PointerMark[] }> {
     try {
       const { paused } = await client.pingState()
-      if (!paused) return null
+      if (!paused) return { rows: null, marks: [] }
       const bytes = await client.readRam(this.base, WINDOW_BYTES, { cpuView: true })
-      return buildMemoryRows(bytes, { base: this.base, columns: COLUMNS })
+      const rows = buildMemoryRows(bytes, { base: this.base, columns: COLUMNS })
+      const r = await client.getZ80()
+      const marks = pointerMarks(
+        {
+          BC: pair(r.B, r.C),
+          DE: pair(r.D, r.E),
+          HL: pair(r.H, r.L),
+          IX: r.IX,
+          IY: r.IY,
+          SP: r.SP,
+          PC: r.PC,
+        },
+        { base: this.base, length: WINDOW_BYTES },
+      )
+      return { rows, marks }
     } catch {
-      return null
+      return { rows: null, marks: [] }
     }
   }
 

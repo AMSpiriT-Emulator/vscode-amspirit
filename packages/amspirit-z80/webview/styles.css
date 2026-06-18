@@ -72,6 +72,15 @@ h1 {
   padding: 0 0.2rem;
 }
 
+/* A byte a pointer register (BC/DE/HL/IX/IY/SP/PC) currently targets. */
+.mem-byte.pointer {
+  color: var(--vscode-editor-background);
+  background: var(--vscode-charts-blue, var(--vscode-textLink-foreground));
+  border-radius: 2px;
+  font-weight: 600;
+  cursor: help;
+}
+
 .mem-ascii {
   padding-left: 0.75rem;
   opacity: 0.85;

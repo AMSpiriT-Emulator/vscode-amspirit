@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { buildMemoryRows, parseAddress } from "../src/memory-view/memory-model.js"
+import { buildMemoryRows, parseAddress, pointerMarks } from "../src/memory-view/memory-model.js"
+
+// A "parking" address outside every window the tests use, so only the
+// registers a test sets explicitly land inside the window under test.
+const PARK = 0x8000
+const NO_POINTERS = { BC: PARK, DE: PARK, HL: PARK, IX: PARK, IY: PARK, SP: PARK, PC: PARK }
 
 describe("parseAddress", () => {
   it("parses bare hex", () => {
@@ -81,5 +86,45 @@ describe("buildMemoryRows", () => {
     const rows = buildMemoryRows(bytes, { base: 0x4000, columns: 8 })
     expect(rows).toHaveLength(2)
     expect(rows[1]?.address).toBe("0x4008")
+  })
+})
+
+describe("pointerMarks", () => {
+  it("marks a register that points inside the window at its byte offset", () => {
+    const regs = { ...NO_POINTERS, HL: 0x4010 }
+    expect(pointerMarks(regs, { base: 0x4000, length: 256 })).toEqual([
+      { offset: 0x10, registers: ["HL"] },
+    ])
+  })
+
+  it("ignores registers that point outside the window", () => {
+    const regs = { ...NO_POINTERS, HL: 0x4010, DE: 0x8000 }
+    expect(pointerMarks(regs, { base: 0x4000, length: 256 })).toEqual([
+      { offset: 0x10, registers: ["HL"] },
+    ])
+  })
+
+  it("groups several registers pointing at the same byte, in canonical order", () => {
+    const regs = { ...NO_POINTERS, PC: 0x4000, BC: 0x4000, HL: 0x4000 }
+    expect(pointerMarks(regs, { base: 0x4000, length: 256 })).toEqual([
+      { offset: 0, registers: ["BC", "HL", "PC"] },
+    ])
+  })
+
+  it("sorts marks by ascending offset", () => {
+    const regs = { ...NO_POINTERS, SP: 0x40ff, PC: 0x4000, HL: 0x4080 }
+    expect(pointerMarks(regs, { base: 0x4000, length: 256 })).toEqual([
+      { offset: 0x00, registers: ["PC"] },
+      { offset: 0x80, registers: ["HL"] },
+      { offset: 0xff, registers: ["SP"] },
+    ])
+  })
+
+  it("handles a window that wraps the 16-bit space", () => {
+    const regs = { ...NO_POINTERS, HL: 0x0008 }
+    // window starts at 0xFFF8, length 256 -> 0x0008 is offset 0x10
+    expect(pointerMarks(regs, { base: 0xfff8, length: 256 })).toEqual([
+      { offset: 0x10, registers: ["HL"] },
+    ])
   })
 })
