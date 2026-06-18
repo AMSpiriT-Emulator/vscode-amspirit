@@ -68,6 +68,39 @@ describe("<MemoryGrid />", () => {
     expect(screen.getByText(/0x4000/)).toBeDefined()
   })
 
+  it("renders a Follow PC checkbox reflecting its state and toggling it", () => {
+    const onFollowPcChange = vi.fn()
+    render(
+      <MemoryGrid
+        rows={rows}
+        followPc={false}
+        onFollowPcChange={onFollowPcChange}
+        onGoto={vi.fn()}
+      />,
+    )
+    const box = screen.getByRole("checkbox", { name: /follow pc/i }) as HTMLInputElement
+    expect(box.checked).toBe(false)
+    fireEvent.click(box)
+    expect(onFollowPcChange).toHaveBeenCalledWith(true)
+  })
+
+  it("turns Follow PC off when the user navigates with Go to", () => {
+    const onFollowPcChange = vi.fn()
+    const onGoto = vi.fn()
+    render(
+      <MemoryGrid
+        rows={rows}
+        followPc={true}
+        onFollowPcChange={onFollowPcChange}
+        onGoto={onGoto}
+      />,
+    )
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "&8000" } })
+    fireEvent.submit(screen.getByRole("form"))
+    expect(onFollowPcChange).toHaveBeenCalledWith(false)
+    expect(onGoto).toHaveBeenCalledWith(0x8000)
+  })
+
   it("flashes a byte that changed value since the last render, not its neighbours", () => {
     const before: MemoryRow[] = [{ address: "0xC000", hex: ["48", "65"], ascii: "He" }]
     const after: MemoryRow[] = [{ address: "0xC000", hex: ["49", "65"], ascii: "Ie" }]

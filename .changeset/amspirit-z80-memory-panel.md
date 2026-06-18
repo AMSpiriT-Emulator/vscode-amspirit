@@ -8,4 +8,6 @@ only, no multi-byte/float widgets like VS Code's native hex inspector. It polls
 the emulator while paused, refreshes live, and has a "Go to" field accepting
 hex/`0x`/`&`-prefixed addresses. Bytes targeted by a pointer register
 (BC/DE/HL/IX/IY/SP/PC) are highlighted, with the register name(s) in a tooltip,
-and bytes that change between paused ticks flash briefly.
+and bytes that change between paused ticks flash briefly. A header shows the
+window's base address, and a **Follow PC** checkbox keeps the window centred on
+the program counter as you step.

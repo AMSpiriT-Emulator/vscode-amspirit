@@ -12,6 +12,10 @@ interface MemoryGridProps {
   base?: string | undefined
   /** Pointer registers landing in the window, by byte offset (optional). */
   marks?: PointerMark[]
+  /** Whether the window currently tracks the program counter. */
+  followPc?: boolean
+  /** Called when the "Follow PC" checkbox is toggled. */
+  onFollowPcChange?: (enabled: boolean) => void
   /** Called with a 16-bit address when the user submits the "Go to" field. */
   onGoto: (address: number) => void
 }
@@ -21,13 +25,23 @@ interface MemoryGridProps {
  * no multi-byte/float interpretation, unlike VS Code's native hex inspector.
  * Pure presentation; the panel feeds rows and acts on `onGoto`.
  */
-export function MemoryGrid({ rows, base, marks, onGoto }: MemoryGridProps) {
+export function MemoryGrid({
+  rows,
+  base,
+  marks,
+  followPc,
+  onFollowPcChange,
+  onGoto,
+}: MemoryGridProps) {
   const [input, setInput] = useState("")
 
   const submit = (e: React.FormEvent): void => {
     e.preventDefault()
     const addr = parseAddress(input)
-    if (addr !== undefined) onGoto(addr)
+    if (addr === undefined) return
+    // Navigating manually leaves "follow PC" mode so the address sticks.
+    if (followPc) onFollowPcChange?.(false)
+    onGoto(addr)
   }
 
   // Byte offsets accumulate across rows; resolve each to its pointer label.
@@ -60,6 +74,14 @@ export function MemoryGrid({ rows, base, marks, onGoto }: MemoryGridProps) {
           onChange={(e) => setInput(e.target.value)}
         />
         <button type="submit">Go</button>
+        <label className="follow-pc">
+          <input
+            type="checkbox"
+            checked={followPc ?? false}
+            onChange={(e) => onFollowPcChange?.(e.target.checked)}
+          />
+          Follow PC
+        </label>
         {base !== undefined && <span className="window-base">Window: {base}</span>}
       </form>
       {rows === null ? (

@@ -13,4 +13,7 @@ interface MemoryViewSnapshot {
 export type ExtToWebview = { type: "snapshot"; snapshot: MemoryViewSnapshot }
 
 /** Messages the webview posts back to the extension. */
-export type WebviewToExt = { type: "ready" } | { type: "goto"; address: number }
+export type WebviewToExt =
+  | { type: "ready" }
+  | { type: "goto"; address: number }
+  | { type: "followPc"; enabled: boolean }

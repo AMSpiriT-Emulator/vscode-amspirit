@@ -2,7 +2,12 @@ import { randomBytes } from "node:crypto"
 import type { EmulatorClient } from "@amspirit/shared"
 import * as vscode from "vscode"
 import type { ExtToWebview, WebviewToExt } from "../../webview/messaging.js"
-import { buildMemoryRows, type PointerMark, pointerMarks } from "../memory-view/memory-model.js"
+import {
+  buildMemoryRows,
+  followBase,
+  type PointerMark,
+  pointerMarks,
+} from "../memory-view/memory-model.js"
 import { buildWebviewHtml } from "./html.js"
 
 const POLL_INTERVAL_MS = 500
@@ -28,6 +33,8 @@ export class MemoryPanel {
   private static current: MemoryPanel | undefined
 
   private base = DEFAULT_BASE
+  /** When set, each tick re-centres the window on the program counter. */
+  private followPc = false
   private timer: ReturnType<typeof setInterval> | undefined
   /** Last snapshot posted, serialized — skip posting identical snapshots. */
   private lastPosted = ""
@@ -44,6 +51,9 @@ export class MemoryPanel {
         if (m.type === "ready") this.startPolling()
         else if (m.type === "goto") {
           this.base = m.address & 0xffff
+          void this.tick()
+        } else if (m.type === "followPc") {
+          this.followPc = m.enabled
           void this.tick()
         }
       }),
@@ -122,9 +132,11 @@ export class MemoryPanel {
     try {
       const { ok } = await client.pingState()
       if (!ok) return { rows: null, marks: [] }
+      const r = await client.getZ80()
+      // Follow PC: re-centre the window on the program counter before reading.
+      if (this.followPc) this.base = followBase(r.PC, WINDOW_BYTES, COLUMNS)
       const bytes = await client.readRam(this.base, WINDOW_BYTES, { cpuView: true })
       const rows = buildMemoryRows(bytes, { base: this.base, columns: COLUMNS })
-      const r = await client.getZ80()
       const marks = pointerMarks(
         {
           BC: pair(r.B, r.C),

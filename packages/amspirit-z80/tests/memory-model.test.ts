@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { buildMemoryRows, parseAddress, pointerMarks } from "../src/memory-view/memory-model.js"
+import {
+  buildMemoryRows,
+  followBase,
+  parseAddress,
+  pointerMarks,
+} from "../src/memory-view/memory-model.js"
 
 // A "parking" address outside every window the tests use, so only the
 // registers a test sets explicitly land inside the window under test.
@@ -126,5 +131,22 @@ describe("pointerMarks", () => {
     expect(pointerMarks(regs, { base: 0xfff8, length: 256 })).toEqual([
       { offset: 0x10, registers: ["HL"] },
     ])
+  })
+})
+
+describe("followBase", () => {
+  it("centres a 256-byte window on PC, row-aligned", () => {
+    // PC 0x8000, half window 0x80 -> 0x7F80 (already 16-aligned)
+    expect(followBase(0x8000, 256, 16)).toBe(0x7f80)
+  })
+
+  it("aligns the base down to the column width", () => {
+    // 0x8008 - 0x80 = 0x7F88 -> aligned down to 0x7F80
+    expect(followBase(0x8008, 256, 16)).toBe(0x7f80)
+  })
+
+  it("wraps below 0x0000 into the 16-bit space", () => {
+    // 0x0040 - 0x80 = -0x40 -> 0xFFC0
+    expect(followBase(0x0040, 256, 16)).toBe(0xffc0)
   })
 })

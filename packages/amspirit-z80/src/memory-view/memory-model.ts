@@ -86,6 +86,16 @@ export function pointerMarks(
 }
 
 /**
+ * The window base that centres a `windowBytes`-tall view on `pc`, aligned down
+ * to a `columns`-wide row so the layout stays stable as PC moves. Wraps the
+ * 16-bit space. Used by the "Follow PC" mode.
+ */
+export function followBase(pc: number, windowBytes: number, columns: number): number {
+  const start = (pc - (windowBytes >> 1)) & 0xffff
+  return start & ~(columns - 1) & 0xffff
+}
+
+/**
  * Lay a flat byte buffer out into `columns`-wide rows starting at `base`.
  * Pure and rendering-agnostic; the row address wraps the 16-bit space.
  */
