@@ -5,7 +5,6 @@ import type { ExtToWebview, WebviewToExt } from "../../webview/messaging.js"
 import {
   buildMemoryRows,
   followBase,
-  hex16,
   type PointerMark,
   pointerMarks,
 } from "../memory-view/memory-model.js"
@@ -111,7 +110,7 @@ export class MemoryPanel {
   private async tick(): Promise<void> {
     const client = this.makeClient()
     const { rows, marks } = await this.readWindow(client)
-    this.post({ type: "snapshot", snapshot: { base: hex16(this.base), rows, marks } })
+    this.post({ type: "snapshot", snapshot: { rows, marks } })
   }
 
   /**

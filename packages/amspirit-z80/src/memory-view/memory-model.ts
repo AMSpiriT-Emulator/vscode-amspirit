@@ -30,7 +30,7 @@ export function parseAddress(input: string): number | undefined {
 }
 
 /** Bare, upper-case, 4-digit hex (no `0x`/`&` prefix) for display. */
-export const hex16 = (n: number): string => (n & 0xffff).toString(16).toUpperCase().padStart(4, "0")
+const hex16 = (n: number): string => (n & 0xffff).toString(16).toUpperCase().padStart(4, "0")
 const byteHex = (n: number): string => (n & 0xff).toString(16).padStart(2, "0")
 const asciiChar = (n: number): string => (n >= 0x20 && n < 0x7f ? String.fromCharCode(n) : ".")
 

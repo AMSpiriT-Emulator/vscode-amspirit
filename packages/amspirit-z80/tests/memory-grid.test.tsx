@@ -52,7 +52,7 @@ describe("<MemoryGrid />", () => {
     // the "65" byte (row0, col1) is the HL target
     const hl = screen.getByTitle("HL")
     expect(hl.textContent).toBe("65")
-    expect(hl.className).toContain("pointer")
+    expect(hl.getAttribute("data-pointer")).toBe("true")
     // the "00" byte (row1, col0) is shared by BC and PC
     const shared = screen.getByTitle("BC, PC")
     expect(shared.textContent).toBe("00")
@@ -61,11 +61,6 @@ describe("<MemoryGrid />", () => {
   it("renders fine when no marks are supplied", () => {
     render(<MemoryGrid rows={rows} onGoto={vi.fn()} />)
     expect(screen.getAllByText("48").length).toBeGreaterThan(0)
-  })
-
-  it("shows the current window base address in a header", () => {
-    render(<MemoryGrid rows={rows} base="4000" onGoto={vi.fn()} />)
-    expect(screen.getByText(/4000/)).toBeDefined()
   })
 
   it("renders a Follow PC checkbox reflecting its state and toggling it", () => {
@@ -106,8 +101,8 @@ describe("<MemoryGrid />", () => {
     const after: MemoryRow[] = [{ addr: 0xc000, address: "C000", hex: ["49", "65"], ascii: "Ie" }]
     const { rerender } = render(<MemoryGrid rows={before} onGoto={vi.fn()} />)
     rerender(<MemoryGrid rows={after} onGoto={vi.fn()} />)
-    expect(screen.getByText("49").className).toContain("valflash")
-    expect(screen.getByText("65").className).not.toContain("valflash")
+    expect(screen.getByText("49").getAttribute("data-flash")).toBe("true")
+    expect(screen.getByText("65").getAttribute("data-flash")).toBeNull()
   })
 
   it("does not flash when the window moves to a new base address", () => {
@@ -115,6 +110,6 @@ describe("<MemoryGrid />", () => {
     const after: MemoryRow[] = [{ addr: 0x8000, address: "8000", hex: ["49"], ascii: "I" }]
     const { rerender } = render(<MemoryGrid rows={before} onGoto={vi.fn()} />)
     rerender(<MemoryGrid rows={after} onGoto={vi.fn()} />)
-    expect(screen.getByText("49").className).not.toContain("valflash")
+    expect(screen.getByText("49").getAttribute("data-flash")).toBeNull()
   })
 })

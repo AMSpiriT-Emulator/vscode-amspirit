@@ -4,12 +4,11 @@ import {
   type PointerMark,
   parseAddress,
 } from "../../src/memory-view/memory-model.js"
+import styles from "./memory-grid.module.css"
 
 interface MemoryGridProps {
   /** Rows to render, or `null` when memory is unavailable (running/detached). */
   rows: MemoryRow[] | null
-  /** Address of the first byte of the window (`0x`-prefixed), shown in the header. */
-  base?: string | undefined
   /** Pointer registers landing in the window, by byte offset (optional). */
   marks?: PointerMark[]
   /** Whether the window currently tracks the program counter. */
@@ -25,14 +24,7 @@ interface MemoryGridProps {
  * no multi-byte/float interpretation, unlike VS Code's native hex inspector.
  * Pure presentation; the panel feeds rows and acts on `onGoto`.
  */
-export function MemoryGrid({
-  rows,
-  base,
-  marks,
-  followPc,
-  onFollowPcChange,
-  onGoto,
-}: MemoryGridProps) {
+export function MemoryGrid({ rows, marks, followPc, onFollowPcChange, onGoto }: MemoryGridProps) {
   const [input, setInput] = useState("")
 
   const submit = (e: React.FormEvent): void => {
@@ -62,31 +54,33 @@ export function MemoryGrid({
   })
 
   return (
-    <div className="memory-view">
-      <form className="goto" aria-label="Go to address" onSubmit={submit}>
-        <label htmlFor="goto-addr">Address</label>
+    <div>
+      <form className={styles.toolbar} aria-label="Go to address" onSubmit={submit}>
         <input
+          className={styles.addrInput}
           id="goto-addr"
           type="text"
           placeholder="C000"
+          aria-label="Address"
           value={input}
           onChange={(e) => setInput(e.target.value)}
         />
-        <button type="submit">Go</button>
-        <label className="follow-pc">
+        <button className={styles.go} type="submit">
+          Go
+        </button>
+        <label className={styles.followPc}>
           <input
             type="checkbox"
             checked={followPc ?? false}
             onChange={(e) => onFollowPcChange?.(e.target.checked)}
           />
-          Follow PC
+          <span>Follow PC</span>
         </label>
-        {base !== undefined && <span className="window-base">Window: {base}</span>}
       </form>
       {rows === null ? (
-        <p className="placeholder">No data — connect to the emulator to inspect memory.</p>
+        <p className={styles.placeholder}>No data — connect to the emulator to inspect memory.</p>
       ) : (
-        <table className="mem-table">
+        <table className={styles.table}>
           <tbody>
             {rows.map((row, rowIndex) => {
               // Offset of this row's first byte: rows before it are full-width.
@@ -94,22 +88,27 @@ export function MemoryGrid({
               const rowAddr = row.addr
               return (
                 <tr key={row.address}>
-                  <th className="mem-addr">{row.address}</th>
+                  <th className={styles.addr}>{row.address}</th>
                   {row.hex.map((b, i) => {
                     const label = labelByOffset.get(rowOffset + i)
                     const before = previous.get(rowAddr + i)
                     const changed = before !== undefined && before !== b
-                    const className = `mem-byte${label ? " pointer" : ""}${changed ? " valflash" : ""}`
                     return (
-                      // Re-key on value so the flash animation replays on change;
-                      // the column index keeps it unique within the row.
-                      // biome-ignore lint/suspicious/noArrayIndexKey: composite key, value drives remount
-                      <td key={`${i}:${b}`} className={className} title={label}>
+                      <td
+                        // Re-key on value so the flash animation replays on change;
+                        // the column index keeps it unique within the row.
+                        // biome-ignore lint/suspicious/noArrayIndexKey: composite key, value drives remount
+                        key={`${i}:${b}`}
+                        className={styles.byte}
+                        title={label}
+                        data-pointer={label ? "true" : undefined}
+                        data-flash={changed ? "true" : undefined}
+                      >
                         {b}
                       </td>
                     )
                   })}
-                  <td className="mem-ascii">{row.ascii}</td>
+                  <td className={styles.ascii}>{row.ascii}</td>
                 </tr>
               )
             })}

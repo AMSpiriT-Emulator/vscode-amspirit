@@ -14,10 +14,8 @@ export function App() {
 
   return (
     <main>
-      <h1>Z80 Memory</h1>
       <MemoryGrid
         rows={snapshot?.rows ?? null}
-        base={snapshot?.base}
         marks={snapshot?.marks ?? []}
         followPc={followPc}
         onFollowPcChange={changeFollowPc}

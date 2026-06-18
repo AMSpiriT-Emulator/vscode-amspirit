@@ -1,0 +1,126 @@
+/* Memory View grid — co-located CSS Module (Vite scopes the class names). */
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.45rem 0;
+  margin-bottom: 0.35rem;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.25));
+}
+
+.addrInput {
+  width: 5.5rem;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 3px;
+  padding: 3px 6px;
+}
+
+.addrInput:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.go {
+  font-family: inherit;
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  border: none;
+  border-radius: 3px;
+  padding: 3px 12px;
+  cursor: pointer;
+}
+
+.go:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.followPc {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.9;
+}
+
+.followPc input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.placeholder {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1.55;
+}
+
+.table tbody tr:hover {
+  background: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.12));
+}
+
+.addr {
+  text-align: right;
+  padding-right: 0.9rem;
+  color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+  opacity: 0.7;
+  font-weight: 600;
+  user-select: none;
+}
+
+.byte {
+  padding: 0 0.22rem;
+  text-align: center;
+}
+
+/* Split each 16-byte row into two octets for readability. */
+.byte:nth-child(10) {
+  padding-left: 0.6rem;
+}
+
+/* A byte a pointer register (BC/DE/HL/IX/IY/SP/PC) currently targets. */
+.byte[data-pointer] {
+  color: var(--vscode-editor-background);
+  background: var(--vscode-charts-blue, var(--vscode-textLink-foreground));
+  border-radius: 2px;
+  font-weight: 700;
+  cursor: help;
+}
+
+/* Briefly flash a byte that changed value between two paused ticks. */
+@keyframes flash {
+  from {
+    background: var(--vscode-charts-yellow, #6a6a1a);
+    color: var(--vscode-editor-background, #fff);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+.byte[data-flash] {
+  animation: flash 1.1s ease-out;
+  border-radius: 2px;
+}
+
+.ascii {
+  padding-left: 0.9rem;
+  opacity: 0.85;
+  border-left: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
+  white-space: pre;
+}
