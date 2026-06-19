@@ -1,4 +1,5 @@
 import {
+  type LabelRecord,
   type SymbolMap,
   type SymbolMapParser,
   type TraceRecord,
@@ -7,6 +8,8 @@ import {
 
 /** SLD record type for an executable instruction (trace data). */
 const TRACE_TYPE = "T"
+/** SLD record type for a label definition. */
+const LABEL_TYPE = "L"
 
 /**
  * SLD records are pipe-separated and end with `…|value|type|data`. Real
@@ -51,11 +54,41 @@ function parseTraceRecords(content: string): TraceRecord[] {
   return records
 }
 
+/**
+ * Resolve a label name from an `L` record's data field. The field is
+ * comma-separated `module,name,sub,+flag…`; the qualified label is the
+ * identifier parts (those not starting with `+`, non-empty) joined with a dot —
+ * e.g. `,delay,wait,+local` → `delay.wait`, `,start,` → `start`.
+ */
+function labelName(data: string): string | undefined {
+  const parts = data
+    .split(",")
+    .map((p) => p.trim())
+    .filter((p) => p !== "" && !p.startsWith("+"))
+  return parts.length > 0 ? parts.join(".") : undefined
+}
+
+function parseLabelRecords(content: string): LabelRecord[] {
+  const labels: LabelRecord[] = []
+  for (const raw of content.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (line === "" || line.startsWith("|")) continue
+    const fields = line.split("|")
+    if (fields.length < MIN_FIELDS) continue
+    if (fields[fields.length - TYPE_FROM_END] !== LABEL_TYPE) continue
+    const addr = parseAddress(fields[fields.length - VALUE_FROM_END] ?? "")
+    const name = labelName(fields[fields.length - 1] ?? "")
+    if (addr === undefined || name === undefined) continue
+    labels.push({ name, addr })
+  }
+  return labels
+}
+
 /** Parses the sjasmplus SLD format (`sjasmplus --sld=out.sld`). */
 export class SjasmplusSldParser implements SymbolMapParser {
   readonly id = "sjasmplus-sld"
 
   parse(content: string): SymbolMap {
-    return new TraceSymbolMap(parseTraceRecords(content))
+    return new TraceSymbolMap(parseTraceRecords(content), parseLabelRecords(content))
   }
 }

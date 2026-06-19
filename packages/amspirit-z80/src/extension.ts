@@ -10,6 +10,7 @@ import * as vscode from "vscode"
 import { vsCodeConfigReader } from "./config/vs-code-config-reader.js"
 import { Z80DebugSession } from "./debug/z80-debug-session.js"
 import { Z80StatusBar } from "./status-bar/z80-status-bar.js"
+import { MemoryPanel } from "./webview/memory-panel.js"
 
 const DEBUG_TYPE = "amspirit-z80"
 
@@ -40,6 +41,24 @@ export function activate(context: vscode.ExtensionContext): void {
     settings = loadSettings()
     client = new EmulatorClient({ port: settings.webPort })
     statusBar.setPort(client.port)
+  }
+
+  // The Memory View must talk to whichever emulator the active debug session is
+  // attached to (its launch config may override host/port); fall back to the
+  // status-bar client when no Z80 session is running.
+  function debugAwareClient(): EmulatorClient {
+    const cfg = vscode.debug.activeDebugSession?.configuration as
+      | { type?: string; host?: string; port?: number }
+      | undefined
+    if (cfg?.type !== DEBUG_TYPE) return client
+    if ((cfg.host ?? client.host) === client.host && (cfg.port ?? client.port) === client.port) {
+      return client
+    }
+    return new EmulatorClient(
+      cfg.host !== undefined
+        ? { host: cfg.host, port: cfg.port ?? client.port }
+        : { port: cfg.port ?? client.port },
+    )
   }
 
   async function cmdLaunch(): Promise<void> {
@@ -98,6 +117,9 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("amspirit.z80.launch", cmdLaunch),
     vscode.commands.registerCommand("amspirit.z80.connect", cmdConnect),
+    vscode.commands.registerCommand("amspirit.z80.memoryView", () =>
+      MemoryPanel.show(context.extensionUri, debugAwareClient),
+    ),
   )
 
   const debugFactory: vscode.DebugAdapterDescriptorFactory = {

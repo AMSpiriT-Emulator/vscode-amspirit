@@ -1,0 +1,14 @@
+/* Global base for the Z80 webviews. Component styles live in co-located
+   *.module.css files (Vite scopes their class names). */
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  padding: 0 0.75rem 0.6rem;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: var(--vscode-editor-font-size, 13px);
+  color: var(--vscode-foreground);
+}

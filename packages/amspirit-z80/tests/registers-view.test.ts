@@ -33,6 +33,9 @@ const REGS: Z80Registers = {
 const value = (scopes: RegisterScope[], scope: string, name: string): string | undefined =>
   scopes.find((s) => s.name === scope)?.variables.find((v) => v.name === name)?.value
 
+const memref = (scopes: RegisterScope[], scope: string, name: string): string | undefined =>
+  scopes.find((s) => s.name === scope)?.variables.find((v) => v.name === name)?.memoryReference
+
 describe("buildRegisterScopes", () => {
   it("groups registers into Registers / Flags / Shadow / Interrupts", () => {
     const scopes = buildRegisterScopes(REGS)
@@ -76,6 +79,26 @@ describe("buildRegisterScopes", () => {
     expect(value(s, "Interrupts", "IFF1")).toBe("1")
     expect(value(s, "Interrupts", "IFF2")).toBe("0")
     expect(value(s, "Interrupts", "IM")).toBe("2")
+  })
+
+  it("exposes a memoryReference on the pointer registers (for the hex inspector)", () => {
+    const s = buildRegisterScopes(REGS)
+    // The pointer registers point into RAM, so their value is the memory anchor.
+    expect(memref(s, "Registers", "BC")).toBe("0x3456")
+    expect(memref(s, "Registers", "DE")).toBe("0x789A")
+    expect(memref(s, "Registers", "HL")).toBe("0xBCDE")
+    expect(memref(s, "Registers", "IX")).toBe("0x1111")
+    expect(memref(s, "Registers", "IY")).toBe("0x2222")
+    expect(memref(s, "Registers", "SP")).toBe("0xC000")
+    expect(memref(s, "Registers", "PC")).toBe("0x8000")
+  })
+
+  it("does not expose a memoryReference on non-pointer entries", () => {
+    const s = buildRegisterScopes(REGS)
+    expect(memref(s, "Registers", "AF")).toBeUndefined()
+    expect(memref(s, "Flags", "Z")).toBeUndefined()
+    expect(memref(s, "Shadow", "HL'")).toBeUndefined()
+    expect(memref(s, "Interrupts", "I")).toBeUndefined()
   })
 
   it("decodes all flags set", () => {

@@ -17,6 +17,10 @@ export interface SymbolMap {
   addressToLine(addr: number): SourceLocation | undefined
   /** Lowest instruction address (program origin), or `undefined` if no code. */
   lowestAddress(): number | undefined
+  /** The address a label resolves to (case-insensitive), or `undefined`. */
+  labelToAddress(name: string): number | undefined
+  /** A label defined at `addr` (first if several), or `undefined`. */
+  addressToLabel(addr: number): string | undefined
 }
 
 /** Adapter that turns one assembler's debug artifact into a {@link SymbolMap}. */
@@ -37,12 +41,21 @@ export interface TraceRecord {
   addr: number
 }
 
+/** A label definition: the symbol name and the address it stands for. */
+export interface LabelRecord {
+  name: string
+  addr: number
+}
+
 /**
  * A {@link SymbolMap} backed by trace records. Shared by every adapter — each
  * parser just turns its artifact into records and hands them here.
  */
 export class TraceSymbolMap implements SymbolMap {
-  constructor(private readonly records: readonly TraceRecord[]) {}
+  constructor(
+    private readonly records: readonly TraceRecord[],
+    private readonly labels: readonly LabelRecord[] = [],
+  ) {}
 
   lineToAddresses(file: string, line: number): number[] {
     const key = basename(file)
@@ -62,5 +75,14 @@ export class TraceSymbolMap implements SymbolMap {
       if (min === undefined || r.addr < min) min = r.addr
     }
     return min
+  }
+
+  labelToAddress(name: string): number | undefined {
+    const key = name.toLowerCase()
+    return this.labels.find((l) => l.name.toLowerCase() === key)?.addr
+  }
+
+  addressToLabel(addr: number): string | undefined {
+    return this.labels.find((l) => l.addr === addr)?.name
   }
 }

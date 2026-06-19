@@ -22,7 +22,7 @@ import { type ReadMem, reconstructCallStack } from "../call-stack.js"
 import { type ByteReader, buildDisassemblyWindow } from "../disasm-window.js"
 import { firmwareLabel } from "../firmware-labels.js"
 import { buildRegisterScopes } from "../registers-view.js"
-import { stepSettled } from "../step-landing.js"
+import { launchEntryReached, stepSettled } from "../step-landing.js"
 import { planStepOver, returnAddress } from "../step-targets.js"
 import { parseSymbolMap } from "../symbol-map/parse-symbol-map.js"
 import type { SymbolMap } from "../symbol-map/symbol-map.js"
@@ -42,6 +42,13 @@ const STOP_SETTLE_MS = 150
 const STEP_SETTLE_MAX_POLLS = 30
 /** Longest Z80 instruction is 4 bytes; read a small window to decode at PC. */
 const MAX_INSTR_LEN = 4
+/**
+ * Upper bound on raw steps for the launch-entry first step. The dirty prefetch
+ * latch lands the first one or two steps mid-instruction before the PC re-syncs;
+ * a handful of steps always clears a 4-byte instruction. Caps a pathological
+ * entry (e.g. `jr $`) instead of looping forever.
+ */
+const LAUNCH_ENTRY_MAX_STEPS = 8
 
 interface Z80DebugConfig {
   program?: string
@@ -92,6 +99,8 @@ export class Z80DebugSession extends LoggingDebugSession {
   private symbols: SymbolMap | undefined
   private programPath: string | undefined
   private poller: StopPoller | undefined
+  /** Bumped by every monitor start; the launch-entry loop stops if superseded. */
+  private monitorRun = 0
   private disposed = false
   private stopOnEntry = false
   /** True once running and a stop is expected (arms the persistent monitor). */
@@ -388,6 +397,7 @@ export class Z80DebugSession extends LoggingDebugSession {
           name: v.name,
           value: v.value,
           variablesReference: 0,
+          ...(v.memoryReference ? { memoryReference: v.memoryReference } : {}),
         }))
       } catch {
         // empty
@@ -475,15 +485,18 @@ export class Z80DebugSession extends LoggingDebugSession {
    */
   private async stepOne(response: DebugProtocol.Response): Promise<void> {
     const client = this.client
-    // First step after a launch stop-on-entry: a raw step only advances one byte
-    // (pre-fetched exec state), so run to the next instruction boundary instead.
+    // First step after a launch stop-on-entry: the `exec` leaves a dirty prefetch
+    // latch that lands the first raw step mid-instruction. Step (bounded) until
+    // the PC clears the entry instruction, rather than a free-running temp
+    // breakpoint — which escapes into firmware on the rare run where the latch
+    // shifts boundaries so the temp address is never hit.
     if (this.atLaunchEntry && client) {
       this.atLaunchEntry = false
       try {
         const instr = await this.decodeAtPc(client)
         if (instr) {
           this.sendResponse(response)
-          await this.runToTemp((instr.address + instr.bytes.length) & 0xffff, "step")
+          this.monitorLaunchEntry(client, instr.address, instr.bytes.length)
           return
         }
       } catch {
@@ -513,6 +526,7 @@ export class Z80DebugSession extends LoggingDebugSession {
    */
   private monitorStepSettled(client: EmulatorClient, prePc: number): void {
     this.poller?.cancel()
+    this.monitorRun += 1
     let prevPc: number | undefined
     let attempts = 0
     const poller = new StopPoller(async () => {
@@ -534,6 +548,62 @@ export class Z80DebugSession extends LoggingDebugSession {
         this.sendEvent(new StoppedEvent("step", THREAD_ID))
       }
     })
+  }
+
+  /**
+   * Drive the launch-entry first step: raw-step (bounded) until the PC clears
+   * the entry instruction ({@link launchEntryReached}), then report one stop.
+   * Each step is a single instruction, so it can never run away — unlike the old
+   * free-running temp breakpoint, which escaped into firmware when the dirty
+   * launch latch shifted instruction boundaries past the temp address.
+   */
+  private monitorLaunchEntry(client: EmulatorClient, startPc: number, instrLen: number): void {
+    this.poller?.cancel()
+    const run = ++this.monitorRun
+    const loop = async (): Promise<void> => {
+      let pc = startPc
+      for (let i = 0; i < LAUNCH_ENTRY_MAX_STEPS; i += 1) {
+        if (this.disposed || this.monitorRun !== run) return
+        if (launchEntryReached(startPc, instrLen, pc)) break
+        try {
+          await client.step()
+        } catch {
+          // ignore; the settle below still reads the PC
+        }
+        pc = await this.waitForStablePc(client, pc, run)
+      }
+      if (!this.disposed && this.monitorRun === run) {
+        this.consumeEntryBreakpoint()
+        this.sendEvent(new StoppedEvent("step", THREAD_ID))
+      }
+    }
+    void loop()
+  }
+
+  /**
+   * Poll until the PC moves off `prePc` and is stable across two polls (or a
+   * bounded number of attempts), resolving the settled PC. Stops early if the
+   * session is disposed or a newer monitor (`run`) superseded this one.
+   */
+  private waitForStablePc(client: EmulatorClient, prePc: number, run: number): Promise<number> {
+    let prevPc: number | undefined
+    let lastPc = prePc
+    let attempts = 0
+    const poller = new StopPoller(async () => {
+      attempts += 1
+      if (this.disposed || this.monitorRun !== run) return true
+      try {
+        const pc = (await client.getZ80()).PC
+        lastPc = pc
+        if (stepSettled(prePc, pc, prevPc)) return true
+        prevPc = pc
+      } catch {
+        // transient read error; keep polling
+      }
+      return attempts >= STEP_SETTLE_MAX_POLLS
+    })
+    this.poller = poller
+    return poller.start().then(() => lastPc)
   }
 
   /** Set a one-shot breakpoint at `addr` (plus user bps), resume, restore on stop. */
@@ -656,6 +726,7 @@ export class Z80DebugSession extends LoggingDebugSession {
    */
   private monitorStop(reason: string, settleMs: number, onStopped?: () => void): void {
     this.poller?.cancel()
+    this.monitorRun += 1
     const client = this.client
     if (!client) return
     const poller = new StopPoller(async () => (await client.pingState()).paused)

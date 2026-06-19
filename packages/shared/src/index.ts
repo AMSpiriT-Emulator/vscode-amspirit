@@ -6,6 +6,7 @@ export type {
   BasicState,
   BasicStatement,
   EmulatorClientOptions,
+  EmulatorConfig,
   PingState,
   Z80Registers,
 } from "./emulator.js"

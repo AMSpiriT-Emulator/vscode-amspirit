@@ -60,6 +60,33 @@ describe("RasmMapParser", () => {
     expect(parse().addressToLine(0x9999)).toBeUndefined()
   })
 
+  describe("labelToAddress", () => {
+    it("resolves a label (the `NAME:` line) to its address", () => {
+      expect(parse().labelToAddress("START")).toBe(0x8000)
+      expect(parse().labelToAddress("DELAY")).toBe(0x800b)
+      expect(parse().labelToAddress("WAIT")).toBe(0x800d)
+    })
+
+    it("matches case-insensitively", () => {
+      expect(parse().labelToAddress("start")).toBe(0x8000)
+    })
+
+    it("returns undefined for an unknown label", () => {
+      expect(parse().labelToAddress("nope")).toBeUndefined()
+    })
+  })
+
+  describe("addressToLabel", () => {
+    it("resolves an address back to the label defined there", () => {
+      expect(parse().addressToLabel(0x8000)).toBe("START")
+      expect(parse().addressToLabel(0x800b)).toBe("DELAY")
+    })
+
+    it("returns undefined for an address with no label", () => {
+      expect(parse().addressToLabel(0x9999)).toBeUndefined()
+    })
+  })
+
   it("reports the program origin via lowestAddress", () => {
     expect(parse().lowestAddress()).toBe(0x8000)
   })

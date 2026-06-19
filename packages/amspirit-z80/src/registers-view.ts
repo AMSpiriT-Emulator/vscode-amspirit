@@ -4,6 +4,12 @@ import type { Z80Registers } from "@amspirit/shared"
 interface RegisterVariable {
   name: string
   value: string
+  /**
+   * For registers that point into RAM, a DAP memory anchor (the address as a
+   * numeric string) so VS Code's "View Binary Data" opens the native hex
+   * inspector there. Absent on flags, shadow and interrupt entries.
+   */
+  memoryReference?: string
 }
 
 /** A named group of register variables (one DAP scope). */
@@ -26,15 +32,17 @@ export function buildRegisterScopes(r: Z80Registers): RegisterScope[] {
   return [
     {
       name: "Registers",
+      // Pointer registers carry a memoryReference so the hex inspector can open
+      // at the address they hold; AF is data, so it has none.
       variables: [
         { name: "AF", value: pair(r.A, r.F) },
-        { name: "BC", value: pair(r.B, r.C) },
-        { name: "DE", value: pair(r.D, r.E) },
-        { name: "HL", value: pair(r.H, r.L) },
-        { name: "IX", value: word(r.IX) },
-        { name: "IY", value: word(r.IY) },
-        { name: "SP", value: word(r.SP) },
-        { name: "PC", value: word(r.PC) },
+        { name: "BC", value: pair(r.B, r.C), memoryReference: pair(r.B, r.C) },
+        { name: "DE", value: pair(r.D, r.E), memoryReference: pair(r.D, r.E) },
+        { name: "HL", value: pair(r.H, r.L), memoryReference: pair(r.H, r.L) },
+        { name: "IX", value: word(r.IX), memoryReference: word(r.IX) },
+        { name: "IY", value: word(r.IY), memoryReference: word(r.IY) },
+        { name: "SP", value: word(r.SP), memoryReference: word(r.SP) },
+        { name: "PC", value: word(r.PC), memoryReference: word(r.PC) },
       ],
     },
     {
