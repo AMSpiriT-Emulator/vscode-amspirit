@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest"
 import {
   buildMemoryRows,
+  executedOffsets,
   followBase,
   memoryBanks,
   parseAddress,
+  parseByte,
   pointerMarks,
+  scrollBase,
 } from "../src/memory-view/memory-model.js"
 
 // A "parking" address outside every window the tests use, so only the
@@ -170,5 +173,63 @@ describe("followBase", () => {
   it("wraps below 0x0000 into the 16-bit space", () => {
     // 0x0040 - 0x80 = -0x40 -> 0xFFC0
     expect(followBase(0x0040, 256, 16)).toBe(0xffc0)
+  })
+})
+
+describe("scrollBase", () => {
+  it("moves the base down by whole rows", () => {
+    expect(scrollBase(0xc000, 1, 16)).toBe(0xc010)
+    expect(scrollBase(0xc000, 16, 16)).toBe(0xc100) // a full 256-byte page
+  })
+  it("moves the base up by whole rows", () => {
+    expect(scrollBase(0xc010, -1, 16)).toBe(0xc000)
+  })
+  it("wraps the 16-bit space in both directions", () => {
+    expect(scrollBase(0x0000, -1, 16)).toBe(0xfff0)
+    expect(scrollBase(0xfff0, 1, 16)).toBe(0x0000)
+  })
+})
+
+describe("parseByte", () => {
+  it("parses one or two hex digits", () => {
+    expect(parseByte("a")).toBe(0x0a)
+    expect(parseByte("FF")).toBe(0xff)
+    expect(parseByte("00")).toBe(0x00)
+  })
+  it("trims whitespace", () => {
+    expect(parseByte("  3e ")).toBe(0x3e)
+  })
+  it("rejects empty, overlong or non-hex input", () => {
+    expect(parseByte("")).toBeUndefined()
+    expect(parseByte("100")).toBeUndefined()
+    expect(parseByte("zz")).toBeUndefined()
+  })
+})
+
+describe("executedOffsets", () => {
+  // 8192-byte (16384 hex char) bitmap, bit `addr` = byte[addr>>3] & (1<<(addr&7)).
+  const bitmap = (addrs: number[]): string => {
+    const bytes = new Uint8Array(8192)
+    for (const a of addrs) {
+      const idx = a >> 3
+      bytes[idx] = (bytes[idx] ?? 0) | (1 << (a & 7))
+    }
+    return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("")
+  }
+
+  it("returns window offsets whose address has been executed", () => {
+    const hex = bitmap([0xc000, 0xc003, 0xc00f])
+    expect(executedOffsets(hex, 0xc000, 16)).toEqual([0, 3, 15])
+  })
+  it("excludes addresses outside the window", () => {
+    const hex = bitmap([0xbfff, 0xc000, 0xc010])
+    expect(executedOffsets(hex, 0xc000, 16)).toEqual([0])
+  })
+  it("wraps the window across the 16-bit boundary", () => {
+    const hex = bitmap([0xffff, 0x0000])
+    expect(executedOffsets(hex, 0xffff, 2)).toEqual([0, 1])
+  })
+  it("returns nothing for an empty or malformed bitmap", () => {
+    expect(executedOffsets("", 0xc000, 16)).toEqual([])
   })
 })

@@ -24,7 +24,18 @@
 - **Tooling installed locally** (for the sandbox assemble tasks): **sjasmplus
   v1.23.1** and **rasm v3.0.8** (both on PATH). Emulator: build amspirit-lite
   `feat/z80-breakpoints` and run from `amspirit-lite/src` (ROMs are CWD-relative).
-- **Latest (2026-06-18, branch `feat/amspirit-z80-memory-view`):** committed the
+- **Latest (2026-06-19, branch `feat/amspirit-z80-memory-view`, UNCOMMITTED):**
+  **Memory View finishing pass + label-aware disassembly — live-validated.**
+  Added: 64 KB wheel/keyboard **scroll + paging** (`scrollBase`), **code-coverage
+  shading** (new `EmulatorClient.getCodemap()` + pure `executedOffsets`, decoding
+  `/api/codemap`), **inline byte editing** on central RAM (`writeRam`, `parseByte`;
+  read-only on extended banks), and a rewritten **label-aware Disassemble** —
+  `#` hex, firmware + symbol-map labels (new `SymbolMap.addressToLabel`),
+  auto-`Lxxxx` for in-range targets, opened as `z80-asm`. Full gate green (z80 148
+  tests, 97.74% stmts / 90.11% br). Changesets `amspirit-z80-memory-panel.md`
+  (updated) + `shared-getcodemap.md` (new), both `minor`. See
+  `doc/sessions/2026-06-19-amspirit-z80-memory-view-finished.md`.
+- **Prior (2026-06-18, branch `feat/amspirit-z80-memory-view`):** committed the
   Memory View off `main` and added two parity follow-ups to the panel —
   **pointer-register highlight** (each byte a pointer reg BC/DE/HL/IX/IY/SP/PC
   targets is highlighted + named in a tooltip; pure `pointerMarks`, TDD) and
@@ -49,13 +60,13 @@
   `doc/sessions/2026-06-17-amspirit-z80-memory-view.md`. (Prior 2026-06-17 slice —
   call-stack + firmware labels + Disassembly View + step robustness — is **merged
   in PR #5**; see `doc/sessions/2026-06-17-amspirit-z80-callstack-disasm-step.md`.)
-- **Next step:** push `feat/amspirit-z80-memory-view` + open a PR (Memory View is
-  now **live-validated**; 2 pending changesets). Then the remaining panel
-  follow-up **label-aware "Go to"** (resolve firmware/symbol-map labels — crosses
-  the webview↔extension boundary). Then code coverage via `/api/codemap`,
+- **Next step:** commit the 2026-06-19 finishing pass (currently uncommitted),
+  then push `feat/amspirit-z80-memory-view` + open a PR (Memory View finished &
+  **live-validated**; changesets ready). Remaining parity follow-ups: label-aware
+  "Go to", "code vs data" colouring in the Disassembly View (reuse `getCodemap`),
   SNA/DSK load via `/api/script`, conditional/hit-count breakpoints + logpoints,
-  then writeMemory / reverse-debug / watchpoints (the last needs an emulator
-  endpoint). rasm trailing-`ret` quirk still open.
+  DAP `writeMemoryRequest` / reverse-debug / watchpoints (the last needs an
+  emulator endpoint). rasm trailing-`ret` quirk still open.
 - **Known emulator root cause (worked around in-extension, not fixed):** on
   `launch`, `POST /api/ram {exec}` does `Core_z80_Write_Register(PC, entry)` +
   `set_paused(false)` while the core is mid-instruction (emulator was running),
@@ -132,15 +143,15 @@
 | Push `amspirit-z80` + open PR to `main` | ✅ | **PR #5 merged** (`65ac1d5`); 2 changesets `amspirit-z80: minor` pending release |
 | rasm trailing-`ret` line-attribution quirk | ⬜ | rasm maps a `ret` before a label/EOF to the previous line; parsed as-is, refine later |
 | Memory view (expose `memoryReference` on pointer regs) | ✅ | `registers-view.ts` sets `memoryReference` on BC/DE/HL/IX/IY/SP/PC (reusing the hex-word value); `variablesRequest` forwards it → "View Binary Data" opens the native hex inspector. TDD; changeset `minor`. Not yet live-validated |
-| Dedicated Memory View React webview panel | ✅ | first React webview in `amspirit-z80` (Vite + CSP, mirrors `amspirit-basic`); octets-only hex+ASCII grid, "Go to" (hex/`0x`/`&`); pure `memory-model` (TDD) + RTL `memory-grid`; `memory-panel` polls `readRam` while paused. Command `amspirit.z80.memoryView`. Changeset `minor`. Not yet live-validated |
+| Dedicated Memory View React webview panel | ✅ | first React webview in `amspirit-z80` (Vite + CSP, mirrors `amspirit-basic`); octets-only hex+ASCII grid; pure `memory-model` (TDD) + RTL `memory-grid`; `memory-panel` polls `readRam`. Command `amspirit.z80.memoryView`. **Finished pass:** "Go to", pointer-register highlight + tooltip, diff-flash, Follow PC, machine-driven bank/view selector, range-select → **label-aware Disassemble** (`#` hex; firmware + symbol-map labels; auto `Lxxxx` for in-range targets; opens as `z80-asm`), **64 KB wheel/keyboard scroll + paging**, **code-coverage shading**, **inline byte editing** on central RAM. Changesets `minor` (z80 + shared). **Live-validated** on a real emulator (2026-06-19) |
 | Memory View — pointer-register highlight | ✅ | pure `pointerMarks(regs,window)` (TDD); byte a pointer reg (BC/DE/HL/IX/IY/SP/PC) targets highlighted + named in tooltip; panel fetches `getZ80()` each paused tick. On branch `feat/amspirit-z80-memory-view` |
 | Memory View — diff-flash changed bytes | ✅ | `.valflash` on bytes that change between paused ticks; keyed by absolute address so a "Go to" doesn't flash everything. RTL. On branch |
 | Memory View — **live-validated** vs real emulator | ✅ | confirmed on `amspirit-lite-qt` 1.11.0 (port 8765): dump + "Go to" + header render. Fixed the blank-at-breakpoint bug: gate on reachability (`ok`), not `pingState().paused` — the QT build wires `p_freeze=&s_paused` but the flag was fragile; `readRam` works whenever reachable. Panel now also targets the active debug session's host/port. Added a `Window: 0xXXXX` header (a zeroed window read as "empty") |
 | Memory View — label-aware "Go to" | ⬜ | resolve firmware/symbol-map labels in the goto field (crosses webview↔extension boundary) |
-| Code coverage via `/api/codemap` | ⬜ | DeZog parity |
+| Code coverage via `/api/codemap` | ✅ | `EmulatorClient.getCodemap()` (shared) + pure `executedOffsets`; Memory View shades executed bytes. Disassembler "code vs data" colouring still a possible follow-up |
 | rasm SNA/DSK load modes via `/api/script` | ⬜ | DeZog parity |
 | Conditional / hit-count breakpoints + logpoints | ⬜ | client-side (re-`continue` on unmet condition); logpoints via `OutputEvent` |
-| `writeMemory` (`supportsWriteMemoryRequest`) | ⬜ | needs a RAM-write endpoint |
+| `writeMemory` (`supportsWriteMemoryRequest`) | 🟡 | Memory View edits central RAM inline via `writeRam` (`/api/ram`); the DAP `writeMemoryRequest` itself is still unwired (extended banks would need a bank-aware write) |
 | Reverse-debug (`stepBack`/`reverseContinue`) | ⬜ | emulator already records Z80 history (`session_record_z80_history`); expose via API then wire |
 | Memory watchpoints (read/write) | ⬜ | **needs an emulator data-breakpoint endpoint** (none today) — costliest |
 

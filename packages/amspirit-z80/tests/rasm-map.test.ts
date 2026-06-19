@@ -76,6 +76,17 @@ describe("RasmMapParser", () => {
     })
   })
 
+  describe("addressToLabel", () => {
+    it("resolves an address back to the label defined there", () => {
+      expect(parse().addressToLabel(0x8000)).toBe("START")
+      expect(parse().addressToLabel(0x800b)).toBe("DELAY")
+    })
+
+    it("returns undefined for an address with no label", () => {
+      expect(parse().addressToLabel(0x9999)).toBeUndefined()
+    })
+  })
+
   it("reports the program origin via lowestAddress", () => {
     expect(parse().lowestAddress()).toBe(0x8000)
   })

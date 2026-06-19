@@ -154,4 +154,89 @@ describe("<MemoryGrid />", () => {
     rerender(<MemoryGrid rows={after} onGoto={vi.fn()} />)
     expect(screen.getByText("49").getAttribute("data-flash")).toBeNull()
   })
+
+  it("shades the bytes the PC has executed (code coverage)", () => {
+    // offsets accumulate across rows: row0 = 0..4, row1 = 5..6.
+    render(<MemoryGrid rows={rows} executed={[1, 5]} onGoto={vi.fn()} />)
+    expect(screen.getByText("65").getAttribute("data-executed")).toBe("true") // offset 1
+    expect(screen.getByText("48").getAttribute("data-executed")).toBeNull() // offset 0
+    expect(screen.getByText("00").getAttribute("data-executed")).toBe("true") // offset 5
+  })
+
+  it("scrolls down one row on a wheel-down, leaving Follow PC", () => {
+    const onGoto = vi.fn()
+    const onFollowPcChange = vi.fn()
+    render(
+      <MemoryGrid
+        rows={rows}
+        columns={16}
+        followPc={true}
+        onFollowPcChange={onFollowPcChange}
+        onGoto={onGoto}
+      />,
+    )
+    fireEvent.wheel(screen.getByRole("table"), { deltaY: 120 })
+    expect(onGoto).toHaveBeenCalledWith(0xc010) // base 0xC000 + one 16-byte row
+    expect(onFollowPcChange).toHaveBeenCalledWith(false)
+  })
+
+  it("pages by the window height on PageDown/PageUp", () => {
+    const onGoto = vi.fn()
+    render(<MemoryGrid rows={rows} columns={16} onGoto={onGoto} />)
+    const table = screen.getByRole("table")
+    fireEvent.keyDown(table, { key: "PageDown" }) // 2 visible rows × 16 = +0x20
+    expect(onGoto).toHaveBeenCalledWith(0xc020)
+    onGoto.mockClear()
+    fireEvent.keyDown(table, { key: "ArrowUp" }) // one row up, wraps below base
+    expect(onGoto).toHaveBeenCalledWith(0xbff0)
+  })
+
+  it("jumps to 0x0000 on Home and to the last window on End", () => {
+    const onGoto = vi.fn()
+    render(<MemoryGrid rows={rows} columns={16} onGoto={onGoto} />)
+    const table = screen.getByRole("table")
+    fireEvent.keyDown(table, { key: "Home" })
+    expect(onGoto).toHaveBeenCalledWith(0x0000)
+    onGoto.mockClear()
+    fireEvent.keyDown(table, { key: "End" }) // -(2 rows × 16) wraps to 0xFFE0
+    expect(onGoto).toHaveBeenCalledWith(0xffe0)
+  })
+
+  it("commits an edit when the input loses focus", () => {
+    const onWrite = vi.fn()
+    render(<MemoryGrid rows={rows} editable onWrite={onWrite} onGoto={vi.fn()} />)
+    fireEvent.doubleClick(screen.getByText("48"))
+    const input = screen.getByRole("textbox", { name: /edit byte/i })
+    fireEvent.change(input, { target: { value: "7f" } })
+    fireEvent.blur(input)
+    expect(onWrite).toHaveBeenCalledWith(0xc000, 0x7f)
+  })
+
+  it("edits a byte when editable and writes the new value", () => {
+    const onWrite = vi.fn()
+    render(<MemoryGrid rows={rows} editable onWrite={onWrite} onGoto={vi.fn()} />)
+    fireEvent.doubleClick(screen.getByText("48")) // 0xC000
+    const input = screen.getByRole("textbox", { name: /edit byte/i })
+    fireEvent.change(input, { target: { value: "3e" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    expect(onWrite).toHaveBeenCalledWith(0xc000, 0x3e)
+  })
+
+  it("cancels an edit on Escape without writing", () => {
+    const onWrite = vi.fn()
+    render(<MemoryGrid rows={rows} editable onWrite={onWrite} onGoto={vi.fn()} />)
+    fireEvent.doubleClick(screen.getByText("48"))
+    const input = screen.getByRole("textbox", { name: /edit byte/i })
+    fireEvent.change(input, { target: { value: "3e" } })
+    fireEvent.keyDown(input, { key: "Escape" })
+    expect(onWrite).not.toHaveBeenCalled()
+    expect(screen.queryByRole("textbox", { name: /edit byte/i })).toBeNull()
+  })
+
+  it("ignores a double-click when read-only", () => {
+    const onWrite = vi.fn()
+    render(<MemoryGrid rows={rows} editable={false} onWrite={onWrite} onGoto={vi.fn()} />)
+    fireEvent.doubleClick(screen.getByText("48"))
+    expect(screen.queryByRole("textbox", { name: /edit byte/i })).toBeNull()
+  })
 })

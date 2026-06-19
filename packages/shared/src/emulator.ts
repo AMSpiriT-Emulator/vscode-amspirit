@@ -309,6 +309,16 @@ export class EmulatorClient {
     if (!parsed.ok) throw new Error("Emulator rejected RAM write")
   }
 
+  /**
+   * The Z80 execution bitmap via `GET /api/codemap`: 8192 bytes as hex, bit
+   * `addr` set once an instruction has started at `addr` since the last reset.
+   * Returns `""` if the emulator omits it. Decode with `executedOffsets`.
+   */
+  async getCodemap(): Promise<string> {
+    const res = await this.getJson<{ hex?: string }>("/api/codemap", this.debugTimeoutMs)
+    return res.hex ?? ""
+  }
+
   private async getJson<T>(path: string, timeoutMs: number): Promise<T> {
     const body = await this.get(path, timeoutMs)
     return JSON.parse(body) as T

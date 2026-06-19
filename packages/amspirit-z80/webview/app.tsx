@@ -23,11 +23,14 @@ export function App() {
       <MemoryGrid
         rows={snapshot?.rows ?? null}
         marks={snapshot?.marks ?? []}
+        executed={snapshot?.executed ?? []}
         banks={snapshot?.banks ?? []}
         selectedBankId={bankId}
         onSelectBank={changeBank}
         followPc={followPc}
         onFollowPcChange={changeFollowPc}
+        editable={snapshot?.editable ?? false}
+        onWrite={(address, value) => postToExt({ type: "write", address, value })}
         onGoto={(address) => postToExt({ type: "goto", address })}
         onDisassemble={(start, end) => postToExt({ type: "disassemble", start, end })}
       />

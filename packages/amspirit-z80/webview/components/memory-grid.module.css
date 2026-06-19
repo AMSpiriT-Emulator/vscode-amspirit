@@ -81,6 +81,15 @@
   line-height: 1.55;
 }
 
+.table:focus {
+  outline: none;
+}
+
+.table:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
 .table tbody tr:hover {
   background: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.12));
 }
@@ -98,6 +107,30 @@
   padding: 0 0.22rem;
   text-align: center;
   cursor: pointer;
+}
+
+.byte[data-editable]:hover {
+  outline: 1px solid var(--vscode-focusBorder, rgba(128, 128, 128, 0.5));
+  border-radius: 2px;
+}
+
+/* A byte the Z80 has executed since reset (code vs data shading). */
+.byte[data-executed] {
+  background: var(--vscode-diffEditor-insertedTextBackground, rgba(99, 184, 99, 0.18));
+}
+
+/* Inline byte editor: fills the cell, keeps the monospace grid aligned. */
+.edit {
+  width: 1.6em;
+  padding: 0;
+  text-align: center;
+  font-family: inherit;
+  font-size: inherit;
+  text-transform: lowercase;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: 2px;
 }
 
 /* A byte inside the current selection (for range disassembly). */

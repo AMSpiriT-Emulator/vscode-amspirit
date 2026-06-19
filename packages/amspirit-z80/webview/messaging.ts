@@ -5,8 +5,12 @@ interface MemoryViewSnapshot {
   rows: MemoryRow[] | null
   /** Pointer registers (BC/DE/HL/IX/IY/SP/PC) landing in the window, by offset. */
   marks: PointerMark[]
+  /** Window offsets the Z80 has executed (code-coverage shading). */
+  executed: number[]
   /** Selectable views/banks for this machine (machine-driven; empty until known). */
   banks: BankOption[]
+  /** Whether bytes can be edited (central RAM only); false on extended banks. */
+  editable: boolean
 }
 
 /** Messages the extension posts to the webview. */
@@ -19,3 +23,4 @@ export type WebviewToExt =
   | { type: "followPc"; enabled: boolean }
   | { type: "selectBank"; id: string }
   | { type: "disassemble"; start: number; end: number }
+  | { type: "write"; address: number; value: number }

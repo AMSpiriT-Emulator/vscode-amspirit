@@ -19,6 +19,8 @@ export interface SymbolMap {
   lowestAddress(): number | undefined
   /** The address a label resolves to (case-insensitive), or `undefined`. */
   labelToAddress(name: string): number | undefined
+  /** A label defined at `addr` (first if several), or `undefined`. */
+  addressToLabel(addr: number): string | undefined
 }
 
 /** Adapter that turns one assembler's debug artifact into a {@link SymbolMap}. */
@@ -78,5 +80,9 @@ export class TraceSymbolMap implements SymbolMap {
   labelToAddress(name: string): number | undefined {
     const key = name.toLowerCase()
     return this.labels.find((l) => l.name.toLowerCase() === key)?.addr
+  }
+
+  addressToLabel(addr: number): string | undefined {
+    return this.labels.find((l) => l.addr === addr)?.name
   }
 }

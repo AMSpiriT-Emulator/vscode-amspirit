@@ -4,14 +4,20 @@ import {
   type MemoryRow,
   type PointerMark,
   parseAddress,
+  parseByte,
+  scrollBase,
 } from "../../src/memory-view/memory-model.js"
 import styles from "./memory-grid.module.css"
 
 interface MemoryGridProps {
   /** Rows to render, or `null` when memory is unavailable (running/detached). */
   rows: MemoryRow[] | null
+  /** Bytes per row (drives scroll/paging math). Defaults to 16. */
+  columns?: number
   /** Pointer registers landing in the window, by byte offset (optional). */
   marks?: PointerMark[]
+  /** Window offsets the Z80 has executed, shaded as "code" (optional). */
+  executed?: number[]
   /** Selectable views/banks for the machine (empty hides the selector). */
   banks?: BankOption[]
   /** Id of the currently selected view/bank. */
@@ -26,18 +32,34 @@ interface MemoryGridProps {
   onGoto: (address: number) => void
   /** Called with the inclusive [start, end] of the selected byte range. */
   onDisassemble?: (start: number, end: number) => void
+  /** Whether bytes can be edited in place (central RAM only). */
+  editable?: boolean
+  /** Called when an inline byte edit is committed. */
+  onWrite?: (address: number, value: number) => void
 }
 
 const hex4 = (n: number): string => (n & 0xffff).toString(16).toUpperCase().padStart(4, "0")
 
+/** Keyboard navigation: how many rows to move for each handled key. */
+const KEY_ROWS: Record<string, (visibleRows: number) => number> = {
+  ArrowDown: () => 1,
+  ArrowUp: () => -1,
+  PageDown: (n) => n,
+  PageUp: (n) => -n,
+}
+
 /**
  * Z80 memory view: a "Go to" address field over a hex+ASCII dump. Octets only —
  * no multi-byte/float interpretation, unlike VS Code's native hex inspector.
- * Pure presentation; the panel feeds rows and acts on `onGoto`.
+ * Supports wheel/keyboard scrolling, code-coverage shading and (on central RAM)
+ * inline byte editing. Pure presentation; the panel feeds rows and acts on the
+ * callbacks.
  */
 export function MemoryGrid({
   rows,
+  columns = 16,
   marks,
+  executed,
   banks,
   selectedBankId,
   onSelectBank,
@@ -45,21 +67,55 @@ export function MemoryGrid({
   onFollowPcChange,
   onGoto,
   onDisassemble,
+  editable,
+  onWrite,
 }: MemoryGridProps) {
   const [input, setInput] = useState("")
   // Byte-range selection: anchor + focus addresses (null = nothing selected).
   const [selAnchor, setSelAnchor] = useState<number | null>(null)
   const [selFocus, setSelFocus] = useState<number | null>(null)
+  // Inline edit: the address being edited and its in-progress hex text.
+  const [editAddr, setEditAddr] = useState<number | null>(null)
+  const [editValue, setEditValue] = useState("")
   const selLo = selAnchor !== null && selFocus !== null ? Math.min(selAnchor, selFocus) : null
   const selHi = selAnchor !== null && selFocus !== null ? Math.max(selAnchor, selFocus) : null
+
+  // Navigate to an absolute base, leaving "follow PC" so the address sticks.
+  const navigate = (base: number): void => {
+    if (followPc) onFollowPcChange?.(false)
+    onGoto(base & 0xffff)
+  }
 
   const submit = (e: React.FormEvent): void => {
     e.preventDefault()
     const addr = parseAddress(input)
-    if (addr === undefined) return
-    // Navigating manually leaves "follow PC" mode so the address sticks.
-    if (followPc) onFollowPcChange?.(false)
-    onGoto(addr)
+    if (addr !== undefined) navigate(addr)
+  }
+
+  // Scroll/page relative to the current window (its first row is the base).
+  const scrollRows = (deltaRows: number): void => {
+    if (!rows || rows.length === 0 || deltaRows === 0) return
+    const base = rows[0]?.addr ?? 0
+    navigate(scrollBase(base, deltaRows, columns))
+  }
+
+  const onWheel = (e: React.WheelEvent): void => {
+    if (editAddr === null) scrollRows(Math.sign(e.deltaY))
+  }
+
+  const onKeyDown = (e: React.KeyboardEvent): void => {
+    if (editAddr !== null || !rows) return
+    const move = KEY_ROWS[e.key]
+    if (move) {
+      e.preventDefault()
+      scrollRows(move(rows.length))
+    } else if (e.key === "Home") {
+      e.preventDefault()
+      navigate(0x0000)
+    } else if (e.key === "End") {
+      e.preventDefault()
+      navigate(-rows.length * columns)
+    }
   }
 
   const clickByte = (addr: number, extend: boolean): void => {
@@ -70,8 +126,27 @@ export function MemoryGrid({
     }
   }
 
+  const startEdit = (addr: number, current: string): void => {
+    if (!editable) return
+    setEditAddr(addr)
+    setEditValue(current)
+  }
+
+  const commitEdit = (addr: number): void => {
+    const value = parseByte(editValue)
+    if (value !== undefined) onWrite?.(addr, value)
+    setEditAddr(null)
+  }
+
+  const editKeyDown = (e: React.KeyboardEvent, addr: number): void => {
+    e.stopPropagation()
+    if (e.key === "Enter") commitEdit(addr)
+    else if (e.key === "Escape") setEditAddr(null)
+  }
+
   // Byte offsets accumulate across rows; resolve each to its pointer label.
   const labelByOffset = new Map((marks ?? []).map((m) => [m.offset, m.registers.join(", ")]))
+  const executedSet = new Set(executed ?? [])
 
   // Previous byte value per absolute address, to flash bytes that changed this
   // tick. Keyed by address (not offset) so moving the window doesn't flash.
@@ -133,7 +208,13 @@ export function MemoryGrid({
       {rows === null ? (
         <p className={styles.placeholder}>No data — connect to the emulator to inspect memory.</p>
       ) : (
-        <table className={styles.table}>
+        <table
+          className={styles.table}
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: the grid is a scroll surface that takes focus for keyboard paging
+          tabIndex={0}
+          onWheel={onWheel}
+          onKeyDown={onKeyDown}
+        >
           <tbody>
             {rows.map((row, rowIndex) => {
               // Offset of this row's first byte: rows before it are full-width.
@@ -148,8 +229,9 @@ export function MemoryGrid({
                     const before = previous.get(addr)
                     const changed = before !== undefined && before !== b
                     const sel = selLo !== null && selHi !== null && addr >= selLo && addr <= selHi
+                    const editing = editAddr === addr
                     return (
-                      // biome-ignore lint/a11y/useKeyWithClickEvents: byte grid; click-to-select, keyboard nav out of scope
+                      // biome-ignore lint/a11y/useKeyWithClickEvents: byte grid; keyboard paging handled at table level
                       <td
                         // Re-key on value so the flash animation replays on change;
                         // the column index keeps it unique within the row.
@@ -160,9 +242,27 @@ export function MemoryGrid({
                         data-pointer={label ? "true" : undefined}
                         data-flash={changed ? "true" : undefined}
                         data-selected={sel ? "true" : undefined}
+                        data-executed={executedSet.has(rowOffset + i) ? "true" : undefined}
+                        data-editable={editable ? "true" : undefined}
                         onClick={(e) => clickByte(addr, e.shiftKey)}
+                        onDoubleClick={() => startEdit(addr, b)}
                       >
-                        {b}
+                        {editing ? (
+                          <input
+                            className={styles.edit}
+                            type="text"
+                            // biome-ignore lint/a11y/noAutofocus: the cell was just opened for editing by the user
+                            autoFocus
+                            maxLength={2}
+                            aria-label={`Edit byte ${hex4(addr)}`}
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyDown={(e) => editKeyDown(e, addr)}
+                            onBlur={() => commitEdit(addr)}
+                          />
+                        ) : (
+                          b
+                        )}
                       </td>
                     )
                   })}

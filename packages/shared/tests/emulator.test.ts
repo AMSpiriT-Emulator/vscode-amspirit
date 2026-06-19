@@ -429,6 +429,21 @@ describe("EmulatorClient", () => {
     })
   })
 
+  describe("getCodemap", () => {
+    it("GETs /api/codemap and returns the execution bitmap hex", async () => {
+      fake.responder = jsonResponder({ hex: "00ff" })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.getCodemap()).resolves.toBe("00ff")
+      expect(fake.recorded.at(0)?.url).toBe("/api/codemap")
+    })
+
+    it("returns an empty string when the emulator omits the bitmap", async () => {
+      fake.responder = jsonResponder({})
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.getCodemap()).resolves.toBe("")
+    })
+  })
+
   describe("getZ80", () => {
     it("GETs /api/z80 and returns the register snapshot", async () => {
       fake.responder = jsonResponder({

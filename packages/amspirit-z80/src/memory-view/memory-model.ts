@@ -128,6 +128,41 @@ export function followBase(pc: number, windowBytes: number, columns: number): nu
 }
 
 /**
+ * The base after scrolling by `deltaRows` rows of `columns` bytes (negative =
+ * up). Wraps the 16-bit space. Used by mouse-wheel / keyboard navigation.
+ */
+export function scrollBase(base: number, deltaRows: number, columns: number): number {
+  return (base + deltaRows * columns) & 0xffff
+}
+
+/**
+ * Parse one or two hex digits into a byte (0–255), or `undefined` if the input
+ * isn't 1–2 hex chars. Used to commit an inline byte edit.
+ */
+export function parseByte(input: string): number | undefined {
+  const trimmed = input.trim()
+  if (!/^[0-9a-f]{1,2}$/i.test(trimmed)) return undefined
+  return Number.parseInt(trimmed, 16) & 0xff
+}
+
+/**
+ * Given the emulator's 64K-bit execution bitmap (`/api/codemap`, 8192 bytes as
+ * hex — bit `addr` set once an instruction has started at `addr`), return the
+ * window offsets in `[0, length)` whose address has been executed by the Z80.
+ * Pure; the grid shades those bytes as "code". 16-bit wrapping.
+ */
+export function executedOffsets(bitmapHex: string, base: number, length: number): number[] {
+  const offsets: number[] = []
+  if (bitmapHex.length < 16384) return offsets
+  for (let offset = 0; offset < length; offset += 1) {
+    const addr = (base + offset) & 0xffff
+    const byte = Number.parseInt(bitmapHex.substr((addr >> 3) * 2, 2), 16)
+    if ((byte >> (addr & 7)) & 1) offsets.push(offset)
+  }
+  return offsets
+}
+
+/**
  * Lay a flat byte buffer out into `columns`-wide rows starting at `base`.
  * Pure and rendering-agnostic; the row address wraps the 16-bit space.
  */
