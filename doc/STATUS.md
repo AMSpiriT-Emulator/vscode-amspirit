@@ -24,8 +24,9 @@
 - **Tooling installed locally** (for the sandbox assemble tasks): **sjasmplus
   v1.23.1** and **rasm v3.0.8** (both on PATH). Emulator: build amspirit-lite
   `feat/z80-breakpoints` and run from `amspirit-lite/src` (ROMs are CWD-relative).
-- **Latest (2026-06-19, on `main`, UNCOMMITTED): dedicated Disassembly View
-  webview panel** — brought the Memory View's care to disassembly. New React
+- **Latest (2026-06-19, MERGED via PR #7, merge `6cbc93c`): dedicated
+  Disassembly View webview panel** — brought the Memory View's care to
+  disassembly. New React
   panel (command **AMSpiriT Z80: Open Disassembly View**) replacing reliance on
   VS Code's built-in DAP view: label-aware decode (`#`-hex, firmware + symbol-map
   labels, auto-`Lxxxx:`), Follow PC + `▶` marker, machine-driven bank selector,
@@ -36,8 +37,9 @@
   pure `disasm-view/disasm-view-model` + shared `disasm-labels` (TDD), RTL
   `disasm-list`; one webview bundle now hosts both panels via the HTML shell's
   `data-view`. Full z80 gate green (172 tests, 99.5% lines / 91.17% br).
-  Changeset `amspirit-z80-disassembly-view.md` (`minor`). **Not yet
-  live-validated.** See `doc/sessions/2026-06-19-amspirit-z80-disassembly-view.md`.
+  Changeset `amspirit-z80-disassembly-view.md` (`minor`). **Live-validated** on a
+  real emulator (2026-06-19). See
+  `doc/sessions/2026-06-19-amspirit-z80-disassembly-view.md`.
 - **Prior (2026-06-19, branch `feat/amspirit-z80-memory-view`, UNCOMMITTED):**
   **Memory View finishing pass + label-aware disassembly — live-validated.**
   Added: 64 KB wheel/keyboard **scroll + paging** (`scrollBase`), **code-coverage
@@ -152,7 +154,7 @@
 | Live-validate `amspirit-z80` vs real emulator | ✅ | breakpoint stop at PC, step in/over/out + current-line confirmed for sjasmplus **and** rasm |
 | Call-stack reconstruction + firmware jumpblock labels | ✅ | pure `call-stack` (CALL/RST scan) + `firmware-labels` (&BB00–&BD37); multi-frame `stackTrace`, `TXT OUTPUT (0xBBxx)` labels. TDD |
 | VS Code Disassembly View working | ✅ | `instructionPointerReference` anchor (was blank without it) + pure `disasm-window` (real backward decode, PC centred); reuses shared `disassemble()`. TDD. **Refactored to a shared numeric `decodeWindow` core** consumed by the DAP adapter and the new webview panel |
-| Dedicated Disassembly View React webview panel | ✅ | second React panel in `amspirit-z80`, parity with the Memory View. Command `amspirit.z80.disassemblyView`. Pure `disasm-view/disasm-view-model` (TDD) + shared `disasm-labels` + RTL `disasm-list`; thin `disasm-panel` polls memory. Label-aware (`#`-hex, firmware + symbol map, auto-`Lxxxx:`), Follow PC + `▶` marker, machine-driven bank selector, instruction-wise wheel/keyboard paging, coverage shading, **code-vs-data `DB` for un-reached bytes**, row range-select → Export `.asm`. One webview bundle hosts both panels (`data-view`). z80 gate green (172 tests). Changeset `minor`. **Not yet live-validated**. On `main`, uncommitted |
+| Dedicated Disassembly View React webview panel | ✅ | second React panel in `amspirit-z80`, parity with the Memory View. Command `amspirit.z80.disassemblyView`. Pure `disasm-view/disasm-view-model` (TDD) + shared `disasm-labels` + RTL `disasm-list`; thin `disasm-panel` polls memory. Label-aware (`#`-hex, firmware + symbol map, auto-`Lxxxx:`), Follow PC + `▶` marker, machine-driven bank selector, instruction-wise wheel/keyboard paging, coverage shading, **code-vs-data `DB` for un-reached bytes**, row range-select → Export `.asm`. One webview bundle hosts both panels (`data-view`). z80 gate green (172 tests). Changeset `minor`. **Live-validated** on a real emulator (2026-06-19). **Merged** via PR #7 (`6cbc93c`) |
 | Step robustness | ✅ | `step-landing.stepSettled` (PC moves + stable) replaces fixed settle; launch stop-on-entry phantom step worked around (first step = run-to-boundary). Live-validated |
 | `stackTrace` resilience | ✅ | current-line frame 0 always emitted, even if the 64 KB call-stack snapshot read fails |
 | Push `amspirit-z80` + open PR to `main` | ✅ | **PR #5 merged** (`65ac1d5`); 2 changesets `amspirit-z80: minor` pending release |
