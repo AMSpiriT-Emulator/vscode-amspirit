@@ -183,6 +183,12 @@
         "title": "Open Memory View",
         "category": "AMSpiriT Z80",
         "icon": "$(file-binary)"
+      },
+      {
+        "command": "amspirit.z80.disassemblyView",
+        "title": "Open Disassembly View",
+        "category": "AMSpiriT Z80",
+        "icon": "$(list-flat)"
       }
     ],
     "configuration": {
