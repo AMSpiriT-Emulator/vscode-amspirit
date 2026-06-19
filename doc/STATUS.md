@@ -24,7 +24,21 @@
 - **Tooling installed locally** (for the sandbox assemble tasks): **sjasmplus
   v1.23.1** and **rasm v3.0.8** (both on PATH). Emulator: build amspirit-lite
   `feat/z80-breakpoints` and run from `amspirit-lite/src` (ROMs are CWD-relative).
-- **Latest (2026-06-19, branch `feat/amspirit-z80-memory-view`, UNCOMMITTED):**
+- **Latest (2026-06-19, on `main`, UNCOMMITTED): dedicated Disassembly View
+  webview panel** — brought the Memory View's care to disassembly. New React
+  panel (command **AMSpiriT Z80: Open Disassembly View**) replacing reliance on
+  VS Code's built-in DAP view: label-aware decode (`#`-hex, firmware + symbol-map
+  labels, auto-`Lxxxx:`), Follow PC + `▶` marker, machine-driven bank selector,
+  wheel/keyboard instruction paging (`stepBase`), code-coverage shading, and
+  **code-vs-data** (un-reached bytes shown as `DB #xx` when `/api/codemap`
+  coverage is known), plus **row range-select → Export `.asm`**. Refactored
+  `disasm-window` to a shared numeric `decodeWindow` core (DAP + webview), new
+  pure `disasm-view/disasm-view-model` + shared `disasm-labels` (TDD), RTL
+  `disasm-list`; one webview bundle now hosts both panels via the HTML shell's
+  `data-view`. Full z80 gate green (172 tests, 99.5% lines / 91.17% br).
+  Changeset `amspirit-z80-disassembly-view.md` (`minor`). **Not yet
+  live-validated.** See `doc/sessions/2026-06-19-amspirit-z80-disassembly-view.md`.
+- **Prior (2026-06-19, branch `feat/amspirit-z80-memory-view`, UNCOMMITTED):**
   **Memory View finishing pass + label-aware disassembly — live-validated.**
   Added: 64 KB wheel/keyboard **scroll + paging** (`scrollBase`), **code-coverage
   shading** (new `EmulatorClient.getCodemap()` + pure `executedOffsets`, decoding
@@ -137,7 +151,8 @@
 | `amspirit-z80` status-bar widget + launch emulator | ✅ | `PingService`-driven indicator; click launches/connects; `amspirit-z80.*` settings namespace (no clash with `amspirit-basic`) |
 | Live-validate `amspirit-z80` vs real emulator | ✅ | breakpoint stop at PC, step in/over/out + current-line confirmed for sjasmplus **and** rasm |
 | Call-stack reconstruction + firmware jumpblock labels | ✅ | pure `call-stack` (CALL/RST scan) + `firmware-labels` (&BB00–&BD37); multi-frame `stackTrace`, `TXT OUTPUT (0xBBxx)` labels. TDD |
-| VS Code Disassembly View working | ✅ | `instructionPointerReference` anchor (was blank without it) + pure `disasm-window` (real backward decode, PC centred); reuses shared `disassemble()`. TDD |
+| VS Code Disassembly View working | ✅ | `instructionPointerReference` anchor (was blank without it) + pure `disasm-window` (real backward decode, PC centred); reuses shared `disassemble()`. TDD. **Refactored to a shared numeric `decodeWindow` core** consumed by the DAP adapter and the new webview panel |
+| Dedicated Disassembly View React webview panel | ✅ | second React panel in `amspirit-z80`, parity with the Memory View. Command `amspirit.z80.disassemblyView`. Pure `disasm-view/disasm-view-model` (TDD) + shared `disasm-labels` + RTL `disasm-list`; thin `disasm-panel` polls memory. Label-aware (`#`-hex, firmware + symbol map, auto-`Lxxxx:`), Follow PC + `▶` marker, machine-driven bank selector, instruction-wise wheel/keyboard paging, coverage shading, **code-vs-data `DB` for un-reached bytes**, row range-select → Export `.asm`. One webview bundle hosts both panels (`data-view`). z80 gate green (172 tests). Changeset `minor`. **Not yet live-validated**. On `main`, uncommitted |
 | Step robustness | ✅ | `step-landing.stepSettled` (PC moves + stable) replaces fixed settle; launch stop-on-entry phantom step worked around (first step = run-to-boundary). Live-validated |
 | `stackTrace` resilience | ✅ | current-line frame 0 always emitted, even if the 64 KB call-stack snapshot read fails |
 | Push `amspirit-z80` + open PR to `main` | ✅ | **PR #5 merged** (`65ac1d5`); 2 changesets `amspirit-z80: minor` pending release |
@@ -148,7 +163,7 @@
 | Memory View — diff-flash changed bytes | ✅ | `.valflash` on bytes that change between paused ticks; keyed by absolute address so a "Go to" doesn't flash everything. RTL. On branch |
 | Memory View — **live-validated** vs real emulator | ✅ | confirmed on `amspirit-lite-qt` 1.11.0 (port 8765): dump + "Go to" + header render. Fixed the blank-at-breakpoint bug: gate on reachability (`ok`), not `pingState().paused` — the QT build wires `p_freeze=&s_paused` but the flag was fragile; `readRam` works whenever reachable. Panel now also targets the active debug session's host/port. Added a `Window: 0xXXXX` header (a zeroed window read as "empty") |
 | Memory View — label-aware "Go to" | ⬜ | resolve firmware/symbol-map labels in the goto field (crosses webview↔extension boundary) |
-| Code coverage via `/api/codemap` | ✅ | `EmulatorClient.getCodemap()` (shared) + pure `executedOffsets`; Memory View shades executed bytes. Disassembler "code vs data" colouring still a possible follow-up |
+| Code coverage via `/api/codemap` | ✅ | `EmulatorClient.getCodemap()` (shared) + pure `executedOffsets` / `isExecuted`; Memory View shades executed bytes; **Disassembly View** shades executed code and renders un-reached bytes as `DB` data (code vs data) |
 | rasm SNA/DSK load modes via `/api/script` | ⬜ | DeZog parity |
 | Conditional / hit-count breakpoints + logpoints | ⬜ | client-side (re-`continue` on unmet condition); logpoints via `OutputEvent` |
 | `writeMemory` (`supportsWriteMemoryRequest`) | 🟡 | Memory View edits central RAM inline via `writeRam` (`/api/ram`); the DAP `writeMemoryRequest` itself is still unwired (extended banks would need a bank-aware write) |

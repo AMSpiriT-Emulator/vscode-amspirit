@@ -155,11 +155,22 @@ export function executedOffsets(bitmapHex: string, base: number, length: number)
   const offsets: number[] = []
   if (bitmapHex.length < 16384) return offsets
   for (let offset = 0; offset < length; offset += 1) {
-    const addr = (base + offset) & 0xffff
-    const byte = Number.parseInt(bitmapHex.substr((addr >> 3) * 2, 2), 16)
-    if ((byte >> (addr & 7)) & 1) offsets.push(offset)
+    if (isExecuted(bitmapHex, (base + offset) & 0xffff)) offsets.push(offset)
   }
   return offsets
+}
+
+/**
+ * Whether the Z80 has started an instruction at `addr`, per the execution
+ * bitmap (`/api/codemap`). Single-address form of {@link executedOffsets} for
+ * the (non-contiguous) Disassembly View rows. Returns `false` for an absent or
+ * truncated bitmap (older emulators).
+ */
+export function isExecuted(bitmapHex: string, addr: number): boolean {
+  if (bitmapHex.length < 16384) return false
+  const a = addr & 0xffff
+  const byte = Number.parseInt(bitmapHex.substr((a >> 3) * 2, 2), 16)
+  return ((byte >> (a & 7)) & 1) === 1
 }
 
 /**

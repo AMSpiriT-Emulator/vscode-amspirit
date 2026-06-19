@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react"
-import type { ExtToWebview, WebviewToExt } from "../messaging.js"
 
 interface VsCodeApi {
-  postMessage(message: WebviewToExt): void
+  postMessage(message: unknown): void
 }
 
 declare function acquireVsCodeApi(): VsCodeApi
@@ -10,15 +9,15 @@ declare function acquireVsCodeApi(): VsCodeApi
 const vscode = acquireVsCodeApi()
 
 /** Post a message from the webview back to the extension. */
-export function postToExt(message: WebviewToExt): void {
+export function postToExt<TOut>(message: TOut): void {
   vscode.postMessage(message)
 }
 
 /** Subscribe to extension→webview messages; signals readiness on mount. */
-export function useExtMessage(): ExtToWebview | undefined {
-  const [message, setMessage] = useState<ExtToWebview>()
+export function useExtMessage<TIn>(): TIn | undefined {
+  const [message, setMessage] = useState<TIn>()
   useEffect(() => {
-    const handler = (e: MessageEvent): void => setMessage(e.data as ExtToWebview)
+    const handler = (e: MessageEvent): void => setMessage(e.data as TIn)
     window.addEventListener("message", handler)
     vscode.postMessage({ type: "ready" })
     return () => window.removeEventListener("message", handler)

@@ -4,13 +4,17 @@ export interface WebviewHtmlOptions {
   /** `webview.cspSource` — the origin allowed to load local resources. */
   cspSource: string
   nonce: string
+  /** Which view the shared bundle should mount (`memory` | `disasm`). */
+  view?: string
 }
 
 /**
  * Build the HTML shell for the React webview with a strict CSP. No HTML is
- * written by hand elsewhere; the React bundle mounts into `#root`.
+ * written by hand elsewhere; the React bundle mounts into `#root`, choosing the
+ * view from its `data-view` attribute (the bundle hosts every panel).
  */
 export function buildWebviewHtml(o: WebviewHtmlOptions): string {
+  const view = o.view ?? "memory"
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -23,7 +27,7 @@ export function buildWebviewHtml(o: WebviewHtmlOptions): string {
     <link rel="stylesheet" href="${o.styleUri}" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root" data-view="${view}"></div>
     <script type="module" nonce="${o.nonce}" src="${o.scriptUri}"></script>
   </body>
 </html>`

@@ -1,0 +1,171 @@
+/* Disassembly View list — co-located CSS Module (Vite scopes the class names).
+   Mirrors the Memory View grid's look (sticky toolbar, VS Code color tokens). */
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.45rem 0;
+  margin-bottom: 0.35rem;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.25));
+}
+
+.addrInput {
+  width: 5.5rem;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 3px;
+  padding: 3px 6px;
+}
+
+.addrInput:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.go {
+  font-family: inherit;
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  border: none;
+  border-radius: 3px;
+  padding: 3px 12px;
+  cursor: pointer;
+}
+
+.go:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.followPc {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.9;
+}
+
+.followPc input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.export {
+  font-family: inherit;
+  color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+  background: var(--vscode-button-secondaryBackground, transparent);
+  border: 1px solid
+    var(--vscode-button-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.4)));
+  border-radius: 3px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.export:hover {
+  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
+}
+
+.bankSelect {
+  margin-left: auto;
+  font-family: inherit;
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, transparent);
+  border-radius: 3px;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.placeholder {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1.55;
+  width: 100%;
+}
+
+.table:focus {
+  outline: none;
+}
+
+.table:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+.table tbody tr:hover {
+  background: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.12));
+}
+
+/* The row holding the current program counter. */
+.row[data-pc] {
+  background: var(--vscode-editor-lineHighlightBackground, rgba(128, 128, 128, 0.18));
+}
+
+.row[data-pc] .marker {
+  color: var(--vscode-charts-blue, var(--vscode-textLink-foreground));
+}
+
+/* An instruction the Z80 has executed since reset (code vs data shading). */
+.row[data-executed] .bytes {
+  background: var(--vscode-diffEditor-insertedTextBackground, rgba(99, 184, 99, 0.18));
+}
+
+/* When coverage is known, rows the Z80 never reached are rendered as `DB` data
+   (see the view model) and dimmed so confirmed code stands out. */
+.row[data-data] {
+  opacity: 0.55;
+}
+
+/* A row inside the current export selection. */
+.row[data-selected] {
+  background: var(--vscode-editor-selectionBackground, rgba(88, 166, 255, 0.35));
+}
+
+.marker {
+  width: 1.1rem;
+  text-align: center;
+  user-select: none;
+  font-weight: 700;
+}
+
+.addr {
+  text-align: right;
+  padding-right: 0.9rem;
+  color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+  opacity: 0.7;
+  font-weight: 600;
+  user-select: none;
+}
+
+.bytes {
+  padding: 0 0.6rem;
+  opacity: 0.7;
+  border-radius: 2px;
+}
+
+.text {
+  padding-left: 0.6rem;
+  width: 100%;
+}
+
+/* A label definition line above its instruction (assembler-listing style). */
+.labelRow td {
+  padding-top: 0.25rem;
+  color: var(--vscode-charts-yellow, var(--vscode-symbolIcon-functionForeground, #c8a24a));
+  font-weight: 700;
+}

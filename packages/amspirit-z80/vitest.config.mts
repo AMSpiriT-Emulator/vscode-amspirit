@@ -20,6 +20,7 @@ export default defineConfig({
         "src/webview/**",
         "webview/main.tsx",
         "webview/app.tsx",
+        "webview/disasm-app.tsx",
         "webview/hooks/**",
       ],
       thresholds: {
