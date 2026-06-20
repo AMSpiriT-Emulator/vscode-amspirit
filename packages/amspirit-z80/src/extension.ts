@@ -12,6 +12,7 @@ import { Z80DebugSession } from "./debug/z80-debug-session.js"
 import { Z80StatusBar } from "./status-bar/z80-status-bar.js"
 import { DisasmPanel } from "./webview/disasm-panel.js"
 import { MemoryPanel } from "./webview/memory-panel.js"
+import { RegistersPanel } from "./webview/registers-panel.js"
 
 const DEBUG_TYPE = "amspirit-z80"
 
@@ -115,14 +116,31 @@ export function activate(context: vscode.ExtensionContext): void {
     if (choice === "Launch Emulator") await cmdLaunch()
   }
 
+  const memoryPanel = new MemoryPanel(context.extensionUri, debugAwareClient)
+  const disasmPanel = new DisasmPanel(context.extensionUri, debugAwareClient)
+  const registersPanel = new RegistersPanel(context.extensionUri, debugAwareClient, (address) =>
+    memoryPanel.goto(address),
+  )
+
   context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(RegistersPanel.viewId, registersPanel, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
+    vscode.window.registerWebviewViewProvider(MemoryPanel.viewId, memoryPanel, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
+    vscode.window.registerWebviewViewProvider(DisasmPanel.viewId, disasmPanel, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
     vscode.commands.registerCommand("amspirit.z80.launch", cmdLaunch),
     vscode.commands.registerCommand("amspirit.z80.connect", cmdConnect),
+    // The views live in the AMSpiriT Z80 activity-bar container; the commands
+    // just reveal (focus) them so they stay discoverable from the palette.
     vscode.commands.registerCommand("amspirit.z80.memoryView", () =>
-      MemoryPanel.show(context.extensionUri, debugAwareClient),
+      vscode.commands.executeCommand(`${MemoryPanel.viewId}.focus`),
     ),
     vscode.commands.registerCommand("amspirit.z80.disassemblyView", () =>
-      DisasmPanel.show(context.extensionUri, debugAwareClient),
+      vscode.commands.executeCommand(`${DisasmPanel.viewId}.focus`),
     ),
   )
 

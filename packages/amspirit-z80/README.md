@@ -11,10 +11,17 @@ assembly straight from VS Code.
   resolved to PC addresses through the assembler's symbol map.
 - **Execution control** — continue, pause, step-into, step-over (runs over
   `CALL`/`RST`) and step-out.
-- **Registers view** — the full Z80 state grouped into Registers, Flags, Shadow
-  and Interrupts.
-- **Memory & disassembly** — read memory and disassemble around the PC as the
-  CPU sees it (ROM/RAM mapping applied).
+- **A dedicated tool suite** — open the **AMSpiriT Z80** view container in the
+  Activity Bar to dock three purpose-built panels side by side, rather than
+  scattered across VS Code's generic debug UI:
+  - **Registers** — the full Z80 state grouped into Registers, Flags, Shadow and
+    Interrupts; click a pointer register (BC/DE/HL/IX/IY/SP/PC) to jump the
+    Memory view to the address it holds.
+  - **Memory** — an octet-only hex+ASCII dump with Go-to, Follow PC, bank
+    selector, pointer-register highlight, code-coverage shading, inline byte
+    editing and range-select → label-aware disassembly.
+  - **Disassembly** — a live, label-aware listing (firmware + symbol-map labels,
+    code-vs-data) with Follow PC, paging and range-export to `.asm`.
 
 ## Requirements
 

@@ -48,35 +48,44 @@ function symbolMapPath(mapFile?: string, program?: string): string | undefined {
 }
 
 /**
- * Singleton webview panel showing a live Z80 memory dump (React) — a hex+ASCII
- * grid tailored to the 8-bit machine, without the native inspector's multi-byte
- * and float widgets. Thin shell: it polls `readRam` while visible and paused
+ * Webview *view* showing a live Z80 memory dump (React) — a hex+ASCII grid
+ * tailored to the 8-bit machine, without the native inspector's multi-byte and
+ * float widgets. Docked in the AMSpiriT Z80 activity-bar container alongside the
+ * Registers and Disassembly views. Thin shell: it polls `readRam` while visible
  * and posts a snapshot; the React app only renders. Memory is only coherent
  * while paused, so the poll skips the read when the program runs free.
  */
-export class MemoryPanel {
-  private static current: MemoryPanel | undefined
+export class MemoryPanel implements vscode.WebviewViewProvider {
+  /** View id contributed in package.json (and its `<id>.focus` command). */
+  static readonly viewId = "amspirit.z80.memory"
 
+  private view: vscode.WebviewView | undefined
   private base = DEFAULT_BASE
   /** When set, each tick re-centres the window on the program counter. */
   private followPc = false
   /** Selectable views/banks; populated once from `/api/config`. */
   private banks: BankOption[] = []
   /** The currently selected view (defaults to the CPU-visible mapping). */
-  private view: BankOption = CPU_VIEW
+  private bankView: BankOption = CPU_VIEW
   private timer: ReturnType<typeof setInterval> | undefined
   /** Last snapshot posted, serialized — skip posting identical snapshots. */
   private lastPosted = ""
   private readonly disposables: vscode.Disposable[] = []
 
-  private constructor(
-    private readonly panel: vscode.WebviewPanel,
+  constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly makeClient: () => EmulatorClient,
-  ) {
-    this.panel.webview.html = this.render()
+  ) {}
+
+  resolveWebviewView(view: vscode.WebviewView): void {
+    this.view = view
+    view.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, "out", "webview")],
+    }
+    view.webview.html = this.render(view.webview)
     this.disposables.push(
-      this.panel.webview.onDidReceiveMessage((m: WebviewToExt) => {
+      view.webview.onDidReceiveMessage((m: WebviewToExt) => {
         if (m.type === "ready") this.startPolling()
         else if (m.type === "goto") {
           this.base = m.address & 0xffff
@@ -85,7 +94,7 @@ export class MemoryPanel {
           this.followPc = m.enabled
           void this.tick()
         } else if (m.type === "selectBank") {
-          this.view = this.banks.find((b) => b.id === m.id) ?? CPU_VIEW
+          this.bankView = this.banks.find((b) => b.id === m.id) ?? CPU_VIEW
           void this.tick()
         } else if (m.type === "disassemble") {
           void this.disassembleRange(m.start, m.end)
@@ -93,35 +102,27 @@ export class MemoryPanel {
           void this.writeByte(m.address, m.value)
         }
       }),
-      // Don't poll a hidden panel; resume when it comes back into view.
-      this.panel.onDidChangeViewState(() => {
-        if (this.panel.visible) this.startPolling()
+      // Don't poll a hidden view; resume when it comes back into view.
+      view.onDidChangeVisibility(() => {
+        if (view.visible) this.startPolling()
         else this.stopPolling()
       }),
     )
-    this.panel.onDidDispose(() => this.dispose(), null, this.disposables)
+    view.onDidDispose(() => this.disposeView(), null, this.disposables)
   }
 
-  static show(extensionUri: vscode.Uri, makeClient: () => EmulatorClient): void {
-    if (MemoryPanel.current) {
-      MemoryPanel.current.panel.reveal()
-      return
-    }
-    const panel = vscode.window.createWebviewPanel(
-      "amspiritZ80Memory",
-      "Z80 Memory",
-      vscode.ViewColumn.Beside,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: [vscode.Uri.joinPath(extensionUri, "out", "webview")],
-      },
-    )
-    MemoryPanel.current = new MemoryPanel(panel, extensionUri, makeClient)
+  /**
+   * Reveal the Memory view focused on `address` (used by the Registers view's
+   * pointer-register links). Disables Follow PC so the jump sticks.
+   */
+  goto(address: number): void {
+    this.base = address & 0xffff
+    this.followPc = false
+    void vscode.commands.executeCommand(`${MemoryPanel.viewId}.focus`)
+    void this.tick()
   }
 
-  private render(): string {
-    const webview = this.panel.webview
+  private render(webview: vscode.Webview): string {
     const asset = (name: string): string =>
       webview
         .asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "out", "webview", name))
@@ -152,7 +153,7 @@ export class MemoryPanel {
       type: "snapshot",
       // Editing writes central RAM (`/api/ram` has no bank arg), so it's only
       // offered on the central-bank views (CPU view / Main RAM).
-      snapshot: { rows, marks, executed, banks: this.banks, editable: this.view.bank === 0 },
+      snapshot: { rows, marks, executed, banks: this.banks, editable: this.bankView.bank === 0 },
     })
   }
 
@@ -162,7 +163,7 @@ export class MemoryPanel {
    * flashes on the next tick via the grid's diff highlight.
    */
   private async writeByte(address: number, value: number): Promise<void> {
-    if (this.view.bank !== 0) return
+    if (this.bankView.bank !== 0) return
     try {
       await this.makeClient().writeRam(address, [value])
       await this.tick()
@@ -182,8 +183,8 @@ export class MemoryPanel {
     const span = (end - start) & 0xffff
     try {
       const bytes = await client.readRam(start, span + 1 + MAX_INSTR_PAD, {
-        cpuView: this.view.cpuView,
-        bank: this.view.bank,
+        cpuView: this.bankView.cpuView,
+        bank: this.bankView.bank,
       })
       const instructions = disassemble(bytes, start, span + 1).filter(
         (ins) => ((ins.address - start) & 0xffff) <= span,
@@ -252,14 +253,14 @@ export class MemoryPanel {
       // Follow PC: re-centre the window on the program counter before reading.
       if (this.followPc) this.base = followBase(r.PC, WINDOW_BYTES, COLUMNS)
       const bytes = await client.readRam(this.base, WINDOW_BYTES, {
-        cpuView: this.view.cpuView,
-        bank: this.view.bank,
+        cpuView: this.bankView.cpuView,
+        bank: this.bankView.bank,
       })
       const rows = buildMemoryRows(bytes, { base: this.base, columns: COLUMNS })
       // Pointer registers and the execution bitmap are indexed by CPU address;
       // on an extended bank the same offsets aren't those addresses, so omit
       // both there. The codemap is best-effort (older emulators may lack it).
-      const central = this.view.bank === 0
+      const central = this.bankView.bank === 0
       const marks = central
         ? pointerMarks(
             {
@@ -287,13 +288,13 @@ export class MemoryPanel {
     const json = JSON.stringify(payload)
     if (json === this.lastPosted) return
     this.lastPosted = json
-    void this.panel.webview.postMessage(payload)
+    void this.view?.webview.postMessage(payload)
   }
 
-  private dispose(): void {
-    MemoryPanel.current = undefined
+  private disposeView(): void {
     this.stopPolling()
-    this.panel.dispose()
-    for (const d of this.disposables) d.dispose()
+    this.view = undefined
+    this.lastPosted = ""
+    for (const d of this.disposables.splice(0)) d.dispose()
   }
 }

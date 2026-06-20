@@ -1,0 +1,107 @@
+/* Registers view — co-located CSS Module (Vite scopes the class names).
+   Compact key/value cards using VS Code color tokens, matching the Memory and
+   Disassembly views. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.scope {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.heading {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  gap: 0.1rem 0.6rem;
+  margin: 0;
+}
+
+.entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 1px 2px;
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.18));
+}
+
+.name {
+  font-weight: 600;
+  color: var(--vscode-symbolIcon-variableForeground, var(--vscode-foreground));
+}
+
+.value {
+  margin: 0;
+  color: var(--vscode-foreground);
+}
+
+.pointer {
+  font-family: inherit;
+  font-size: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--vscode-textLink-foreground);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+
+.pointer:hover {
+  color: var(--vscode-textLink-activeForeground);
+}
+
+.pointer:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.flag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+  /* Cleared flag: dim, outlined. */
+  color: var(--vscode-descriptionForeground);
+  background: transparent;
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+}
+
+.flag[data-set="true"] {
+  /* Set flag: lit with the badge accent. */
+  color: var(--vscode-badge-foreground);
+  background: var(--vscode-badge-background);
+  border-color: var(--vscode-badge-background);
+}
+
+.placeholder {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}

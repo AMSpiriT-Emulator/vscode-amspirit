@@ -6,34 +6,16 @@ export type ByteReader = (addr: number, len: number) => number[]
 /**
  * One decoded row of a disassembly window: either a real instruction (numeric
  * address + raw bytes + mnemonic) or a placeholder near address 0 where there
- * is no room to decode backwards. The numeric form is consumed both by the DAP
- * adapter (mapped to {@link DisasmLine}) and by the webview disassembly view
- * (enriched with labels / PC / coverage), so the tricky backward-decode logic
- * lives in one place.
+ * is no room to decode backwards. The numeric form is consumed by the webview
+ * disassembly view (enriched with labels / PC / coverage), so the tricky
+ * backward-decode logic lives in one place.
  */
 export type WindowRow =
   | { addr: number; bytes: number[]; text: string }
   | { addr: number; placeholder: true }
 
-/** One row of a DAP disassemble response. */
-export interface DisasmLine {
-  /** `0x`-prefixed hex address of the instruction. */
-  address: string
-  /** Space-separated lowercase hex bytes (absent for placeholder rows). */
-  instructionBytes?: string
-  /** Rendered mnemonic, or `"..."` for a placeholder row. */
-  instruction: string
-}
-
 /** Longest Z80 instruction is 4 bytes. */
 const MAX_INSTR_LEN = 4
-/** Shown for rows we couldn't decode (only near address 0, where there is no
- * room to decode backwards). */
-const PLACEHOLDER = "..."
-
-const addrHex = (n: number): string => `0x${(n & 0xffff).toString(16)}`
-const bytesHex = (bytes: number[]): string =>
-  bytes.map((b) => b.toString(16).padStart(2, "0")).join(" ")
 
 /** Where to start a backward decode so it can reach `base` in ≤ `lead` steps. */
 const windowStart = (base: number, lead: number): number => Math.max(0, base - lead * MAX_INSTR_LEN)
@@ -80,19 +62,6 @@ export function decodeWindow(
 }
 
 /**
- * Build a DAP disassembly window: {@link decodeWindow} mapped to the protocol's
- * `DisassembledInstruction` shape (string addresses, `"..."` placeholders).
- */
-export function buildDisassemblyWindow(
-  read: ByteReader,
-  base: number,
-  instructionOffset: number,
-  instructionCount: number,
-): DisasmLine[] {
-  return decodeWindow(read, base, instructionOffset, instructionCount).map(toLine)
-}
-
-/**
  * The `lead` rows immediately before `base`: decode forward from `windowStart`,
  * collect every instruction that ends at/before `base`, and keep the last
  * `lead`. Pad the front with placeholders if the window couldn't supply enough.
@@ -126,13 +95,4 @@ function decodeLen(read: ByteReader, addr: number): number {
 
 function toRow(ins: { address: number; bytes: number[]; text: string }): WindowRow {
   return { addr: ins.address, bytes: ins.bytes, text: ins.text }
-}
-
-function toLine(row: WindowRow): DisasmLine {
-  if (!isInstructionRow(row)) return { address: addrHex(row.addr), instruction: PLACEHOLDER }
-  return {
-    address: addrHex(row.addr),
-    instructionBytes: bytesHex(row.bytes),
-    instruction: row.text,
-  }
 }

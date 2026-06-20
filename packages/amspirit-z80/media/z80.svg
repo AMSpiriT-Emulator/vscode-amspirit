@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="AMSpiriT Z80">
+  <title>AMSpiriT Z80</title>
+  <rect x="7" y="7" width="10" height="10" rx="1.2" />
+  <!-- pins -->
+  <line x1="9.5" y1="7" x2="9.5" y2="4" />
+  <line x1="14.5" y1="7" x2="14.5" y2="4" />
+  <line x1="9.5" y1="20" x2="9.5" y2="17" />
+  <line x1="14.5" y1="20" x2="14.5" y2="17" />
+  <line x1="7" y1="9.5" x2="4" y2="9.5" />
+  <line x1="7" y1="14.5" x2="4" y2="14.5" />
+  <line x1="20" y1="9.5" x2="17" y2="9.5" />
+  <line x1="20" y1="14.5" x2="17" y2="14.5" />
+  <!-- stylised Z in the die -->
+  <path d="M10 10 H14 L10 14 H14" fill="none" />
+</svg>
