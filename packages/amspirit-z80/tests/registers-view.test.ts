@@ -1,6 +1,6 @@
 import type { Z80Registers } from "@amspirit/shared"
 import { describe, expect, it } from "vitest"
-import { buildRegisterScopes, type RegisterScope } from "../src/registers-view.js"
+import { buildRegisterScopes, buildStackScope, type RegisterScope } from "../src/registers-view.js"
 
 const REGS: Z80Registers = {
   PC: 0x8000,
@@ -42,16 +42,22 @@ describe("buildRegisterScopes", () => {
     expect(scopes.map((s) => s.name)).toEqual(["Registers", "Flags", "Shadow", "Interrupts"])
   })
 
-  it("renders 16-bit register pairs as hex words", () => {
+  it("renders 16-bit register pairs as bare hex words (no 0x prefix)", () => {
     const s = buildRegisterScopes(REGS)
-    expect(value(s, "Registers", "AF")).toBe("0x12C1")
-    expect(value(s, "Registers", "BC")).toBe("0x3456")
-    expect(value(s, "Registers", "DE")).toBe("0x789A")
-    expect(value(s, "Registers", "HL")).toBe("0xBCDE")
-    expect(value(s, "Registers", "IX")).toBe("0x1111")
-    expect(value(s, "Registers", "IY")).toBe("0x2222")
-    expect(value(s, "Registers", "SP")).toBe("0xC000")
-    expect(value(s, "Registers", "PC")).toBe("0x8000")
+    expect(value(s, "Registers", "AF")).toBe("12C1")
+    expect(value(s, "Registers", "BC")).toBe("3456")
+    expect(value(s, "Registers", "DE")).toBe("789A")
+    expect(value(s, "Registers", "HL")).toBe("BCDE")
+    expect(value(s, "Registers", "IX")).toBe("1111")
+    expect(value(s, "Registers", "IY")).toBe("2222")
+    expect(value(s, "Registers", "SP")).toBe("C000")
+    expect(value(s, "Registers", "PC")).toBe("8000")
+  })
+
+  it("places R (the refresh register) in Registers, not in Interrupts", () => {
+    const s = buildRegisterScopes(REGS)
+    expect(value(s, "Registers", "R")).toBe("40")
+    expect(value(s, "Interrupts", "R")).toBeUndefined()
   })
 
   it("decodes the flags from F (S Z H P/V N C)", () => {
@@ -66,16 +72,15 @@ describe("buildRegisterScopes", () => {
 
   it("renders the shadow register pairs", () => {
     const s = buildRegisterScopes(REGS)
-    expect(value(s, "Shadow", "AF'")).toBe("0x0102")
-    expect(value(s, "Shadow", "BC'")).toBe("0x0304")
-    expect(value(s, "Shadow", "DE'")).toBe("0x0506")
-    expect(value(s, "Shadow", "HL'")).toBe("0x0708")
+    expect(value(s, "Shadow", "AF'")).toBe("0102")
+    expect(value(s, "Shadow", "BC'")).toBe("0304")
+    expect(value(s, "Shadow", "DE'")).toBe("0506")
+    expect(value(s, "Shadow", "HL'")).toBe("0708")
   })
 
-  it("renders the interrupt state", () => {
+  it("renders the interrupt state (I, IFF1/2, IM — without R)", () => {
     const s = buildRegisterScopes(REGS)
-    expect(value(s, "Interrupts", "I")).toBe("0x3F")
-    expect(value(s, "Interrupts", "R")).toBe("0x40")
+    expect(value(s, "Interrupts", "I")).toBe("3F")
     expect(value(s, "Interrupts", "IFF1")).toBe("1")
     expect(value(s, "Interrupts", "IFF2")).toBe("0")
     expect(value(s, "Interrupts", "IM")).toBe("2")
@@ -106,5 +111,42 @@ describe("buildRegisterScopes", () => {
     for (const f of ["S", "Z", "H", "P/V", "N", "C"]) {
       expect(value(s, "Flags", f)).toBe("1")
     }
+  })
+})
+
+describe("buildStackScope", () => {
+  // Little-endian words at SP: [SP]=0x8003, [SP+2]=0x1234, [SP+4]=0xBEEF
+  const BYTES = [0x03, 0x80, 0x34, 0x12, 0xef, 0xbe]
+
+  it("labels each slot by its absolute address and shows the word it holds", () => {
+    const scope = buildStackScope(0xc000, BYTES)
+    expect(scope.name).toBe("Stack")
+    expect(scope.variables[0]).toMatchObject({ name: "C000", value: "8003" })
+    expect(scope.variables[1]).toMatchObject({ name: "C002", value: "1234" })
+    expect(scope.variables[2]).toMatchObject({ name: "C004", value: "BEEF" })
+  })
+
+  it("exposes the held word as a memoryReference so a click jumps memory there", () => {
+    const scope = buildStackScope(0xc000, BYTES)
+    expect(scope.variables[0]?.memoryReference).toBe("0x8003")
+    expect(scope.variables[2]?.memoryReference).toBe("0xBEEF")
+  })
+
+  it("wraps slot addresses at the 16-bit boundary", () => {
+    const scope = buildStackScope(0xfffe, [0x00, 0x00, 0x11, 0x22])
+    expect(scope.variables[0]?.name).toBe("FFFE")
+    expect(scope.variables[1]?.name).toBe("0000")
+  })
+
+  it("stops at the bytes available (a short read yields fewer rows)", () => {
+    expect(buildStackScope(0xc000, [0x03, 0x80]).variables).toHaveLength(1)
+    expect(buildStackScope(0xc000, []).variables).toHaveLength(0)
+    // a trailing odd byte can't form a word, so it's dropped
+    expect(buildStackScope(0xc000, [0x03, 0x80, 0x34]).variables).toHaveLength(1)
+  })
+
+  it("caps the depth to the requested number of words", () => {
+    const many = Array.from({ length: 64 }, () => 0)
+    expect(buildStackScope(0x8000, many, 4).variables).toHaveLength(4)
   })
 })

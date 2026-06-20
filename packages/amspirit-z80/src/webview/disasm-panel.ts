@@ -46,23 +46,25 @@ function symbolMapPath(mapFile?: string, program?: string): string | undefined {
 }
 
 /**
- * Singleton webview panel showing a live, label-aware Z80 disassembly (React) —
- * the Disassembly View's rich counterpart to VS Code's built-in DAP view, with
- * the same care as the Memory View: Follow PC, machine-driven bank selector,
- * wheel/keyboard paging, current-PC highlight, code-coverage shading and
- * firmware/symbol-map labels. Thin shell: it polls memory while visible and
- * posts a snapshot; the React app only renders.
+ * Webview *view* showing a live, label-aware Z80 disassembly (React) — the rich
+ * replacement for VS Code's built-in DAP disassembly, with the same care as the
+ * Memory View: Follow PC, machine-driven bank selector, wheel/keyboard paging,
+ * current-PC highlight, code-coverage shading and firmware/symbol-map labels.
+ * Docked in the AMSpiriT Z80 activity-bar container. Thin shell: it polls memory
+ * while visible and posts a snapshot; the React app only renders.
  */
-export class DisasmPanel {
-  private static current: DisasmPanel | undefined
+export class DisasmPanel implements vscode.WebviewViewProvider {
+  /** View id contributed in package.json (and its `<id>.focus` command). */
+  static readonly viewId = "amspirit.z80.disassembly"
 
+  private view: vscode.WebviewView | undefined
   private base = DEFAULT_BASE
   /** When set, each tick re-centres the window on the program counter. */
   private followPc = true
   /** Selectable views/banks; populated once from `/api/config`. */
   private banks: BankOption[] = []
   /** The currently selected view (defaults to the CPU-visible mapping). */
-  private view: BankOption = CPU_VIEW
+  private bankView: BankOption = CPU_VIEW
   /** Last window rendered, kept so paging/export know the visible range. */
   private rows: DisasmRow[] = []
   private timer: ReturnType<typeof setInterval> | undefined
@@ -70,14 +72,20 @@ export class DisasmPanel {
   private lastPosted = ""
   private readonly disposables: vscode.Disposable[] = []
 
-  private constructor(
-    private readonly panel: vscode.WebviewPanel,
+  constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly makeClient: () => EmulatorClient,
-  ) {
-    this.panel.webview.html = this.render()
+  ) {}
+
+  resolveWebviewView(view: vscode.WebviewView): void {
+    this.view = view
+    view.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, "out", "webview")],
+    }
+    view.webview.html = this.render(view.webview)
     this.disposables.push(
-      this.panel.webview.onDidReceiveMessage((m: DisasmWebviewToExt) => {
+      view.webview.onDidReceiveMessage((m: DisasmWebviewToExt) => {
         if (m.type === "ready") this.startPolling()
         else if (m.type === "goto") {
           this.base = m.address & 0xffff
@@ -86,7 +94,7 @@ export class DisasmPanel {
           this.followPc = m.enabled
           void this.tick()
         } else if (m.type === "selectBank") {
-          this.view = this.banks.find((b) => b.id === m.id) ?? CPU_VIEW
+          this.bankView = this.banks.find((b) => b.id === m.id) ?? CPU_VIEW
           void this.tick()
         } else if (m.type === "page") {
           void this.scroll(m.delta)
@@ -94,35 +102,16 @@ export class DisasmPanel {
           void this.exportRange(m.start, m.end)
         }
       }),
-      // Don't poll a hidden panel; resume when it comes back into view.
-      this.panel.onDidChangeViewState(() => {
-        if (this.panel.visible) this.startPolling()
+      // Don't poll a hidden view; resume when it comes back into view.
+      view.onDidChangeVisibility(() => {
+        if (view.visible) this.startPolling()
         else this.stopPolling()
       }),
     )
-    this.panel.onDidDispose(() => this.dispose(), null, this.disposables)
+    view.onDidDispose(() => this.disposeView(), null, this.disposables)
   }
 
-  static show(extensionUri: vscode.Uri, makeClient: () => EmulatorClient): void {
-    if (DisasmPanel.current) {
-      DisasmPanel.current.panel.reveal()
-      return
-    }
-    const panel = vscode.window.createWebviewPanel(
-      "amspiritZ80Disasm",
-      "Z80 Disassembly",
-      vscode.ViewColumn.Beside,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: [vscode.Uri.joinPath(extensionUri, "out", "webview")],
-      },
-    )
-    DisasmPanel.current = new DisasmPanel(panel, extensionUri, makeClient)
-  }
-
-  private render(): string {
-    const webview = this.panel.webview
+  private render(webview: vscode.Webview): string {
     const asset = (name: string): string =>
       webview
         .asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "out", "webview", name))
@@ -178,7 +167,7 @@ export class DisasmPanel {
       const read = await this.snapshotReader(client, this.base)
       if (!read) return null
       // Coverage/PC are CPU addresses; meaningful only on the central views.
-      const central = this.view.bank === 0
+      const central = this.bankView.bank === 0
       const codemapHex = central ? await client.getCodemap().catch(() => "") : ""
       return buildDisasmRows({
         read,
@@ -207,8 +196,8 @@ export class DisasmPanel {
     const start = (anchor - LEAD * MAX_INSTR_LEN) & 0xffff
     try {
       const snapshot = await client.readRam(start, READ_SPAN + LEAD * MAX_INSTR_LEN, {
-        cpuView: this.view.cpuView,
-        bank: this.view.bank,
+        cpuView: this.bankView.cpuView,
+        bank: this.bankView.bank,
       })
       return (addr, len) => {
         const out: number[] = []
@@ -235,8 +224,8 @@ export class DisasmPanel {
     const { start, span } = bounds
     try {
       const bytes = await this.makeClient().readRam(start, span + 1 + MAX_INSTR_LEN, {
-        cpuView: this.view.cpuView,
-        bank: this.view.bank,
+        cpuView: this.bankView.cpuView,
+        bank: this.bankView.bank,
       })
       const instructions = disassemble(bytes, start, span + 1).filter(
         (ins) => ((ins.address - start) & 0xffff) <= span,
@@ -305,13 +294,13 @@ export class DisasmPanel {
     const json = JSON.stringify(payload)
     if (json === this.lastPosted) return
     this.lastPosted = json
-    void this.panel.webview.postMessage(payload)
+    void this.view?.webview.postMessage(payload)
   }
 
-  private dispose(): void {
-    DisasmPanel.current = undefined
+  private disposeView(): void {
     this.stopPolling()
-    this.panel.dispose()
-    for (const d of this.disposables) d.dispose()
+    this.view = undefined
+    this.lastPosted = ""
+    for (const d of this.disposables.splice(0)) d.dispose()
   }
 }

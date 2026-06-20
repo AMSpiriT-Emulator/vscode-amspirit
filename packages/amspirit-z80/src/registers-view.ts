@@ -1,48 +1,59 @@
 import type { Z80Registers } from "@amspirit/shared"
 
-/** A single register/flag entry rendered for the DAP Variables view. */
+/** A single register/flag entry rendered in the Registers view. */
 interface RegisterVariable {
   name: string
   value: string
   /**
-   * For registers that point into RAM, a DAP memory anchor (the address as a
-   * numeric string) so VS Code's "View Binary Data" opens the native hex
-   * inspector there. Absent on flags, shadow and interrupt entries.
+   * For registers that point into RAM, a `0x`-prefixed address string so a click
+   * can jump the Memory view there. Absent on flags, shadow and interrupt
+   * entries. Kept `0x`-prefixed (unlike the bare `value`) so it parses directly
+   * with `Number()`.
    */
   memoryReference?: string
 }
 
-/** A named group of register variables (one DAP scope). */
+/** A named group of register variables (one section of the view). */
 export interface RegisterScope {
   name: string
   variables: RegisterVariable[]
 }
 
-const word = (n: number): string => `0x${(n & 0xffff).toString(16).toUpperCase().padStart(4, "0")}`
-const byte = (n: number): string => `0x${(n & 0xff).toString(16).toUpperCase().padStart(2, "0")}`
-const pair = (hi: number, lo: number): string => word(((hi & 0xff) << 8) | (lo & 0xff))
+/** How many stack words {@link buildStackScope} shows by default. */
+const DEFAULT_STACK_DEPTH = 8
+
+/** Bare uppercase hex (no `0x`): the form shown in the view, matching the Memory grid. */
+const hex4 = (n: number): string => (n & 0xffff).toString(16).toUpperCase().padStart(4, "0")
+const hex2 = (n: number): string => (n & 0xff).toString(16).toUpperCase().padStart(2, "0")
+/** A `Number()`-parseable memory anchor for a 16-bit address. */
+const ref = (n: number): string => `0x${hex4(n)}`
+const pairValue = (hi: number, lo: number): number => ((hi & 0xff) << 8) | (lo & 0xff)
 const bit = (value: number, index: number): string => `${(value >> index) & 1}`
 
 /**
- * Format a Z80 register snapshot into the four DAP scopes shown in the
- * Variables view: the main registers, the decoded flags, the shadow set and the
- * interrupt state. Pure: the session maps these to `DebugProtocol.Variable`s.
+ * Format a Z80 register snapshot into the four scopes shown in the Registers
+ * view: the main registers, the decoded flags, the shadow set and the interrupt
+ * state. Values are bare hex (no `0x`); pointer registers also carry a
+ * `memoryReference` so a click can open the Memory view at that address. Pure.
  */
 export function buildRegisterScopes(r: Z80Registers): RegisterScope[] {
   return [
     {
       name: "Registers",
-      // Pointer registers carry a memoryReference so the hex inspector can open
-      // at the address they hold; AF is data, so it has none.
+      // Pointer registers carry a memoryReference so the Memory view can jump to
+      // the address they hold; AF is data and R is the refresh counter, so
+      // neither does. R lives here rather than under Interrupts — it is the DRAM
+      // refresh register, unrelated to the interrupt state.
       variables: [
-        { name: "AF", value: pair(r.A, r.F) },
-        { name: "BC", value: pair(r.B, r.C), memoryReference: pair(r.B, r.C) },
-        { name: "DE", value: pair(r.D, r.E), memoryReference: pair(r.D, r.E) },
-        { name: "HL", value: pair(r.H, r.L), memoryReference: pair(r.H, r.L) },
-        { name: "IX", value: word(r.IX), memoryReference: word(r.IX) },
-        { name: "IY", value: word(r.IY), memoryReference: word(r.IY) },
-        { name: "SP", value: word(r.SP), memoryReference: word(r.SP) },
-        { name: "PC", value: word(r.PC), memoryReference: word(r.PC) },
+        { name: "AF", value: hex4(pairValue(r.A, r.F)) },
+        { name: "BC", value: hex4(pairValue(r.B, r.C)), memoryReference: ref(pairValue(r.B, r.C)) },
+        { name: "DE", value: hex4(pairValue(r.D, r.E)), memoryReference: ref(pairValue(r.D, r.E)) },
+        { name: "HL", value: hex4(pairValue(r.H, r.L)), memoryReference: ref(pairValue(r.H, r.L)) },
+        { name: "IX", value: hex4(r.IX), memoryReference: ref(r.IX) },
+        { name: "IY", value: hex4(r.IY), memoryReference: ref(r.IY) },
+        { name: "SP", value: hex4(r.SP), memoryReference: ref(r.SP) },
+        { name: "PC", value: hex4(r.PC), memoryReference: ref(r.PC) },
+        { name: "R", value: hex2(r.R) },
       ],
     },
     {
@@ -60,21 +71,44 @@ export function buildRegisterScopes(r: Z80Registers): RegisterScope[] {
     {
       name: "Shadow",
       variables: [
-        { name: "AF'", value: pair(r.A2, r.F2) },
-        { name: "BC'", value: pair(r.B2, r.C2) },
-        { name: "DE'", value: pair(r.D2, r.E2) },
-        { name: "HL'", value: pair(r.H2, r.L2) },
+        { name: "AF'", value: hex4(pairValue(r.A2, r.F2)) },
+        { name: "BC'", value: hex4(pairValue(r.B2, r.C2)) },
+        { name: "DE'", value: hex4(pairValue(r.D2, r.E2)) },
+        { name: "HL'", value: hex4(pairValue(r.H2, r.L2)) },
       ],
     },
     {
       name: "Interrupts",
       variables: [
-        { name: "I", value: byte(r.I) },
-        { name: "R", value: byte(r.R) },
+        { name: "I", value: hex2(r.I) },
         { name: "IFF1", value: `${r.IFF1 & 1}` },
         { name: "IFF2", value: `${r.IFF2 & 1}` },
         { name: "IM", value: `${r.IM}` },
       ],
     },
   ]
+}
+
+/**
+ * Build the "Stack" scope: up to `depth` little-endian words read at `sp`. Each
+ * entry is labelled by its absolute slot address and shows the word it holds,
+ * with that word exposed as a `memoryReference` so a click jumps the Memory view
+ * to where it points (return addresses, saved pointers). A trailing odd byte
+ * that can't form a whole word is dropped. Pure: the panel feeds the bytes.
+ */
+export function buildStackScope(
+  sp: number,
+  bytes: number[],
+  depth: number = DEFAULT_STACK_DEPTH,
+): RegisterScope {
+  const variables: RegisterVariable[] = []
+  for (let i = 0; i < depth; i++) {
+    const lo = bytes[i * 2]
+    const hi = bytes[i * 2 + 1]
+    if (lo === undefined || hi === undefined) break
+    const slot = (sp + i * 2) & 0xffff
+    const word = pairValue(hi, lo)
+    variables.push({ name: hex4(slot), value: hex4(word), memoryReference: ref(word) })
+  }
+  return { name: "Stack", variables }
 }

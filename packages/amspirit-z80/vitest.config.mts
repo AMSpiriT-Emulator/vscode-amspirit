@@ -21,6 +21,7 @@ export default defineConfig({
         "webview/main.tsx",
         "webview/app.tsx",
         "webview/disasm-app.tsx",
+        "webview/registers-app.tsx",
         "webview/hooks/**",
       ],
       thresholds: {

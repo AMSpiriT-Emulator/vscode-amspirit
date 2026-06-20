@@ -10,7 +10,6 @@ import {
   ContinuedEvent,
   InitializedEvent,
   LoggingDebugSession,
-  Scope,
   Source,
   StackFrame,
   StoppedEvent,
@@ -19,17 +18,13 @@ import {
 } from "@vscode/debugadapter"
 import type { DebugProtocol } from "@vscode/debugprotocol"
 import { type ReadMem, reconstructCallStack } from "../call-stack.js"
-import { type ByteReader, buildDisassemblyWindow } from "../disasm-window.js"
 import { firmwareLabel } from "../firmware-labels.js"
-import { buildRegisterScopes } from "../registers-view.js"
 import { launchEntryReached, stepSettled } from "../step-landing.js"
 import { planStepOver, returnAddress } from "../step-targets.js"
 import { parseSymbolMap } from "../symbol-map/parse-symbol-map.js"
 import type { SymbolMap } from "../symbol-map/symbol-map.js"
 
 const THREAD_ID = 1
-/** Variables references: one per register scope (Registers/Flags/Shadow/Interrupts). */
-const FIRST_SCOPE_REF = 1
 /**
  * After a resume/step, ignore the emulator's `paused` flag briefly so we don't
  * read the stale pre-resume freeze (it applies pending actions a frame later).
@@ -136,8 +131,6 @@ export class Z80DebugSession extends LoggingDebugSession {
     response.body = response.body ?? {}
     response.body.supportsConfigurationDoneRequest = true
     response.body.supportsTerminateRequest = true
-    response.body.supportsReadMemoryRequest = true
-    response.body.supportsDisassembleRequest = true
     response.body.supportsSteppingGranularity = true
     this.sendResponse(response)
     this.sendEvent(new InitializedEvent())
@@ -375,38 +368,6 @@ export class Z80DebugSession extends LoggingDebugSession {
     return new Source(basename(file), abs)
   }
 
-  protected override scopesRequest(response: DebugProtocol.ScopesResponse): void {
-    const names = buildRegisterScopes(EMPTY_REGS).map((s) => s.name)
-    response.body = {
-      scopes: names.map((name, i) => new Scope(name, FIRST_SCOPE_REF + i, false)),
-    }
-    this.sendResponse(response)
-  }
-
-  protected override async variablesRequest(
-    response: DebugProtocol.VariablesResponse,
-    args: DebugProtocol.VariablesArguments,
-  ): Promise<void> {
-    let variables: DebugProtocol.Variable[] = []
-    const client = this.client
-    const index = args.variablesReference - FIRST_SCOPE_REF
-    if (client && index >= 0) {
-      try {
-        const scope = buildRegisterScopes(await client.getZ80())[index]
-        variables = (scope?.variables ?? []).map((v) => ({
-          name: v.name,
-          value: v.value,
-          variablesReference: 0,
-          ...(v.memoryReference ? { memoryReference: v.memoryReference } : {}),
-        }))
-      } catch {
-        // empty
-      }
-    }
-    response.body = { variables }
-    this.sendResponse(response)
-  }
-
   protected override async continueRequest(
     response: DebugProtocol.ContinueResponse,
   ): Promise<void> {
@@ -632,60 +593,6 @@ export class Z80DebugSession extends LoggingDebugSession {
     return decodeOne(bytes, pc)
   }
 
-  protected override async readMemoryRequest(
-    response: DebugProtocol.ReadMemoryResponse,
-    args: DebugProtocol.ReadMemoryArguments,
-  ): Promise<void> {
-    const client = this.client
-    const base = Number(args.memoryReference) + (args.offset ?? 0)
-    if (client && Number.isFinite(base) && args.count > 0) {
-      try {
-        const bytes = await client.readRam(base & 0xffff, args.count, { cpuView: true })
-        response.body = {
-          address: `0x${(base & 0xffff).toString(16)}`,
-          data: Buffer.from(bytes).toString("base64"),
-        }
-      } catch {
-        // empty body
-      }
-    }
-    this.sendResponse(response)
-  }
-
-  protected override async disassembleRequest(
-    response: DebugProtocol.DisassembleResponse,
-    args: DebugProtocol.DisassembleArguments,
-  ): Promise<void> {
-    const client = this.client
-    const count = args.instructionCount
-    const offset = args.instructionOffset ?? 0
-    const base = (Number(args.memoryReference) + (args.offset ?? 0)) & 0xffff
-    let instructions: DebugProtocol.DisassembledInstruction[] = []
-    if (client && Number.isFinite(base)) {
-      try {
-        // Rows before `base` (negative offset) are decoded forward from a point
-        // ahead of the window, so snapshot from there through the forward span.
-        const lead = Math.min(Math.max(-offset, 0), count)
-        const start = Math.max(0, base - lead * MAX_INSTR_LEN)
-        const span = base - start + (count + Math.max(offset, 0)) * MAX_INSTR_LEN
-        const snapshot = await client.readRam(start, span, { cpuView: true })
-        const read: ByteReader = (addr, len) => {
-          const out: number[] = []
-          for (let i = 0; i < len; i++) {
-            const idx = addr - start + i
-            out.push(idx >= 0 && idx < snapshot.length ? (snapshot[idx] ?? 0) : 0)
-          }
-          return out
-        }
-        instructions = buildDisassemblyWindow(read, base, offset, count)
-      } catch {
-        // empty
-      }
-    }
-    response.body = { instructions }
-    this.sendResponse(response)
-  }
-
   protected override async disconnectRequest(
     response: DebugProtocol.DisconnectResponse,
   ): Promise<void> {
@@ -760,32 +667,3 @@ function decodeOne(bytes: number[], address: number): DisasmInstruction | undefi
 function dedupe(addrs: number[]): number[] {
   return [...new Set(addrs)]
 }
-
-/** Zeroed registers, used only to derive the static scope names/order. */
-const EMPTY_REGS = {
-  PC: 0,
-  SP: 0,
-  A: 0,
-  F: 0,
-  B: 0,
-  C: 0,
-  D: 0,
-  E: 0,
-  H: 0,
-  L: 0,
-  A2: 0,
-  F2: 0,
-  B2: 0,
-  C2: 0,
-  D2: 0,
-  E2: 0,
-  H2: 0,
-  L2: 0,
-  IX: 0,
-  IY: 0,
-  I: 0,
-  R: 0,
-  IFF1: 0,
-  IFF2: 0,
-  IM: 0,
-} as const

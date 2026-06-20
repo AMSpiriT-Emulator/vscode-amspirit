@@ -55,6 +55,34 @@
         "language": "z80-asm"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "amspiritZ80",
+          "title": "AMSpiriT Z80",
+          "icon": "media/z80.svg"
+        }
+      ]
+    },
+    "views": {
+      "amspiritZ80": [
+        {
+          "type": "webview",
+          "id": "amspirit.z80.registers",
+          "name": "Registers"
+        },
+        {
+          "type": "webview",
+          "id": "amspirit.z80.memory",
+          "name": "Memory"
+        },
+        {
+          "type": "webview",
+          "id": "amspirit.z80.disassembly",
+          "name": "Disassembly"
+        }
+      ]
+    },
     "debuggers": [
       {
         "type": "amspirit-z80",
@@ -191,6 +219,20 @@
         "icon": "$(list-flat)"
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "amspirit.z80.memoryView",
+          "when": "resourceLangId == z80-asm",
+          "group": "amspiritZ80@1"
+        },
+        {
+          "command": "amspirit.z80.disassemblyView",
+          "when": "resourceLangId == z80-asm",
+          "group": "amspiritZ80@2"
+        }
+      ]
+    },
     "configuration": {
       "title": "AMSpiriT Z80",
       "properties": {
