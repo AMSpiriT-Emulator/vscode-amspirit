@@ -74,6 +74,42 @@
   font-style: italic;
 }
 
+/* Colour legend for the byte-state shading. */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.legendItem::before {
+  content: "";
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 2px;
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.4));
+}
+
+.legendItem[data-kind="executed"]::before {
+  background: var(--vscode-diffEditor-insertedTextBackground, rgba(99, 184, 99, 0.18));
+}
+
+.legendItem[data-kind="pointer"]::before {
+  background: var(--vscode-charts-blue, var(--vscode-textLink-foreground));
+}
+
+.legendItem[data-kind="flash"]::before {
+  background: var(--vscode-charts-yellow, #6a6a1a);
+}
+
 .table {
   border-collapse: collapse;
   font-variant-numeric: tabular-nums;

@@ -7,7 +7,14 @@ export type {
   BasicStatement,
   EmulatorClientOptions,
   EmulatorConfig,
+  EmulatorState,
+  EmuState,
+  FdcState,
+  GateArrayState,
+  MemmapRegion,
+  MemmapState,
   PingState,
+  PsgState,
   Z80Registers,
 } from "./emulator.js"
 export { DIRECT_MODE_LINE, EmulatorClient, spawnEmulator } from "./emulator.js"

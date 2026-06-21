@@ -80,6 +80,26 @@
           "type": "webview",
           "id": "amspirit.z80.disassembly",
           "name": "Disassembly"
+        },
+        {
+          "type": "webview",
+          "id": "amspirit.z80.gateArray",
+          "name": "Gate Array"
+        },
+        {
+          "type": "webview",
+          "id": "amspirit.z80.psg",
+          "name": "PSG (AY)"
+        },
+        {
+          "type": "webview",
+          "id": "amspirit.z80.fdc",
+          "name": "FDC (765)"
+        },
+        {
+          "type": "webview",
+          "id": "amspirit.z80.crtc",
+          "name": "CRTC"
         }
       ]
     },

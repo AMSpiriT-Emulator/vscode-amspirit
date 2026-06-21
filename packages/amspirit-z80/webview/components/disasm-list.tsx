@@ -148,6 +148,17 @@ export function DisasmList({
           </select>
         )}
       </form>
+      <div className={styles.legend}>
+        <span className={styles.legendItem} data-kind="pc">
+          ▶ PC
+        </span>
+        <span className={styles.legendItem} data-kind="executed">
+          Executed
+        </span>
+        <span className={styles.legendItem} data-kind="data">
+          Data (DB)
+        </span>
+      </div>
       {rows === null ? (
         <p className={styles.placeholder}>No data — connect to the emulator to disassemble.</p>
       ) : (

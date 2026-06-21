@@ -205,6 +205,17 @@ export function MemoryGrid({
           </select>
         )}
       </form>
+      <div className={styles.legend}>
+        <span className={styles.legendItem} data-kind="executed">
+          Executed
+        </span>
+        <span className={styles.legendItem} data-kind="pointer">
+          Pointer
+        </span>
+        <span className={styles.legendItem} data-kind="flash">
+          Changed
+        </span>
+      </div>
       {rows === null ? (
         <p className={styles.placeholder}>No data — connect to the emulator to inspect memory.</p>
       ) : (

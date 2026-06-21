@@ -26,6 +26,13 @@ describe("<MemoryGrid />", () => {
     expect(screen.getByText(/no data|pause/i)).toBeDefined()
   })
 
+  it("renders a colour legend for the byte-state shading", () => {
+    render(<MemoryGrid rows={rows} onGoto={vi.fn()} />)
+    expect(screen.getByText("Executed")).toBeDefined()
+    expect(screen.getByText("Pointer")).toBeDefined()
+    expect(screen.getByText("Changed")).toBeDefined()
+  })
+
   it("calls onGoto with the parsed address when the form is submitted", () => {
     const onGoto = vi.fn()
     render(<MemoryGrid rows={rows} onGoto={onGoto} />)

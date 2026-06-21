@@ -11,12 +11,37 @@ interface RegisterVariable {
    * with `Number()`.
    */
   memoryReference?: string
+  /**
+   * A CSS colour (e.g. `#RRGGBB`) for `"palette"` scopes: the entry renders as a
+   * colour swatch tinted with this, with `value` shown as its label. Ignored by
+   * other scope kinds.
+   */
+  swatch?: string
+  /**
+   * A fuller description for the tooltip (e.g. a bit's meaning on a `"flags"`
+   * chip). Falls back to the entry name when absent.
+   */
+  hint?: string
+  /** Render this entry dimmed (e.g. a palette PEN unused in the current mode). */
+  muted?: boolean
+  /** Start a visual group separator before this entry (e.g. the GA border ink). */
+  divider?: boolean
+  /** For `"membar"` entries: this region maps ROM (tinted apart from RAM). */
+  rom?: boolean
 }
 
 /** A named group of register variables (one section of the view). */
 export interface RegisterScope {
   name: string
   variables: RegisterVariable[]
+  /**
+   * Render hint. `"flags"` shows a lit/dim chip strip (bit decoders);
+   * `"palette"` shows a grid of colour swatches (each variable's `swatch`);
+   * `"membar"` shows a horizontal ROM/RAM region bar; otherwise a name/value
+   * grid. The Z80 "Flags" scope is treated as `"flags"` by name for back-compat;
+   * chip views set this explicitly.
+   */
+  kind?: "flags" | "palette" | "membar"
 }
 
 /** How many stack words {@link buildStackScope} shows by default. */

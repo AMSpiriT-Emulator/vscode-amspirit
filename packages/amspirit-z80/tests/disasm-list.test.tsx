@@ -51,6 +51,13 @@ describe("<DisasmList />", () => {
     expect(screen.getByText(/no data|connect/i)).toBeDefined()
   })
 
+  it("renders a legend for the PC marker and row shading", () => {
+    render(<DisasmList rows={rows} onGoto={vi.fn()} />)
+    expect(screen.getByText("▶ PC")).toBeDefined()
+    expect(screen.getByText("Executed")).toBeDefined()
+    expect(screen.getByText("Data (DB)")).toBeDefined()
+  })
+
   it("marks the program-counter row and shades executed instructions", () => {
     render(<DisasmList rows={rows} onGoto={vi.fn()} />)
     const pcRow = screen.getByText("JR L8003").closest("tr")
