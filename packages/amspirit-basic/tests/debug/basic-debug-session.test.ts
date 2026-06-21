@@ -72,6 +72,12 @@ class Harness extends BasicDebugSession {
       {} as DebugProtocol.ConfigurationDoneArguments,
     )
   }
+  attach(args: { program?: string; stopOnEntry?: boolean }): Promise<void> {
+    return this.attachRequest(
+      resp<DebugProtocol.AttachResponse>(),
+      args as DebugProtocol.AttachRequestArguments,
+    )
+  }
   disconnect(): Promise<void> {
     return this.disconnectRequest(resp<DebugProtocol.DisconnectResponse>())
   }
@@ -81,10 +87,13 @@ function resp<T>(): T {
   return {} as unknown as T
 }
 
-function makeHarness(calls: Call[]): Harness {
+function makeHarness(calls: Call[], onStopped?: () => void): Harness {
   return new Harness(
     () => makeFake(calls),
     () => doc,
+    // No SSE push channel under test: exercise the polling fallback deterministically.
+    () => undefined,
+    onStopped,
   )
 }
 
@@ -163,6 +172,22 @@ describe("BasicDebugSession launch sequence", () => {
     const entryIndex = calls.findIndex((c) => postsAddr(c, 371))
     expect(entryIndex).toBeGreaterThanOrEqual(0)
     expect(entryIndex).toBeLessThan(runIndex)
+
+    await session.disconnect()
+  })
+
+  it("notifies onStopped on every reported stop so the views refresh", async () => {
+    // A step re-freezes the emulator without an SSE event, so the views rely on
+    // this callback (wired to the event hub) to refresh — without it, registers
+    // stay stale while stepping.
+    const calls: Call[] = []
+    let stops = 0
+    const session = makeHarness(calls, () => stops++)
+
+    session.initialize()
+    await session.attach({ program: PROGRAM, stopOnEntry: true })
+
+    expect(stops).toBe(1) // the stop-on-entry freeze fired the callback
 
     await session.disconnect()
   })

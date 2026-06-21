@@ -1,5 +1,11 @@
 import { randomBytes } from "node:crypto"
-import type { EmulatorClient, EmulatorState, MemmapState } from "@amspirit/shared"
+import type {
+  EmulatorClient,
+  EmulatorState,
+  MemmapState,
+  RefreshTriggerSource,
+} from "@amspirit/shared"
+import { RefreshScheduler } from "@amspirit/shared"
 import * as vscode from "vscode"
 import type {
   HardwareExtToWebview,
@@ -7,8 +13,6 @@ import type {
   HardwareWebviewToExt,
 } from "../../webview/hardware-messaging.js"
 import { buildWebviewHtml } from "./html.js"
-
-const POLL_INTERVAL_MS = 500
 
 /** Per-chip wiring: which view it backs and how to build its payload. */
 export interface HardwarePanelConfig {
@@ -35,7 +39,8 @@ const EMPTY_MEMMAP: MemmapState = { regions: [], rmr: 0, ramMode: 0, ramPage: 0 
  */
 export class HardwarePanel implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined
-  private timer: ReturnType<typeof setInterval> | undefined
+  /** Drives refresh from the SSE hub; chip state tracks frame events live. */
+  private readonly scheduler: RefreshScheduler
   /** Last snapshot posted, serialized — skip posting identical snapshots. */
   private lastPosted = ""
   private readonly disposables: vscode.Disposable[] = []
@@ -43,9 +48,12 @@ export class HardwarePanel implements vscode.WebviewViewProvider {
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly makeClient: () => EmulatorClient,
+    triggers: RefreshTriggerSource,
     /** Public so the activation code can read the `viewId` when registering. */
     readonly config: HardwarePanelConfig,
-  ) {}
+  ) {
+    this.scheduler = new RefreshScheduler(triggers, () => void this.tick(), { onFrame: true })
+  }
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view
@@ -82,14 +90,11 @@ export class HardwarePanel implements vscode.WebviewViewProvider {
   }
 
   private startPolling(): void {
-    if (this.timer) return
-    void this.tick()
-    this.timer = setInterval(() => void this.tick(), POLL_INTERVAL_MS)
+    this.scheduler.start()
   }
 
   private stopPolling(): void {
-    if (this.timer) clearInterval(this.timer)
-    this.timer = undefined
+    this.scheduler.stop()
   }
 
   private async tick(): Promise<void> {

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto"
-import type { EmulatorClient } from "@amspirit/shared"
+import { type EmulatorClient, RefreshScheduler, type RefreshTriggerSource } from "@amspirit/shared"
 import * as vscode from "vscode"
 import type {
   RegistersExtToWebview,
@@ -8,7 +8,6 @@ import type {
 import { buildRegisterScopes, buildStackScope, type RegisterScope } from "../registers-view.js"
 import { buildWebviewHtml } from "./html.js"
 
-const POLL_INTERVAL_MS = 500
 /** Stack words peeked at SP and shown in the Stack scope. */
 const STACK_DEPTH = 8
 
@@ -25,7 +24,8 @@ export class RegistersPanel implements vscode.WebviewViewProvider {
   static readonly viewId = "amspirit.z80.registers"
 
   private view: vscode.WebviewView | undefined
-  private timer: ReturnType<typeof setInterval> | undefined
+  /** Drives refresh from the SSE hub; live registers track frame events. */
+  private readonly scheduler: RefreshScheduler
   /** Last snapshot posted, serialized — skip posting identical snapshots. */
   private lastPosted = ""
   private readonly disposables: vscode.Disposable[] = []
@@ -33,9 +33,12 @@ export class RegistersPanel implements vscode.WebviewViewProvider {
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly makeClient: () => EmulatorClient,
+    triggers: RefreshTriggerSource,
     /** Reveal the Memory view at `address` when a pointer register is clicked. */
     private readonly onGoto: (address: number) => void,
-  ) {}
+  ) {
+    this.scheduler = new RefreshScheduler(triggers, () => void this.tick(), { onFrame: true })
+  }
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view
@@ -73,14 +76,11 @@ export class RegistersPanel implements vscode.WebviewViewProvider {
   }
 
   private startPolling(): void {
-    if (this.timer) return
-    void this.tick()
-    this.timer = setInterval(() => void this.tick(), POLL_INTERVAL_MS)
+    this.scheduler.start()
   }
 
   private stopPolling(): void {
-    if (this.timer) clearInterval(this.timer)
-    this.timer = undefined
+    this.scheduler.stop()
   }
 
   private async tick(): Promise<void> {

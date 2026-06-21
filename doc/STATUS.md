@@ -6,7 +6,26 @@
 
 ## Where we are
 
-- **Latest (2026-06-21, branch `feat/amspirit-z80-hardware-views`, off `main`
+- **Latest (2026-06-23, branch `feat/sse-integration`, off `main` @ `d5c1da1`,
+  commit `1a2a8e1`, NOT pushed): SSE replaces polling for stop detection + live
+  views.** New shared layer (all TDD): `SseParser`, `EmulatorEvents` (typed
+  `/api/events` client, auto-reconnect), `EmulatorEventHub` (one shared
+  connection fanned out — the emulator caps SSE clients at 8), `StopWatcher`
+  (SSE stop signal racing a `StopPoller` fallback), `RefreshScheduler`
+  (stop-immediate + throttled per-frame refresh + always-on safety poll). Debug
+  sessions (z80/basic) watch resume/run-to via SSE with polling fallback and
+  pulse the hub on every `stopped` (single steps emit no SSE event) so views snap
+  to the stopped state. All webview views + the status bar share one hub;
+  `PingService` removed in favour of stream liveness. **Two emulator bugs found &
+  fixed in `amspirit-lite`** (user committed/packaged 1.12.0): the `exec`
+  dirty-prefetch latch (`session_finish_instruction`) and `setZ80Breakpoints`
+  wiping the bp-suppress so step/continue stuck on a breakpoint
+  (`session_z80_suppress_after_set`). Full gate green (**shared 160 / basic 78 /
+  z80 217**; shared 95.47% stmts, z80 98.04%). Changesets `sse-stop-detection.md`
+  + `sse-webviews-and-status.md` (both extensions, `minor`). **Not yet
+  live-validated end-to-end.** See `doc/sessions/2026-06-23-sse-integration.md`.
+  **Next: push + PR, then live-validate.**
+- **Prior (2026-06-21, branch `feat/amspirit-z80-hardware-views`, off `main`
   @ `133763e`, UNCOMMITTED): peripheral-chip views added to the tool suite.**
   Four new docked webview views in the `amspiritZ80` container — **Gate Array**,
   **PSG (AY)**, **FDC (765)**, **CRTC** — each polling `/api/state` (+`/api/memmap`
