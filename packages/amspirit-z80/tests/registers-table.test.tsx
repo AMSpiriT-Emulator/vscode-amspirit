@@ -75,4 +75,55 @@ describe("<RegistersTable />", () => {
     render(<RegistersTable scopes={flags} onGoto={vi.fn()} />)
     expect(screen.getByText("Z").getAttribute("title")).toMatch(/zero/i)
   })
+
+  it("renders a palette scope as a grid of colour swatches (index in the tooltip)", () => {
+    const palette: RegisterScope[] = [
+      {
+        name: "Palette",
+        kind: "palette",
+        variables: [
+          { name: "PEN0", value: "0", swatch: "#000000" },
+          { name: "PEN1", value: "26", swatch: "#FFFF00", muted: true },
+          { name: "Border", value: "3", swatch: "#FF0000", divider: true },
+        ],
+      },
+    ]
+    render(<RegistersTable scopes={palette} onGoto={vi.fn()} />)
+    expect(screen.getByText("PEN0")).toBeDefined()
+    const swatch = screen.getByTestId("swatch-PEN1")
+    expect(swatch.style.backgroundColor).toBe("rgb(255, 255, 0)")
+    // The scattered hardware colour index is not shown on the face, only on hover.
+    expect(screen.queryByText("26")).toBeNull()
+    expect(swatch.parentElement?.getAttribute("title")).toMatch(/hardware colour 26/)
+    expect(swatch.parentElement?.getAttribute("data-muted")).toBe("true")
+  })
+
+  it("renders a membar scope as ROM/RAM regions", () => {
+    const scopesMb: RegisterScope[] = [
+      {
+        name: "Memory map",
+        kind: "membar",
+        variables: [
+          { name: "0000", value: "Lower", rom: true },
+          { name: "4000", value: "RAM 1", rom: false },
+        ],
+      },
+    ]
+    render(<RegistersTable scopes={scopesMb} onGoto={vi.fn()} />)
+    expect(screen.getByText("Lower")).toBeDefined()
+    expect(screen.getByText("0000").parentElement?.getAttribute("data-rom")).toBe("true")
+    expect(screen.getByText("4000").parentElement?.getAttribute("data-rom")).toBeNull()
+  })
+
+  it("uses a variable's hint for the flag chip tooltip", () => {
+    const flags: RegisterScope[] = [
+      {
+        name: "MSR bits",
+        kind: "flags",
+        variables: [{ name: "RQM", value: "1", hint: "Request for Master" }],
+      },
+    ]
+    render(<RegistersTable scopes={flags} onGoto={vi.fn()} />)
+    expect(screen.getByText("RQM").getAttribute("title")).toMatch(/request for master/i)
+  })
 })

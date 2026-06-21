@@ -9,8 +9,11 @@ import {
 import * as vscode from "vscode"
 import { vsCodeConfigReader } from "./config/vs-code-config-reader.js"
 import { Z80DebugSession } from "./debug/z80-debug-session.js"
+import { buildCrtcScopes, buildFdcScopes, buildGateArrayScopes } from "./hardware/hardware-views.js"
+import { buildPsgViewModel } from "./hardware/psg-view-model.js"
 import { Z80StatusBar } from "./status-bar/z80-status-bar.js"
 import { DisasmPanel } from "./webview/disasm-panel.js"
+import { HardwarePanel } from "./webview/hardware-panel.js"
 import { MemoryPanel } from "./webview/memory-panel.js"
 import { RegistersPanel } from "./webview/registers-panel.js"
 
@@ -122,6 +125,39 @@ export function activate(context: vscode.ExtensionContext): void {
     memoryPanel.goto(address),
   )
 
+  // The peripheral-chip views all share HardwarePanel; each is parameterised by
+  // its view id, the bundle `data-view` to mount, and the pure scope formatter.
+  const scopePayload = (scopes: ReturnType<typeof buildGateArrayScopes>) =>
+    ({ kind: "scopes", scopes }) as const
+  const emptyScopes = { kind: "scopes", scopes: null } as const
+  const hardwarePanels = [
+    new HardwarePanel(context.extensionUri, debugAwareClient, {
+      viewId: "amspirit.z80.gateArray",
+      dataView: "gate-array",
+      needsMemmap: true,
+      build: (s, m) => scopePayload(buildGateArrayScopes(s.ga, m)),
+      emptyPayload: emptyScopes,
+    }),
+    new HardwarePanel(context.extensionUri, debugAwareClient, {
+      viewId: "amspirit.z80.psg",
+      dataView: "psg",
+      build: (s) => ({ kind: "psg", psg: buildPsgViewModel(s.psg) }),
+      emptyPayload: { kind: "psg", psg: null },
+    }),
+    new HardwarePanel(context.extensionUri, debugAwareClient, {
+      viewId: "amspirit.z80.fdc",
+      dataView: "fdc",
+      build: (s) => scopePayload(buildFdcScopes(s.fdc)),
+      emptyPayload: emptyScopes,
+    }),
+    new HardwarePanel(context.extensionUri, debugAwareClient, {
+      viewId: "amspirit.z80.crtc",
+      dataView: "crtc",
+      build: (s) => scopePayload(buildCrtcScopes(s.emu, s.ga)),
+      emptyPayload: emptyScopes,
+    }),
+  ]
+
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(RegistersPanel.viewId, registersPanel, {
       webviewOptions: { retainContextWhenHidden: true },
@@ -132,6 +168,11 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.registerWebviewViewProvider(DisasmPanel.viewId, disasmPanel, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
+    ...hardwarePanels.map((panel) =>
+      vscode.window.registerWebviewViewProvider(panel.config.viewId, panel, {
+        webviewOptions: { retainContextWhenHidden: true },
+      }),
+    ),
     vscode.commands.registerCommand("amspirit.z80.launch", cmdLaunch),
     vscode.commands.registerCommand("amspirit.z80.connect", cmdConnect),
     // The views live in the AMSpiriT Z80 activity-bar container; the commands

@@ -29,7 +29,7 @@ export function RegistersTable({ scopes, onGoto }: RegistersTableProps) {
   if (!scopes) {
     return (
       <main>
-        <p className={styles.placeholder}>No data — connect to a paused emulator.</p>
+        <p className={styles.placeholder}>No data — connect to the emulator.</p>
       </main>
     )
   }
@@ -39,14 +39,47 @@ export function RegistersTable({ scopes, onGoto }: RegistersTableProps) {
       {scopes.map((scope) => (
         <section key={scope.name} className={styles.scope}>
           <h2 className={styles.heading}>{scope.name}</h2>
-          {scope.name === "Flags" ? (
+          {scope.kind === "palette" ? (
+            <div className={styles.palette}>
+              {scope.variables.map((v) => (
+                <div
+                  key={v.name}
+                  className={styles.swatchCell}
+                  data-muted={v.muted ? "true" : undefined}
+                  data-divider={v.divider ? "true" : undefined}
+                  title={`${v.name}: hardware colour ${v.value} (${v.swatch})`}
+                >
+                  <span
+                    className={styles.swatch}
+                    style={{ backgroundColor: v.swatch }}
+                    data-testid={`swatch-${v.name}`}
+                  />
+                  <span className={styles.swatchLabel}>{v.name}</span>
+                </div>
+              ))}
+            </div>
+          ) : scope.kind === "membar" ? (
+            <div className={styles.membar}>
+              {scope.variables.map((v) => (
+                <div
+                  key={v.name}
+                  className={styles.region}
+                  data-rom={v.rom ? "true" : undefined}
+                  title={`${v.name}: ${v.value}`}
+                >
+                  <span className={styles.regionName}>{v.name}</span>
+                  <span className={styles.regionValue}>{v.value}</span>
+                </div>
+              ))}
+            </div>
+          ) : scope.kind === "flags" || scope.name === "Flags" ? (
             <div className={styles.flags}>
               {scope.variables.map((v) => (
                 <span
                   key={v.name}
                   className={styles.flag}
                   data-set={v.value === "1"}
-                  title={`${FLAG_NAMES[v.name] ?? v.name} (${v.value})`}
+                  title={`${v.hint ?? FLAG_NAMES[v.name] ?? v.name} (${v.value})`}
                 >
                   {v.name}
                 </span>

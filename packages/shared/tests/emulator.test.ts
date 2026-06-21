@@ -473,6 +473,106 @@ describe("EmulatorClient", () => {
     })
   })
 
+  describe("getState", () => {
+    it("GETs /api/state and maps the chip snapshot to camelCase", async () => {
+      fake.responder = jsonResponder({
+        z80: { PC: 0x1234, SP: 0x4000, A: 1, F: 2 },
+        ga: {
+          mode: 1,
+          border_idx: 3,
+          border_rgb: 0xff0000,
+          hbl: false,
+          vbl: true,
+          ink_idx: [5, 6, 7],
+          ink_rgb: [0x010203, 0x040506],
+        },
+        psg: {
+          period_a: 564,
+          vol_a: 15,
+          period_b: 1,
+          vol_b: 2,
+          period_c: 3,
+          vol_c: 4,
+          mixer: 63,
+          noise: 7,
+          env_period: 0x1234,
+          env_shape: 8,
+        },
+        fdc: { msr: 128, sr0: 1, sr1: 2, sr2: 3, motor: true, drive: 1 },
+        emu: { fps: 50, frame: 99, paused: true, cpc_model: 2, crtc_type: 1 },
+      })
+      const client = new EmulatorClient({ port: fake.port })
+      const s = await client.getState()
+      expect(fake.recorded.at(0)?.url).toBe("/api/state")
+      expect(s.z80.PC).toBe(0x1234)
+      expect(s.ga).toEqual({
+        mode: 1,
+        borderIdx: 3,
+        borderRgb: 0xff0000,
+        hbl: false,
+        vbl: true,
+        inkIdx: [5, 6, 7],
+        inkRgb: [0x010203, 0x040506],
+      })
+      expect(s.psg).toEqual({
+        periodA: 564,
+        volA: 15,
+        periodB: 1,
+        volB: 2,
+        periodC: 3,
+        volC: 4,
+        mixer: 63,
+        noise: 7,
+        envPeriod: 0x1234,
+        envShape: 8,
+      })
+      expect(s.fdc).toEqual({ msr: 128, sr0: 1, sr1: 2, sr2: 3, motor: true, drive: 1 })
+      expect(s.emu).toEqual({ fps: 50, frame: 99, paused: true, cpcModel: 2, crtcType: 1 })
+    })
+
+    it("fills missing sub-objects with safe defaults", async () => {
+      fake.responder = jsonResponder({})
+      const client = new EmulatorClient({ port: fake.port })
+      const s = await client.getState()
+      expect(s.ga.inkIdx).toEqual([])
+      expect(s.ga.mode).toBe(0)
+      expect(s.psg.mixer).toBe(0)
+      expect(s.fdc.motor).toBe(false)
+      expect(s.emu.crtcType).toBe(0)
+    })
+  })
+
+  describe("getMemmap", () => {
+    it("GETs /api/memmap and maps regions + banking to camelCase", async () => {
+      fake.responder = jsonResponder({
+        regions: [
+          { base: 0, name: "0000", rom: true, rom_bank: 255 },
+          { base: 16384, name: "4000", rom: false, ram_bank: 1, ext: false },
+        ],
+        rmr: 137,
+        ram_mode: 2,
+        ram_page: 3,
+      })
+      const client = new EmulatorClient({ port: fake.port })
+      const m = await client.getMemmap()
+      expect(fake.recorded.at(0)?.url).toBe("/api/memmap")
+      expect(m.rmr).toBe(137)
+      expect(m.ramMode).toBe(2)
+      expect(m.ramPage).toBe(3)
+      expect(m.regions).toEqual([
+        { base: 0, name: "0000", rom: true, romBank: 255 },
+        { base: 16384, name: "4000", rom: false, ramBank: 1, ext: false },
+      ])
+    })
+
+    it("defaults to an empty mapping when fields are absent", async () => {
+      fake.responder = jsonResponder({})
+      const client = new EmulatorClient({ port: fake.port })
+      const m = await client.getMemmap()
+      expect(m).toEqual({ regions: [], rmr: 0, ramMode: 0, ramPage: 0 })
+    })
+  })
+
   describe("pingState", () => {
     it("reads ok + emu.paused from /api/ping", async () => {
       fake.responder = jsonResponder({ ok: true, emu: { paused: true, fps: 50 } })

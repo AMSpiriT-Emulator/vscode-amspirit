@@ -101,6 +101,85 @@
   border-color: var(--vscode-badge-background);
 }
 
+.palette {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(3.4rem, 1fr));
+  gap: 0.35rem;
+}
+
+.swatchCell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  cursor: default;
+}
+
+.swatch {
+  width: 100%;
+  height: 1.6rem;
+  border-radius: 3px;
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+}
+
+.swatchLabel {
+  font-weight: 600;
+  font-size: 0.72rem;
+  color: var(--vscode-symbolIcon-variableForeground, var(--vscode-foreground));
+}
+
+.swatchValue {
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* A PEN not used in the current video mode: dimmed but still readable. */
+.swatchCell[data-muted] {
+  opacity: 0.35;
+}
+
+/* The border ink (PEN 16): set off from the 16 display PENs by a separator. */
+.swatchCell[data-divider] {
+  margin-left: 0.5rem;
+  padding-left: 0.5rem;
+  border-left: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.4));
+}
+
+/* ROM/RAM region bar (Gate Array memory map). */
+.membar {
+  display: flex;
+  gap: 2px;
+}
+
+.region {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  padding: 0.2rem 0.1rem;
+  border-radius: 3px;
+  text-align: center;
+  /* RAM by default; ROM is tinted distinctly below. */
+  background: var(--vscode-charts-blue, rgba(88, 166, 255, 0.25));
+  color: var(--vscode-editor-background, #fff);
+}
+
+.region[data-rom] {
+  background: var(--vscode-charts-orange, rgba(210, 153, 34, 0.35));
+}
+
+.regionName {
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+
+.regionValue {
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .placeholder {
   color: var(--vscode-descriptionForeground);
   font-style: italic;

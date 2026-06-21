@@ -6,6 +6,23 @@
 
 ## Where we are
 
+- **Latest (2026-06-21, branch `feat/amspirit-z80-hardware-views`, off `main`
+  @ `133763e`, UNCOMMITTED): peripheral-chip views added to the tool suite.**
+  Four new docked webview views in the `amspiritZ80` container — **Gate Array**,
+  **PSG (AY)**, **FDC (765)**, **CRTC** — each polling `/api/state` (+`/api/memmap`
+  for GA) and reusing the Registers scope table (decoded bit-groups render as the
+  lit/dim chip strip via a new `kind:"flags"` scope field). Shared:
+  `EmulatorClient.getState()` + `getMemmap()` with typed camelCase responses
+  (TDD). z80: pure formatters `src/hardware/hardware-views.ts`
+  (`buildGateArrayScopes`/`buildPsgScopes`/`buildFdcScopes`/`buildCrtcScopes`,
+  TDD) + a generic `HardwarePanel`. **PPI is parked and CRTC is type-only** —
+  both need an `/api/state` extension in `amspirit-lite` (user chose no emulator
+  change this cycle; core readers `Core_CRTC_/PPI_Read_Internal_Value` already
+  exist). Full gate green (**z80 201 tests**, 98.11% stmts / 91.42% br). Changeset
+  `amspirit-z80-hardware-views.md` (`minor`). **Not yet live-validated.** See
+  `doc/sessions/2026-06-21-amspirit-z80-hardware-views.md`. **Next: live-validate,
+  then commit + push + PR.** (The tool suite itself merged via **PR #9**,
+  `133763e`.)
 - **Branch:** `feat/amspirit-z80-memory-view` — the Memory View slices that were
   uncommitted on `main` are now committed here (3 commits ahead of `main`, not
   pushed). The **`amspirit-z80` extension** (Z80 assembler DAP debugger) is
@@ -171,6 +188,9 @@
 | `writeMemory` (`supportsWriteMemoryRequest`) | 🟡 | Memory View edits central RAM inline via `writeRam` (`/api/ram`); the DAP `writeMemoryRequest` itself is still unwired (extended banks would need a bank-aware write) |
 | Reverse-debug (`stepBack`/`reverseContinue`) | ⬜ | emulator already records Z80 history (`session_record_z80_history`); expose via API then wire |
 | Memory watchpoints (read/write) | ⬜ | **needs an emulator data-breakpoint endpoint** (none today) — costliest |
+| Peripheral-chip views (Gate Array / PSG / FDC / CRTC) | ✅ | 2026-06-21, branch `feat/amspirit-z80-hardware-views`. 4 docked webviews polling `/api/state` (+`/api/memmap` for GA); shared `getState()`/`getMemmap()` typed (TDD); pure `hardware-views.ts` formatters (TDD) + generic `HardwarePanel`; scope table gained `kind:"flags"` so bit-groups render as chips. z80 201 tests, gate green. Changeset `minor`. Not yet live-validated |
+| Peripheral views — PPI (8255) | ⬜ | **blocked**: `/api/state` exposes no PPI data (core `Core_PPI_Read_Internal_Value` exists but isn't serialized) — needs an `amspirit-lite` API extension |
+| Peripheral views — full CRTC register file (R0–R17) | ⬜ | only `crtc_type` is exposed; the 6845 register file is in the core (`Core_CRTC_Read_Internal_Value`) but not in `/api/state` — same unblock as PPI |
 
 ## Guardrail baseline
 

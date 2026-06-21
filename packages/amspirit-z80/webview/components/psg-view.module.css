@@ -1,0 +1,128 @@
+/* PSG (AY) view — co-located CSS Module (Vite scopes the class names). */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.channels {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+}
+
+.channel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.35rem;
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.25));
+  border-radius: 4px;
+}
+
+.chanName {
+  font-weight: 700;
+  text-align: center;
+  color: var(--vscode-symbolIcon-variableForeground, var(--vscode-foreground));
+}
+
+.chanFields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 0.4rem;
+  margin: 0;
+  font-size: 0.85em;
+}
+
+.chanFields dt {
+  color: var(--vscode-descriptionForeground);
+}
+
+.chanFields dd {
+  margin: 0;
+  text-align: right;
+}
+
+/* Horizontal volume meter (0–15), or full + "ENV" when envelope-driven. */
+.meter {
+  position: relative;
+  height: 1.1rem;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--vscode-input-background, rgba(128, 128, 128, 0.18));
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
+}
+
+.meterFill {
+  height: 100%;
+  background: var(--vscode-charts-green, rgba(99, 184, 99, 0.6));
+}
+
+.meter[data-env] .meterFill {
+  background: var(--vscode-charts-purple, rgba(170, 120, 220, 0.5));
+}
+
+.meterLabel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75em;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.routing {
+  display: flex;
+  gap: 0.3rem;
+  justify-content: center;
+}
+
+.chip {
+  flex: 1;
+  text-align: center;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.75em;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  background: transparent;
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+}
+
+.chip[data-set="true"] {
+  color: var(--vscode-badge-foreground);
+  background: var(--vscode-badge-background);
+  border-color: var(--vscode-badge-background);
+}
+
+.footer {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.1rem 0.6rem;
+  margin: 0;
+}
+
+.footer dt {
+  font-weight: 600;
+  color: var(--vscode-symbolIcon-variableForeground, var(--vscode-foreground));
+}
+
+.footer dd {
+  margin: 0;
+  text-align: right;
+}
+
+.glyph {
+  font-family: var(--vscode-editor-font-family, monospace);
+  letter-spacing: 0.1em;
+  color: var(--vscode-charts-purple, var(--vscode-textLink-foreground));
+}
+
+.placeholder {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}

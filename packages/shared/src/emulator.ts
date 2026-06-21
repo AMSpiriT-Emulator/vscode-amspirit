@@ -100,6 +100,101 @@ export interface Z80Registers {
   IM: number
 }
 
+/** Gate Array state from `/api/state` (`ga`). Colours are packed RGB24. */
+export interface GateArrayState {
+  /** Video mode 0, 1 or 2. */
+  mode: number
+  /** AMSTRAD colour index of the border (0–31). */
+  borderIdx: number
+  /** Border colour as packed `0xRRGGBB`. */
+  borderRgb: number
+  hbl: boolean
+  vbl: boolean
+  /** AMSTRAD colour index of each of the 16 PENs. */
+  inkIdx: number[]
+  /** RGB24 colour of each of the 16 PENs. */
+  inkRgb: number[]
+}
+
+/** PSG (AY-3-8912) state from `/api/state` (`psg`), already decoded. */
+export interface PsgState {
+  /** Tone periods of channels A/B/C (12-bit). */
+  periodA: number
+  /** Channel volumes (5-bit; bit 4 = envelope mode). */
+  volA: number
+  periodB: number
+  volB: number
+  periodC: number
+  volC: number
+  /** Mixer register (R7). */
+  mixer: number
+  /** Noise period (R6, 5-bit). */
+  noise: number
+  /** 16-bit envelope period (R12<<8 | R11). */
+  envPeriod: number
+  /** Envelope shape (R13, 4-bit). */
+  envShape: number
+}
+
+/** FDC (PD765) state from `/api/state` (`fdc`). */
+export interface FdcState {
+  /** Main Status Register. */
+  msr: number
+  sr0: number
+  sr1: number
+  sr2: number
+  motor: boolean
+  /** Active drive (0 or 1). */
+  drive: number
+}
+
+/** Emulator status from `/api/state` (`emu`). */
+export interface EmuState {
+  fps: number
+  frame: number
+  paused: boolean
+  /** CPC model: 0=464, 1=664, 2=6128, 4=6128+, 5=464+, 6=GX4000. */
+  cpcModel: number
+  /** CRTC type (0–4). */
+  crtcType: number
+}
+
+/** Full chip snapshot from `GET /api/state`. */
+export interface EmulatorState {
+  z80: Z80Registers
+  ga: GateArrayState
+  psg: PsgState
+  fdc: FdcState
+  emu: EmuState
+}
+
+/** One 16 KB region of the memory map from `/api/memmap`. */
+export interface MemmapRegion {
+  /** Region base address. */
+  base: number
+  /** Region name (the base as 4 hex digits). */
+  name: string
+  /** `true` if ROM is currently mapped here. */
+  rom: boolean
+  /** ROM number when `rom` (255 = lower/firmware ROM, else upper-ROM number). */
+  romBank?: number
+  /** Physical RAM bank when `!rom` (0–3 central, 4+ extended). */
+  ramBank?: number
+  /** `true` if this RAM bank comes from extended RAM. */
+  ext?: boolean
+}
+
+/** ROM/RAM mapping + banking config from `GET /api/memmap`. */
+export interface MemmapState {
+  regions: MemmapRegion[]
+  /** Gate Array RMR register value. */
+  rmr: number
+  /** RAM banking configuration (the `&7Fxx` value, 0–7). */
+  ramMode: number
+  /** Extended-RAM page (0–3). */
+  ramPage: number
+}
+
 /** Machine configuration reported by `/api/config`. */
 export interface EmulatorConfig {
   /** CPC model index (0=464, 1=664, 2=6128, …). */
@@ -237,6 +332,133 @@ export class EmulatorClient {
   /** Z80 register snapshot via `/api/z80`. */
   async getZ80(): Promise<Z80Registers> {
     return this.getJson<Z80Registers>("/api/z80", this.debugTimeoutMs)
+  }
+
+  /**
+   * Full chip snapshot via `GET /api/state` (Z80, Gate Array, PSG, FDC, emu),
+   * mapped to camelCase. Missing sub-objects fall back to safe zero/empty
+   * defaults so the hardware views can render unconditionally.
+   */
+  async getState(): Promise<EmulatorState> {
+    const raw = await this.getJson<{
+      z80?: Z80Registers
+      ga?: {
+        mode?: number
+        border_idx?: number
+        border_rgb?: number
+        hbl?: boolean
+        vbl?: boolean
+        ink_idx?: number[]
+        ink_rgb?: number[]
+      }
+      psg?: {
+        period_a?: number
+        vol_a?: number
+        period_b?: number
+        vol_b?: number
+        period_c?: number
+        vol_c?: number
+        mixer?: number
+        noise?: number
+        env_period?: number
+        env_shape?: number
+      }
+      fdc?: {
+        msr?: number
+        sr0?: number
+        sr1?: number
+        sr2?: number
+        motor?: boolean
+        drive?: number
+      }
+      emu?: {
+        fps?: number
+        frame?: number
+        paused?: boolean
+        cpc_model?: number
+        crtc_type?: number
+      }
+    }>("/api/state", this.debugTimeoutMs)
+    const ga = raw.ga ?? {}
+    const psg = raw.psg ?? {}
+    const fdc = raw.fdc ?? {}
+    const emu = raw.emu ?? {}
+    return {
+      z80: raw.z80 ?? ({} as Z80Registers),
+      ga: {
+        mode: ga.mode ?? 0,
+        borderIdx: ga.border_idx ?? 0,
+        borderRgb: ga.border_rgb ?? 0,
+        hbl: ga.hbl ?? false,
+        vbl: ga.vbl ?? false,
+        inkIdx: ga.ink_idx ?? [],
+        inkRgb: ga.ink_rgb ?? [],
+      },
+      psg: {
+        periodA: psg.period_a ?? 0,
+        volA: psg.vol_a ?? 0,
+        periodB: psg.period_b ?? 0,
+        volB: psg.vol_b ?? 0,
+        periodC: psg.period_c ?? 0,
+        volC: psg.vol_c ?? 0,
+        mixer: psg.mixer ?? 0,
+        noise: psg.noise ?? 0,
+        envPeriod: psg.env_period ?? 0,
+        envShape: psg.env_shape ?? 0,
+      },
+      fdc: {
+        msr: fdc.msr ?? 0,
+        sr0: fdc.sr0 ?? 0,
+        sr1: fdc.sr1 ?? 0,
+        sr2: fdc.sr2 ?? 0,
+        motor: fdc.motor ?? false,
+        drive: fdc.drive ?? 0,
+      },
+      emu: {
+        fps: emu.fps ?? 0,
+        frame: emu.frame ?? 0,
+        paused: emu.paused ?? false,
+        cpcModel: emu.cpc_model ?? 0,
+        crtcType: emu.crtc_type ?? 0,
+      },
+    }
+  }
+
+  /**
+   * ROM/RAM mapping + banking config via `GET /api/memmap`, mapped to camelCase.
+   * Supplies the Gate Array view's RMR / RAM-banking section.
+   */
+  async getMemmap(): Promise<MemmapState> {
+    const raw = await this.getJson<{
+      regions?: {
+        base?: number
+        name?: string
+        rom?: boolean
+        rom_bank?: number
+        ram_bank?: number
+        ext?: boolean
+      }[]
+      rmr?: number
+      ram_mode?: number
+      ram_page?: number
+    }>("/api/memmap", this.debugTimeoutMs)
+    const regions: MemmapRegion[] = (raw.regions ?? []).map((r) => {
+      const region: MemmapRegion = {
+        base: r.base ?? 0,
+        name: r.name ?? "",
+        rom: r.rom ?? false,
+      }
+      if (r.rom_bank !== undefined) region.romBank = r.rom_bank
+      if (r.ram_bank !== undefined) region.ramBank = r.ram_bank
+      if (r.ext !== undefined) region.ext = r.ext
+      return region
+    })
+    return {
+      regions,
+      rmr: raw.rmr ?? 0,
+      ramMode: raw.ram_mode ?? 0,
+      ramPage: raw.ram_page ?? 0,
+    }
   }
 
   /**
