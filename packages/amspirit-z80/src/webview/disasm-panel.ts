@@ -1,6 +1,11 @@
 import { randomBytes } from "node:crypto"
 import { existsSync, readFileSync } from "node:fs"
-import { disassemble, type EmulatorClient } from "@amspirit/shared"
+import {
+  disassemble,
+  type EmulatorClient,
+  RefreshScheduler,
+  type RefreshTriggerSource,
+} from "@amspirit/shared"
 import * as vscode from "vscode"
 import type { DisasmExtToWebview, DisasmWebviewToExt } from "../../webview/disasm-messaging.js"
 import {
@@ -16,7 +21,6 @@ import { parseSymbolMap } from "../symbol-map/parse-symbol-map.js"
 import type { SymbolMap } from "../symbol-map/symbol-map.js"
 import { buildWebviewHtml } from "./html.js"
 
-const POLL_INTERVAL_MS = 500
 /** Instruction rows shown at once. */
 const ROWS = 28
 /** Context instructions kept above the anchor (so the anchor isn't the top row). */
@@ -67,7 +71,8 @@ export class DisasmPanel implements vscode.WebviewViewProvider {
   private bankView: BankOption = CPU_VIEW
   /** Last window rendered, kept so paging/export know the visible range. */
   private rows: DisasmRow[] = []
-  private timer: ReturnType<typeof setInterval> | undefined
+  /** Drives refresh from the SSE hub; the listing re-anchors on stop signals. */
+  private readonly scheduler: RefreshScheduler
   /** Last snapshot posted, serialized — skip posting identical snapshots. */
   private lastPosted = ""
   private readonly disposables: vscode.Disposable[] = []
@@ -75,7 +80,10 @@ export class DisasmPanel implements vscode.WebviewViewProvider {
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly makeClient: () => EmulatorClient,
-  ) {}
+    triggers: RefreshTriggerSource,
+  ) {
+    this.scheduler = new RefreshScheduler(triggers, () => void this.tick(), { onFrame: false })
+  }
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view
@@ -126,14 +134,11 @@ export class DisasmPanel implements vscode.WebviewViewProvider {
   }
 
   private startPolling(): void {
-    if (this.timer) return
-    void this.tick()
-    this.timer = setInterval(() => void this.tick(), POLL_INTERVAL_MS)
+    this.scheduler.start()
   }
 
   private stopPolling(): void {
-    if (this.timer) clearInterval(this.timer)
-    this.timer = undefined
+    this.scheduler.stop()
   }
 
   /** Scroll the anchor by `delta` instructions, then refresh. */

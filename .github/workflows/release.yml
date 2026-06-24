@@ -1,10 +1,14 @@
 name: Release
 
-# Triggered by the tag that `changeset tag` produces, e.g. amspirit-basic@0.3.0.
+# Triggered by the per-package tags that `changeset tag` produces, e.g.
+# amspirit-basic@0.3.0 or amspirit-z80@0.1.0. The package to ship is derived
+# from the tag name (the part before `@`); pushing both tags fans out into one
+# run per tag.
 on:
   push:
     tags:
       - "amspirit-basic@*"
+      - "amspirit-z80@*"
 
 permissions:
   contents: write
@@ -12,9 +16,6 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/amspirit-basic
     steps:
       - uses: actions/checkout@v4
 
@@ -25,14 +26,16 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      - name: Resolve package from tag
+        id: pkg
+        run: echo "name=${GITHUB_REF_NAME%@*}" >> "$GITHUB_OUTPUT"
+
       - name: Install dependencies
-        working-directory: .
         run: pnpm install --frozen-lockfile
 
       # Same quality gate as CI before anything ships. Build first so
       # @amspirit/shared's dist exists for typecheck/test/knip.
       - name: Quality gate
-        working-directory: .
         run: |
           pnpm build
           pnpm check
@@ -42,17 +45,17 @@ jobs:
           pnpm audit:prod
 
       - name: Package VSIX
-        working-directory: packages/amspirit-basic
+        working-directory: packages/${{ steps.pkg.outputs.name }}
         run: pnpm run package
 
       - name: Publish to VS Marketplace
-        working-directory: packages/amspirit-basic
+        working-directory: packages/${{ steps.pkg.outputs.name }}
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: pnpm run publish:vsce "$(ls *.vsix)"
 
       - name: Publish to Open VSX
-        working-directory: packages/amspirit-basic
+        working-directory: packages/${{ steps.pkg.outputs.name }}
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
         run: pnpm run publish:ovsx "$(ls *.vsix)"
@@ -60,4 +63,4 @@ jobs:
       - name: Attach VSIX to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: packages/amspirit-basic/*.vsix
+          files: packages/${{ steps.pkg.outputs.name }}/*.vsix

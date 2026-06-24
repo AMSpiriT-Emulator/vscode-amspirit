@@ -1,12 +1,10 @@
 import { randomBytes } from "node:crypto"
-import type { EmulatorClient } from "@amspirit/shared"
+import { type EmulatorClient, RefreshScheduler, type RefreshTriggerSource } from "@amspirit/shared"
 import * as vscode from "vscode"
 import type { ExtToWebview } from "../../webview/messaging.js"
 import { readResolvedBasicVars } from "../debug/basic-vars-reader.js"
 import { type BasicVarsView, buildBasicVarsView } from "../debug/basic-vars-view.js"
 import { buildWebviewHtml } from "./html.js"
-
-const POLL_INTERVAL_MS = 500
 
 /**
  * Singleton webview panel showing the live Locomotive BASIC variables (React),
@@ -18,7 +16,9 @@ const POLL_INTERVAL_MS = 500
 export class DebuggerPanel {
   private static current: DebuggerPanel | undefined
 
-  private timer: ReturnType<typeof setInterval> | undefined
+  /** Drives refresh from the SSE hub; variables are coherent only while paused,
+   * so it refreshes on stop signals (not per-frame). */
+  private readonly scheduler: RefreshScheduler
   /** Last snapshot posted, serialized — skip posting identical snapshots. */
   private lastPosted = ""
   private readonly disposables: vscode.Disposable[] = []
@@ -27,7 +27,9 @@ export class DebuggerPanel {
     private readonly panel: vscode.WebviewPanel,
     private readonly extensionUri: vscode.Uri,
     private readonly makeClient: () => EmulatorClient,
+    triggers: RefreshTriggerSource,
   ) {
+    this.scheduler = new RefreshScheduler(triggers, () => void this.tick(), { onFrame: false })
     this.panel.webview.html = this.render()
     this.disposables.push(
       this.panel.webview.onDidReceiveMessage((m: { type?: string }) => {
@@ -42,7 +44,11 @@ export class DebuggerPanel {
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables)
   }
 
-  static show(extensionUri: vscode.Uri, makeClient: () => EmulatorClient): void {
+  static show(
+    extensionUri: vscode.Uri,
+    makeClient: () => EmulatorClient,
+    triggers: RefreshTriggerSource,
+  ): void {
     if (DebuggerPanel.current) {
       DebuggerPanel.current.panel.reveal()
       return
@@ -57,7 +63,7 @@ export class DebuggerPanel {
         localResourceRoots: [vscode.Uri.joinPath(extensionUri, "out", "webview")],
       },
     )
-    DebuggerPanel.current = new DebuggerPanel(panel, extensionUri, makeClient)
+    DebuggerPanel.current = new DebuggerPanel(panel, extensionUri, makeClient, triggers)
   }
 
   private render(): string {
@@ -75,23 +81,21 @@ export class DebuggerPanel {
   }
 
   private startPolling(): void {
-    if (this.timer) return
-    const tick = async (): Promise<void> => {
-      const client = this.makeClient()
-      // The variable zone is only coherent while paused; a cheap ping gate
-      // avoids the multi-request read (state + chains + per-string) while the
-      // program runs free.
-      const { paused } = await client.pingState()
-      const variables = paused ? await this.readVariables(client) : null
-      this.post({ type: "snapshot", snapshot: { variables } })
-    }
-    void tick()
-    this.timer = setInterval(() => void tick(), POLL_INTERVAL_MS)
+    this.scheduler.start()
   }
 
   private stopPolling(): void {
-    if (this.timer) clearInterval(this.timer)
-    this.timer = undefined
+    this.scheduler.stop()
+  }
+
+  private async tick(): Promise<void> {
+    const client = this.makeClient()
+    // The variable zone is only coherent while paused; a cheap ping gate avoids
+    // the multi-request read (state + chains + per-string) while the program
+    // runs free.
+    const { paused } = await client.pingState()
+    const variables = paused ? await this.readVariables(client) : null
+    this.post({ type: "snapshot", snapshot: { variables } })
   }
 
   /** Post a snapshot, skipping the round-trip when it's identical to the last. */

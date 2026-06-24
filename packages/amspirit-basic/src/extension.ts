@@ -2,9 +2,10 @@ import { basename } from "node:path"
 import {
   type ConnectionState,
   EmulatorClient,
+  EmulatorEventHub,
+  EmulatorEvents,
   EmulatorLauncher,
   errorMessage,
-  PingService,
   readSettingsWithWarnings,
   spawnEmulator,
 } from "@amspirit/shared"
@@ -42,16 +43,21 @@ export function activate(context: vscode.ExtensionContext): void {
   const launcher = new EmulatorLauncher((path, port, args) => spawnEmulator(path, port, args))
   context.subscriptions.push({ dispose: () => launcher.dispose() })
 
+  // One shared SSE stream drives connection state (replacing the ping poll) and
+  // the Debugger panel's refresh (stop signals). It follows the debug session's
+  // emulator when one overrides the port (see `currentTarget`).
   let connectionState: ConnectionState = "disconnected"
-  const pinger = new PingService(
-    () => client.ping(),
-    (s) => {
-      connectionState = s
-      presenter.setState(s)
-    },
+  const hub = new EmulatorEventHub(
+    (host, port) => new EmulatorEvents({ host, port, topics: ["basic_bp", "pause"] }),
+    client.host,
+    client.port,
   )
-  pinger.start()
-  context.subscriptions.push({ dispose: () => pinger.stop() })
+  hub.onConnectionChange((s) => {
+    connectionState = s
+    presenter.setState(s)
+  })
+  hub.start()
+  context.subscriptions.push({ dispose: () => hub.dispose() })
 
   function syncActiveBasicFile(): void {
     const editor = vscode.window.activeTextEditor
@@ -69,7 +75,25 @@ export function activate(context: vscode.ExtensionContext): void {
     settings = loadSettings()
     client = new EmulatorClient({ port: settings.webPort })
     presenter.setPort(client.port)
+    hub.retarget(client.host, client.port)
   }
+
+  // Follow whichever emulator the active BASIC debug session is attached to (its
+  // launch config may override host/port); fall back to the configured client.
+  function currentTarget(): { host: string; port: number } {
+    const cfg = vscode.debug.activeDebugSession?.configuration as
+      | { type?: string; host?: string; port?: number }
+      | undefined
+    if (cfg?.type !== "amspirit-basic") return { host: client.host, port: client.port }
+    return { host: cfg.host ?? client.host, port: cfg.port ?? client.port }
+  }
+
+  context.subscriptions.push(
+    vscode.debug.onDidChangeActiveDebugSession(() => {
+      const { host, port } = currentTarget()
+      hub.retarget(host, port)
+    }),
+  )
 
   async function cmdLaunch(): Promise<void> {
     settings = loadSettings()
@@ -114,8 +138,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   async function cmdConnect(): Promise<void> {
     rebuildClient()
-    const s = await pinger.pingNow()
-    if (s === "connected") {
+    if (await client.ping()) {
       vscode.window.showInformationMessage(`AMSpiriT: connected on port ${client.port}.`)
       return
     }
@@ -213,6 +236,7 @@ export function activate(context: vscode.ExtensionContext): void {
       DebuggerPanel.show(
         context.extensionUri,
         () => new EmulatorClient({ port: loadSettings().webPort }),
+        hub,
       ),
     ),
   )
@@ -220,7 +244,15 @@ export function activate(context: vscode.ExtensionContext): void {
   const debugFactory: vscode.DebugAdapterDescriptorFactory = {
     createDebugAdapterDescriptor() {
       return new vscode.DebugAdapterInlineImplementation(
-        new BasicDebugSession((host, port) => new EmulatorClient({ host, port })),
+        // A BASIC step re-freezes the emulator without an SSE event, so the
+        // session pulses the hub on every stop — the authoritative moment the
+        // Debugger panel's variable zone is final.
+        new BasicDebugSession(
+          (host, port) => new EmulatorClient({ host, port }),
+          undefined,
+          undefined,
+          () => hub.pulseStop(),
+        ),
       )
     },
   }
@@ -251,15 +283,14 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!e.affectsConfiguration("amspirit")) return
       if (e.affectsConfiguration("amspirit.webPort")) {
         rebuildClient()
-        void pinger.pingNow()
       } else {
         settings = loadSettings()
       }
     }),
   )
 
-  void pinger.pingNow().then((s) => {
-    if (s === "disconnected" && settings.autoLaunch) {
+  void client.ping().then((ok) => {
+    if (!ok && settings.autoLaunch) {
       void cmdLaunch()
     }
   })

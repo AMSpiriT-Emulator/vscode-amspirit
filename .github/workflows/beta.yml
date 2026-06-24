@@ -38,19 +38,32 @@ jobs:
           pnpm knip
           pnpm audit:prod
 
-      - name: Package VSIX
+      - name: Package amspirit-basic VSIX
         working-directory: packages/amspirit-basic
         run: pnpm run package
 
-      - name: Resolve pre-release tag
-        id: meta
-        run: echo "tag=v$(node -p "require('./packages/amspirit-basic/package.json').version")-beta.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+      - name: Package amspirit-z80 VSIX
+        working-directory: packages/amspirit-z80
+        run: pnpm run package
 
-      - name: Publish pre-release with VSIX
+      - name: Resolve pre-release tag + versions
+        id: meta
+        run: |
+          echo "tag=beta-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "basic=$(node -p "require('./packages/amspirit-basic/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "z80=$(node -p "require('./packages/amspirit-z80/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish pre-release with both VSIX
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.tag }}
+          name: Beta ${{ steps.meta.outputs.tag }}
           prerelease: true
-          body: ${{ inputs.notes }}
-          files: packages/amspirit-basic/*.vsix
+          body: |
+            ${{ inputs.notes }}
+
+            - amspirit-basic ${{ steps.meta.outputs.basic }}
+            - amspirit-z80 ${{ steps.meta.outputs.z80 }}
+          files: |
+            packages/amspirit-basic/*.vsix
+            packages/amspirit-z80/*.vsix

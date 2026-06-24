@@ -1,4 +1,4 @@
-import type { EmuState, FdcState, GateArrayState, MemmapState } from "@amspirit/shared"
+import type { CrtcState, EmuState, FdcState, GateArrayState, MemmapState } from "@amspirit/shared"
 import type { RegisterScope } from "../registers-view.js"
 
 // Uppercase hex. `#NN` marks a value as hex (the disassembler's sigil) so it
@@ -19,16 +19,6 @@ const CRTC_KIND: Record<number, string> = {
   2: "Type 2 (MC6845)",
   3: "Type 3 (pre-ASIC / Plus)",
   4: "Type 4 (ASIC / GX4000)",
-}
-
-/** CPC model index → label (`/api/state.emu.cpc_model`). */
-const CPC_MODEL: Record<number, string> = {
-  0: "CPC 464",
-  1: "CPC 664",
-  2: "CPC 6128",
-  4: "6128 Plus",
-  5: "464 Plus",
-  6: "GX4000",
 }
 
 /** How many PENs the Gate Array actually displays in each video mode. */
@@ -150,35 +140,60 @@ export function buildFdcScopes(fdc: FdcState): RegisterScope[] {
   ]
 }
 
+/** 6845 register file R0–R13: short label + full description (hint). */
+const CRTC_REGS: ReadonlyArray<{ label: string; hint: string }> = [
+  { label: "R0 HTotal", hint: "Horizontal Total (chars/line − 1)" },
+  { label: "R1 HDisp", hint: "Horizontal Displayed" },
+  { label: "R2 HSync", hint: "Horizontal Sync Position" },
+  { label: "R3 SyncW", hint: "Sync Width (lo nibble HSYNC, hi nibble VSYNC)" },
+  { label: "R4 VTotal", hint: "Vertical Total (char rows − 1)" },
+  { label: "R5 VAdjust", hint: "Vertical Total Adjust (raster lines)" },
+  { label: "R6 VDisp", hint: "Vertical Displayed" },
+  { label: "R7 VSync", hint: "Vertical Sync Position" },
+  { label: "R8 Interlace", hint: "Interlace and Skew" },
+  { label: "R9 MaxScan", hint: "Maximum Raster Address (scan lines/row − 1)" },
+  { label: "R10 CurStart", hint: "Cursor Start Raster" },
+  { label: "R11 CurEnd", hint: "Cursor End Raster" },
+  { label: "R12 StartH", hint: "Screen Start Address High" },
+  { label: "R13 StartL", hint: "Screen Start Address Low" },
+]
+
 /**
- * CRTC (6845) view scopes. The HTTP API exposes only the CRTC *type* (the
- * register file R0–R17 is not surfaced today), so this stays thin: the variant
- * label, the machine context from `emu` (model, frame, FPS), and the HSYNC/VSYNC
- * chips it drives (from the Gate Array snapshot). Pure.
+ * CRTC (6845) view scopes from `/api/state.crtc` (+ the chip type from `emu`):
+ * the chip variant, selected register and raster line; the register file R0–R13
+ * with named decimal values; and the CRTC VSYNC as a flag chip. Pure.
+ *
+ * Strictly CRTC data only — machine context (model/frame/FPS) belongs to other
+ * views, and HSYNC is left out because the core doesn't expose it (R14–R17, the
+ * internal counters, HSYNC and VMA are in `Core_Info_Reg_CRTC` but not
+ * serialised yet). No derived "screen address" is shown: R12/R13 are the raw
+ * 6845 MA start, not a CPU/RAM address (the Gate Array remaps the 16 KB page
+ * and offset), so reporting it as an address would be misleading.
  */
-export function buildCrtcScopes(emu: EmuState, ga: GateArrayState): RegisterScope[] {
+export function buildCrtcScopes(crtc: CrtcState, emu: EmuState): RegisterScope[] {
   return [
     {
       name: "CRTC",
       variables: [
         { name: "Type", value: `${emu.crtcType}` },
         { name: "Chip", value: CRTC_KIND[emu.crtcType] ?? "Unknown" },
+        { name: "Selected", value: `R${crtc.selectedReg}`, hint: "Last write to &BC00" },
+        { name: "Rasterline", value: `${crtc.rasterline}`, hint: "Absolute raster line in frame" },
       ],
+    },
+    {
+      name: "Registers",
+      variables: crtc.regs.map((v, i) => ({
+        name: CRTC_REGS[i]?.label ?? `R${i}`,
+        value: `${v}`,
+        hint: CRTC_REGS[i]?.hint ?? "",
+      })),
     },
     {
       name: "Sync",
       kind: "flags",
       variables: [
-        { name: "HSYNC", value: ga.hbl ? "1" : "0", hint: "Horizontal sync / blanking" },
-        { name: "VSYNC", value: ga.vbl ? "1" : "0", hint: "Vertical sync / blanking" },
-      ],
-    },
-    {
-      name: "Machine",
-      variables: [
-        { name: "Model", value: CPC_MODEL[emu.cpcModel] ?? `#${emu.cpcModel}` },
-        { name: "Frame", value: `${emu.frame}` },
-        { name: "FPS", value: emu.fps.toFixed(1) },
+        { name: "VSYNC", value: crtc.vsync ? "1" : "0", hint: "CRTC vertical sync output" },
       ],
     },
   ]

@@ -4,7 +4,9 @@ import {
   type DisasmInstruction,
   decodeInstruction,
   type EmulatorClient,
+  EmulatorEvents,
   StopPoller,
+  StopWatcher,
 } from "@amspirit/shared"
 import {
   ContinuedEvent,
@@ -82,18 +84,21 @@ class Gate {
 /**
  * Debug Adapter for Z80 assembler programs running in AMSpiriT. Thin imperative
  * shell: the source<->address mapping (`SymbolMap`), register formatting
- * (`buildRegisterScopes`), step-target maths (`step-targets`) and stop polling
- * (`StopPoller`) all live in pure, tested modules. The emulator has no push
- * channel, so resume/run-to are followed by a paused-state poll.
+ * (`buildRegisterScopes`), step-target maths (`step-targets`) and stop detection
+ * (`StopWatcher`) all live in pure, tested modules. Resume/run-to are watched via
+ * the emulator's SSE push channel (`EmulatorEvents`), with paused-state polling
+ * as the fallback when the stream is unavailable.
  *
  * Supports `attach` (to an already-running program) and `launch` (load the
  * assembled binary into RAM, arm breakpoints, then run it).
  */
 export class Z80DebugSession extends LoggingDebugSession {
   private client: EmulatorClient | undefined
+  /** SSE push channel; stop events let the watcher react without polling. */
+  private events: EmulatorEvents | undefined
   private symbols: SymbolMap | undefined
   private programPath: string | undefined
-  private poller: StopPoller | undefined
+  private poller: StopPoller | StopWatcher | undefined
   /** Bumped by every monitor start; the launch-entry loop stops if superseded. */
   private monitorRun = 0
   private disposed = false
@@ -121,10 +126,26 @@ export class Z80DebugSession extends LoggingDebugSession {
     private readonly readFile: FileReader = (p) => readFileSync(p, "utf-8"),
     private readonly fileExists: (p: string) => boolean = existsSync,
     private readonly readBinary: BinaryReader = (p) => Array.from(readFileSync(p)),
+    private readonly createEvents: (host: string, port: number) => EmulatorEvents | undefined = (
+      host,
+      port,
+    ) => new EmulatorEvents({ host, port, topics: ["z80_bp", "pause"] }),
+    /**
+     * Notified whenever the session reports a stop. A single-instruction step
+     * re-freezes the emulator without an SSE event, so this is the authoritative
+     * signal the webview views refresh on (their `/api/z80` etc. are final here).
+     */
+    private readonly onStopped: () => void = () => {},
   ) {
     super("amspirit-z80-debug.log")
     this.setDebuggerLinesStartAt1(true)
     this.setDebuggerColumnsStartAt1(true)
+  }
+
+  /** Emit a DAP `stopped` event and notify {@link onStopped} so the views refresh. */
+  private sendStopped(reason: string): void {
+    this.sendEvent(new StoppedEvent(reason, THREAD_ID))
+    this.onStopped()
   }
 
   protected override initializeRequest(response: DebugProtocol.InitializeResponse): void {
@@ -143,6 +164,7 @@ export class Z80DebugSession extends LoggingDebugSession {
     const host = args.host ?? "127.0.0.1"
     const port = args.port ?? 8765
     this.client = this.createClient(host, port)
+    this.openEvents(host, port)
     this.stopOnEntry = args.stopOnEntry === true
     if (args.program) this.programPath = args.program
     this.loadSymbols(args)
@@ -153,7 +175,7 @@ export class Z80DebugSession extends LoggingDebugSession {
       } catch {
         // best effort
       }
-      this.sendEvent(new StoppedEvent("entry", THREAD_ID))
+      this.sendStopped("entry")
     } else {
       // The program is (or will be) running; arm a stop monitor at
       // configurationDone so a breakpoint the emulator hits on its own surfaces.
@@ -170,6 +192,7 @@ export class Z80DebugSession extends LoggingDebugSession {
     const port = args.port ?? 8765
     const client = this.createClient(host, port)
     this.client = client
+    this.openEvents(host, port)
     this.stopOnEntry = args.stopOnEntry === true
     if (args.program) this.programPath = args.program
     this.loadSymbols(args)
@@ -394,7 +417,7 @@ export class Z80DebugSession extends LoggingDebugSession {
       }
     }
     this.sendResponse(response)
-    this.sendEvent(new StoppedEvent("pause", THREAD_ID))
+    this.sendStopped("pause")
   }
 
   protected override async stepInRequest(response: DebugProtocol.StepInResponse): Promise<void> {
@@ -506,7 +529,7 @@ export class Z80DebugSession extends LoggingDebugSession {
     void poller.start().then((result) => {
       if (result === "stopped" && this.poller === poller && !this.disposed) {
         this.consumeEntryBreakpoint()
-        this.sendEvent(new StoppedEvent("step", THREAD_ID))
+        this.sendStopped("step")
       }
     })
   }
@@ -535,7 +558,7 @@ export class Z80DebugSession extends LoggingDebugSession {
       }
       if (!this.disposed && this.monitorRun === run) {
         this.consumeEntryBreakpoint()
-        this.sendEvent(new StoppedEvent("step", THREAD_ID))
+        this.sendStopped("step")
       }
     }
     void loop()
@@ -598,6 +621,7 @@ export class Z80DebugSession extends LoggingDebugSession {
   ): Promise<void> {
     this.disposed = true
     this.poller?.cancel()
+    this.closeEvents()
     if (this.client) {
       try {
         await this.client.setZ80Breakpoints([])
@@ -613,6 +637,7 @@ export class Z80DebugSession extends LoggingDebugSession {
   ): Promise<void> {
     this.disposed = true
     this.poller?.cancel()
+    this.closeEvents()
     if (this.client) {
       try {
         await this.client.setZ80Breakpoints([])
@@ -636,20 +661,35 @@ export class Z80DebugSession extends LoggingDebugSession {
     this.monitorRun += 1
     const client = this.client
     if (!client) return
-    const poller = new StopPoller(async () => (await client.pingState()).paused)
-    this.poller = poller
+    const watcher = new StopWatcher({
+      probe: async () => (await client.pingState()).paused,
+      ...(this.events ? { events: this.events } : {}),
+    })
+    this.poller = watcher
     const begin = (): void => {
-      if (this.disposed || this.poller !== poller) return
-      void poller.start().then((result) => {
-        if (result === "stopped" && this.poller === poller && !this.disposed) {
+      if (this.disposed || this.poller !== watcher) return
+      void watcher.start().then((result) => {
+        if (result === "stopped" && this.poller === watcher && !this.disposed) {
           onStopped?.()
           this.consumeEntryBreakpoint()
-          this.sendEvent(new StoppedEvent(reason, THREAD_ID))
+          this.sendStopped(reason)
         }
       })
     }
     if (settleMs > 0) setTimeout(begin, settleMs)
     else begin()
+  }
+
+  /** Open the SSE push channel for stop events (best effort; polling is the fallback). */
+  private openEvents(host: string, port: number): void {
+    this.events = this.createEvents(host, port)
+    this.events?.start()
+  }
+
+  /** Tear down the SSE push channel. */
+  private closeEvents(): void {
+    this.events?.close()
+    this.events = undefined
   }
 }
 

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { basename } from "node:path"
-import { type EmulatorClient, StopPoller } from "@amspirit/shared"
+import { type EmulatorClient, EmulatorEvents, StopWatcher } from "@amspirit/shared"
 import {
   ContinuedEvent,
   InitializedEvent,
@@ -63,13 +63,16 @@ const defaultLineReader: LineReader = (path) => readFileSync(path, "utf-8").spli
 /**
  * Debug Adapter for BASIC programs running in AMSpiriT. Thin imperative shell:
  * the line<->address mapping, stop detection and DAP formatting live in pure,
- * tested modules (`BreakpointMapper`, `StopPoller`, `dapHandlers`). The emulator
- * has no push channel, so resume/run-to are followed by a paused-state poll.
+ * tested modules (`BreakpointMapper`, `StopWatcher`, `dapHandlers`). Resume/run-to
+ * are watched via the emulator's SSE push channel (`EmulatorEvents`), with
+ * paused-state polling as the fallback when the stream is unavailable.
  */
 export class BasicDebugSession extends LoggingDebugSession {
   private client: EmulatorClient | undefined
+  /** SSE push channel; stop events let the watcher react without polling. */
+  private events: EmulatorEvents | undefined
   private programPath: string | undefined
-  private poller: StopPoller | undefined
+  private poller: StopWatcher | undefined
   private disposed = false
   private stopOnEntry = false
   /** True once the program is running and a stop is expected (arms the monitor). */
@@ -92,10 +95,26 @@ export class BasicDebugSession extends LoggingDebugSession {
   constructor(
     private readonly createClient: (host: string, port: number) => EmulatorClient,
     private readonly readLines: LineReader = defaultLineReader,
+    private readonly createEvents: (host: string, port: number) => EmulatorEvents | undefined = (
+      host,
+      port,
+    ) => new EmulatorEvents({ host, port, topics: ["basic_bp", "pause"] }),
+    /**
+     * Notified whenever the session reports a stop. A BASIC step re-freezes the
+     * emulator without an SSE event, so this is the authoritative signal the
+     * Debugger panel refreshes on (the variable zone is final here).
+     */
+    private readonly onStopped: () => void = () => {},
   ) {
     super("amspirit-basic-debug.log")
     this.setDebuggerLinesStartAt1(true)
     this.setDebuggerColumnsStartAt1(true)
+  }
+
+  /** Emit a DAP `stopped` event and notify {@link onStopped} so the views refresh. */
+  private sendStopped(reason: string): void {
+    this.sendEvent(new StoppedEvent(reason, THREAD_ID))
+    this.onStopped()
   }
 
   protected override initializeRequest(response: DebugProtocol.InitializeResponse): void {
@@ -120,7 +139,7 @@ export class BasicDebugSession extends LoggingDebugSession {
       } catch {
         // best effort
       }
-      this.sendEvent(new StoppedEvent("entry", THREAD_ID))
+      this.sendStopped("entry")
     } else {
       this.running = true
     }
@@ -193,6 +212,8 @@ export class BasicDebugSession extends LoggingDebugSession {
     const host = args.host ?? "127.0.0.1"
     const port = args.port ?? 8765
     this.client = this.createClient(host, port)
+    this.events = this.createEvents(host, port)
+    this.events?.start()
     this.stopOnEntry = args.stopOnEntry === true
     if (args.program) this.programPath = args.program
   }
@@ -338,7 +359,7 @@ export class BasicDebugSession extends LoggingDebugSession {
       }
     }
     this.sendResponse(response)
-    this.sendEvent(new StoppedEvent("pause", THREAD_ID))
+    this.sendStopped("pause")
   }
 
   protected override async nextRequest(response: DebugProtocol.NextResponse): Promise<void> {
@@ -358,6 +379,7 @@ export class BasicDebugSession extends LoggingDebugSession {
   ): Promise<void> {
     this.disposed = true
     this.poller?.cancel()
+    this.closeEvents()
     if (this.client) {
       try {
         await this.client.setBasicBreakpoints([])
@@ -373,6 +395,7 @@ export class BasicDebugSession extends LoggingDebugSession {
   ): Promise<void> {
     this.disposed = true
     this.poller?.cancel()
+    this.closeEvents()
     if (this.client) {
       try {
         await this.client.setBasicBreakpoints([])
@@ -408,14 +431,17 @@ export class BasicDebugSession extends LoggingDebugSession {
     this.poller?.cancel()
     const client = this.client
     if (!client) return
-    const poller = new StopPoller(async () => (await client.pingState()).paused)
-    this.poller = poller
+    const watcher = new StopWatcher({
+      probe: async () => (await client.pingState()).paused,
+      ...(this.events ? { events: this.events } : {}),
+    })
+    this.poller = watcher
     const begin = (): void => {
-      if (this.disposed || this.poller !== poller) return
-      void poller.start().then((result) => {
-        if (result === "stopped" && this.poller === poller && !this.disposed) {
+      if (this.disposed || this.poller !== watcher) return
+      void watcher.start().then((result) => {
+        if (result === "stopped" && this.poller === watcher && !this.disposed) {
           this.consumeEntryBreakpoint()
-          this.sendEvent(new StoppedEvent(reason, THREAD_ID))
+          this.sendStopped(reason)
         }
       })
     }
@@ -433,5 +459,11 @@ export class BasicDebugSession extends LoggingDebugSession {
     this.firstStopReason = "breakpoint"
     const client = this.client
     if (client) void client.setBasicBreakpoints(this.userBpAddrs).catch(() => {})
+  }
+
+  /** Tear down the SSE push channel. */
+  private closeEvents(): void {
+    this.events?.close()
+    this.events = undefined
   }
 }
