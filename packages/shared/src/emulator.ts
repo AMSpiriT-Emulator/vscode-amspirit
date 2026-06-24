@@ -148,6 +148,18 @@ export interface FdcState {
   drive: number
 }
 
+/** CRTC (6845) snapshot from `/api/state` (`crtc`) and `GET /api/crtc`. */
+export interface CrtcState {
+  /** Hardware register file R0–R13 (14 entries). */
+  regs: number[]
+  /** Register currently selected (last write to `&BC00`). */
+  selectedReg: number
+  /** Absolute raster line within the frame. */
+  rasterline: number
+  /** Current VSYNC output level. */
+  vsync: boolean
+}
+
 /** Emulator status from `/api/state` (`emu`). */
 export interface EmuState {
   fps: number
@@ -165,6 +177,7 @@ export interface EmulatorState {
   ga: GateArrayState
   psg: PsgState
   fdc: FdcState
+  crtc: CrtcState
   emu: EmuState
 }
 
@@ -371,6 +384,12 @@ export class EmulatorClient {
         motor?: boolean
         drive?: number
       }
+      crtc?: {
+        regs?: number[]
+        selected_reg?: number
+        rasterline?: number
+        vsync?: boolean
+      }
       emu?: {
         fps?: number
         frame?: number
@@ -382,6 +401,7 @@ export class EmulatorClient {
     const ga = raw.ga ?? {}
     const psg = raw.psg ?? {}
     const fdc = raw.fdc ?? {}
+    const crtc = raw.crtc ?? {}
     const emu = raw.emu ?? {}
     return {
       z80: raw.z80 ?? ({} as Z80Registers),
@@ -413,6 +433,12 @@ export class EmulatorClient {
         sr2: fdc.sr2 ?? 0,
         motor: fdc.motor ?? false,
         drive: fdc.drive ?? 0,
+      },
+      crtc: {
+        regs: crtc.regs ?? [],
+        selectedReg: crtc.selected_reg ?? 0,
+        rasterline: crtc.rasterline ?? 0,
+        vsync: crtc.vsync ?? false,
       },
       emu: {
         fps: emu.fps ?? 0,

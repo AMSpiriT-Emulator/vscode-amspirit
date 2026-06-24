@@ -1,4 +1,4 @@
-import type { EmuState, FdcState, GateArrayState, MemmapState } from "@amspirit/shared"
+import type { CrtcState, EmuState, FdcState, GateArrayState, MemmapState } from "@amspirit/shared"
 import { describe, expect, it } from "vitest"
 import {
   buildCrtcScopes,
@@ -170,27 +170,41 @@ describe("buildFdcScopes", () => {
 
 describe("buildCrtcScopes", () => {
   const emu: EmuState = { fps: 50, frame: 1234, paused: false, cpcModel: 2, crtcType: 1 }
-  const scopes = buildCrtcScopes(emu, ga)
+  const crtc: CrtcState = {
+    regs: [63, 40, 46, 142, 38, 0, 25, 30, 0, 7, 0, 0, 48, 0],
+    selectedReg: 6,
+    rasterline: 87,
+    vsync: true,
+  }
+  const scopes = buildCrtcScopes(crtc, emu)
 
-  it("shows the CRTC type and a chip label", () => {
+  it("shows the CRTC type, chip label, selected register and raster line", () => {
     expect(value(scopes, "CRTC", "Type")).toBe("1")
     expect(value(scopes, "CRTC", "Chip")).toContain("UM6845R")
+    expect(value(scopes, "CRTC", "Selected")).toBe("R6")
+    expect(value(scopes, "CRTC", "Rasterline")).toBe("87")
   })
 
   it("falls back to Unknown for an out-of-range type", () => {
-    expect(value(buildCrtcScopes({ ...emu, crtcType: 9 }, ga), "CRTC", "Chip")).toBe("Unknown")
+    expect(value(buildCrtcScopes(crtc, { ...emu, crtcType: 9 }), "CRTC", "Chip")).toBe("Unknown")
   })
 
-  it("surfaces the HSYNC/VSYNC signals from the Gate Array", () => {
+  it("lists the register file R0–R13 with named decimal values", () => {
+    const regs = scope(scopes, "Registers")
+    expect(regs.variables).toHaveLength(14)
+    expect(regs.variables[0]?.name).toBe("R0 HTotal")
+    expect(value(scopes, "Registers", "R0 HTotal")).toBe("63")
+    expect(value(scopes, "Registers", "R3 SyncW")).toBe("142")
+    expect(value(scopes, "Registers", "R9 MaxScan")).toBe("7")
+  })
+
+  it("surfaces the CRTC VSYNC as a flag chip", () => {
     expect(scope(scopes, "Sync").kind).toBe("flags")
-    expect(value(scopes, "Sync", "HSYNC")).toBe("0")
-    expect(value(scopes, "Sync", "VSYNC")).toBe("1")
+    expect(value(scopes, "Sync", "VSYNC")).toBe("1") // from crtc.vsync
   })
 
-  it("adds the machine context (model, frame, FPS)", () => {
-    expect(value(scopes, "Machine", "Model")).toBe("CPC 6128")
-    expect(value(scopes, "Machine", "Frame")).toBe("1234")
-    expect(value(scopes, "Machine", "FPS")).toBe("50.0")
-    expect(value(buildCrtcScopes({ ...emu, cpcModel: 99 }, ga), "Machine", "Model")).toBe("#99")
+  it("tolerates an empty register file (no /api/state crtc yet)", () => {
+    const bare = buildCrtcScopes({ regs: [], selectedReg: 0, rasterline: 0, vsync: false }, emu)
+    expect(scope(bare, "Registers").variables).toHaveLength(0)
   })
 })

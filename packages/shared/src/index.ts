@@ -5,6 +5,7 @@ export type {
   BasicListing,
   BasicState,
   BasicStatement,
+  CrtcState,
   EmulatorClientOptions,
   EmulatorConfig,
   EmulatorState,

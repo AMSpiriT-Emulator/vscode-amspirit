@@ -6,7 +6,21 @@
 
 ## Where we are
 
-- **Latest (2026-06-23, branch `feat/sse-integration`, off `main` @ `d5c1da1`,
+- **Latest (2026-06-24, branch `feat/sse-integration`, UNCOMMITTED): CRTC view —
+  full 6845 register file.** The emulator's `/api/state.crtc` now carries `regs`
+  (R0–R13), `selected_reg`, `rasterline`, `vsync` (core `build_crtc_json`; doc
+  verified up to date — R14–R17 / counters / HSYNC / VMA still commented out).
+  Shared gained a typed `CrtcState` + `getState()` mapping (TDD); `buildCrtcScopes`
+  went from a type-only placeholder to the real thing: **CRTC** (Type/Chip/Selected/
+  Rasterline), **Registers** (R0–R13 named decimal), **Sync** (VSYNC chip). After a
+  review pass the view was kept **strictly CRTC** — dropped the Machine context
+  (model/frame/FPS, removed dead `CPC_MODEL`), the GA-proxy HSYNC chip (removed the
+  `ga` param), and the whole Decoded scope (its `screenBase` was the raw 6845 MA
+  start, not a CPU address → misleading). Gate green (**shared 160 / basic 78 /
+  z80 218**). Changeset `crtc-register-file.md` (`@amspirit/shared` + `amspirit-z80`,
+  `minor`). **Not live-validated.** See `doc/sessions/2026-06-24-crtc-register-file.md`.
+  **Next: push `feat/sse-integration` + PR (SSE + CRTC together), then live-validate.**
+- **Prior (2026-06-23, branch `feat/sse-integration`, off `main` @ `d5c1da1`,
   commit `1a2a8e1`, NOT pushed): SSE replaces polling for stop detection + live
   views.** New shared layer (all TDD): `SseParser`, `EmulatorEvents` (typed
   `/api/events` client, auto-reconnect), `EmulatorEventHub` (one shared
@@ -209,7 +223,7 @@
 | Memory watchpoints (read/write) | ⬜ | **needs an emulator data-breakpoint endpoint** (none today) — costliest |
 | Peripheral-chip views (Gate Array / PSG / FDC / CRTC) | ✅ | 2026-06-21, branch `feat/amspirit-z80-hardware-views`. 4 docked webviews polling `/api/state` (+`/api/memmap` for GA); shared `getState()`/`getMemmap()` typed (TDD); pure `hardware-views.ts` formatters (TDD) + generic `HardwarePanel`; scope table gained `kind:"flags"` so bit-groups render as chips. z80 201 tests, gate green. Changeset `minor`. Not yet live-validated |
 | Peripheral views — PPI (8255) | ⬜ | **blocked**: `/api/state` exposes no PPI data (core `Core_PPI_Read_Internal_Value` exists but isn't serialized) — needs an `amspirit-lite` API extension |
-| Peripheral views — full CRTC register file (R0–R17) | ⬜ | only `crtc_type` is exposed; the 6845 register file is in the core (`Core_CRTC_Read_Internal_Value`) but not in `/api/state` — same unblock as PPI |
+| Peripheral views — full CRTC register file (R0–R13) | ✅ | 2026-06-23, branch `feat/sse-integration`. `/api/state.crtc` now carries `regs` R0–R13 + `selected_reg`/`rasterline`/`vsync` (core `build_crtc_json`; R14–R17 + counters/HSYNC/VMA still commented out). Shared `CrtcState` + `getState()` mapping (TDD); `buildCrtcScopes(crtc,emu)` shows the register file (named decimal), chip variant, selected reg, raster line and real CRTC VSYNC. Kept strictly CRTC — dropped machine context (model/frame/FPS) and the GA HSYNC proxy; no derived "screen address" (R12/R13 are the raw 6845 MA start, not a CPU address). Gate green (shared 160 / z80 218). Changeset `crtc-register-file.md` (`minor` shared+z80). Not yet live-validated |
 
 ## Guardrail baseline
 

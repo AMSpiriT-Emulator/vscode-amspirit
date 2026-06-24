@@ -170,7 +170,7 @@ export function activate(context: vscode.ExtensionContext): void {
     new HardwarePanel(context.extensionUri, debugAwareClient, hub, {
       viewId: "amspirit.z80.crtc",
       dataView: "crtc",
-      build: (s) => scopePayload(buildCrtcScopes(s.emu, s.ga)),
+      build: (s) => scopePayload(buildCrtcScopes(s.crtc, s.emu)),
       emptyPayload: emptyScopes,
     }),
   ]

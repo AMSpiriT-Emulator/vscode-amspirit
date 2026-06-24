@@ -499,6 +499,12 @@ describe("EmulatorClient", () => {
           env_shape: 8,
         },
         fdc: { msr: 128, sr0: 1, sr1: 2, sr2: 3, motor: true, drive: 1 },
+        crtc: {
+          regs: [63, 40, 46, 142, 38, 0, 25, 30, 0, 7, 0, 0, 48, 0],
+          selected_reg: 6,
+          rasterline: 87,
+          vsync: true,
+        },
         emu: { fps: 50, frame: 99, paused: true, cpc_model: 2, crtc_type: 1 },
       })
       const client = new EmulatorClient({ port: fake.port })
@@ -527,6 +533,12 @@ describe("EmulatorClient", () => {
         envShape: 8,
       })
       expect(s.fdc).toEqual({ msr: 128, sr0: 1, sr1: 2, sr2: 3, motor: true, drive: 1 })
+      expect(s.crtc).toEqual({
+        regs: [63, 40, 46, 142, 38, 0, 25, 30, 0, 7, 0, 0, 48, 0],
+        selectedReg: 6,
+        rasterline: 87,
+        vsync: true,
+      })
       expect(s.emu).toEqual({ fps: 50, frame: 99, paused: true, cpcModel: 2, crtcType: 1 })
     })
 
@@ -538,6 +550,7 @@ describe("EmulatorClient", () => {
       expect(s.ga.mode).toBe(0)
       expect(s.psg.mixer).toBe(0)
       expect(s.fdc.motor).toBe(false)
+      expect(s.crtc).toEqual({ regs: [], selectedReg: 0, rasterline: 0, vsync: false })
       expect(s.emu.crtcType).toBe(0)
     })
   })
