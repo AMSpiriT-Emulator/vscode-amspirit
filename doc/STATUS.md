@@ -6,8 +6,22 @@
 
 ## Where we are
 
-- **Latest (2026-07-04, branch `docs/lite-parity-plan`, UNCOMMITTED): lite parity
-  Phase 0 — `EmulatorClient` client foundations landed (TDD).** Added the missing
+- **Latest (2026-07-04, branch `docs/lite-parity-plan`, commit `67626c3`): lite
+  parity Phase 1.1 — instruction-history view landed (TDD).** New
+  `amspirit.z80.history` docked webview listing the last executed Z80
+  instructions **newest-first**, each decoded from `/api/history`'s 4-byte fetch
+  window into `address · bytes · mnemonic` via the shared disassembler, current
+  PC (row 0) highlighted. Pure `history-view-model` (`buildHistoryRows`, 5
+  tests) + RTL `HistoryList` (3 tests) + dedicated `HistoryPanel` (mirrors
+  `HardwarePanel`'s lifecycle, reads one endpoint, refreshes off the shared
+  SSE-fed `RefreshScheduler`). Also exported `Z80HistoryEntry` from the shared
+  barrel (Phase 0 left it internal). Gate green (**z80 226 tests**, 98.77%
+  lines). Changeset `amspirit-z80-history-view.md` (`amspirit-z80`, `minor`).
+  **Not live-validated.** See
+  `doc/sessions/2026-07-04-lite-parity-phase1-history-view.md`. **Next:
+  live-validate, then Phase 1.2 — disassembler zone analysis.**
+- **Prior (2026-07-04, branch `docs/lite-parity-plan`, commit `078c749`): lite
+  parity Phase 0 — `EmulatorClient` client foundations landed (TDD).** Added the missing
   wrappers that unblock the rest of the plan: `getHistory()` (`/api/history`,
   typed `Z80HistoryEntry[]`), `execAt()` (`/api/exec`), the scripting trio
   `runScript`/`getScriptState`/`abortScript` (`/api/script`, new `ScriptState`),
@@ -248,7 +262,7 @@
 | Peripheral-chip views (Gate Array / PSG / FDC / CRTC) | ✅ | 2026-06-21, branch `feat/amspirit-z80-hardware-views`. 4 docked webviews polling `/api/state` (+`/api/memmap` for GA); shared `getState()`/`getMemmap()` typed (TDD); pure `hardware-views.ts` formatters (TDD) + generic `HardwarePanel`; scope table gained `kind:"flags"` so bit-groups render as chips. z80 201 tests, gate green. Changeset `minor`. Not yet live-validated |
 | Peripheral views — PPI (8255) | ⬜ | **blocked**: `/api/state` exposes no PPI data (core `Core_PPI_Read_Internal_Value` exists but isn't serialized) — needs an `amspirit-lite` API extension |
 | **Lite parity — Phase 0 client foundations** | ✅ | 2026-07-04, branch `docs/lite-parity-plan`. `EmulatorClient`: `getHistory()`/`execAt()`/`runScript`/`getScriptState`/`abortScript`/`setConfig()`/`keytype()`/`keypress()`; new types `Z80HistoryEntry`/`ScriptState`/`EmulatorConfigUpdate`; private `send()` shared by `post`/`del`. TDD (shared 174). Changeset `minor`. Not live-validated |
-| **Lite parity — instruction history (`/api/history`)** | 🟡 | Phase 1. Client `getHistory()` **done** (Phase 0); the `amspirit.z80.history` view still to build. See `doc/lite-parity-plan.md` |
+| **Lite parity — instruction history (`/api/history`)** | ✅ | Phase 1.1, commit `67626c3`. `amspirit.z80.history` docked webview: last-executed Z80 instructions newest-first, decoded to `addr · bytes · mnemonic` (shared disassembler), current PC highlighted; refreshed off the SSE-fed `RefreshScheduler`. Pure `history-view-model` (5 tests) + RTL `HistoryList` (3) + `HistoryPanel`. Exported `Z80HistoryEntry` from the shared barrel. z80 226 tests. Changeset `minor`. Not live-validated |
 | **Lite parity — disassembler zone analysis** | ⬜ | Phase 1. "Analyze from PC" / "Reset zones" over existing codemap coverage; must be **mapping‑aware** (not flat 64 KB) |
 | **Lite parity — RAM search (Find/Next)** | ⬜ | Phase 1. Pure search over `readRam`; search correct bank / `view=cpu` space |
 | **Lite parity — memmap bar + banking awareness** | ⬜ | Phase 0/1. Render ROM/RAM per region + `ram_mode`/`ram_page` in Memory/Disasm views (`getMemmap()` today feeds only Gate Array) |
