@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client"
 import { App } from "./app.js"
 import { DisasmApp } from "./disasm-app.js"
 import { HardwareApp } from "./hardware-app.js"
+import { HistoryApp } from "./history-app.js"
 import { RegistersApp } from "./registers-app.js"
 import "./styles.css"
 
@@ -16,6 +17,7 @@ const VIEWS: Record<string, () => JSX.Element> = {
   psg: () => <HardwareApp />,
   fdc: () => <HardwareApp />,
   crtc: () => <HardwareApp />,
+  history: () => <HistoryApp />,
 }
 
 const root = document.getElementById("root")

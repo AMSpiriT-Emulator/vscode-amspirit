@@ -83,6 +83,11 @@
         },
         {
           "type": "webview",
+          "id": "amspirit.z80.history",
+          "name": "History"
+        },
+        {
+          "type": "webview",
           "id": "amspirit.z80.gateArray",
           "name": "Gate Array"
         },

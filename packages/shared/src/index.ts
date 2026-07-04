@@ -16,6 +16,7 @@ export type {
   MemmapState,
   PingState,
   PsgState,
+  Z80HistoryEntry,
   Z80Registers,
 } from "./emulator.js"
 export { DIRECT_MODE_LINE, EmulatorClient, spawnEmulator } from "./emulator.js"
