@@ -6,7 +6,20 @@
 
 ## Where we are
 
-- **Latest (2026-07-04): lite debug‑webview parity — analysis & catch‑up plan.**
+- **Latest (2026-07-04, branch `docs/lite-parity-plan`, UNCOMMITTED): lite parity
+  Phase 0 — `EmulatorClient` client foundations landed (TDD).** Added the missing
+  wrappers that unblock the rest of the plan: `getHistory()` (`/api/history`,
+  typed `Z80HistoryEntry[]`), `execAt()` (`/api/exec`), the scripting trio
+  `runScript`/`getScriptState`/`abortScript` (`/api/script`, new `ScriptState`),
+  `setConfig()` (`/api/config`, new `EmulatorConfigUpdate` — model/CRTC/ROM‑lang/
+  soft+hard reset), and `keytype()`/`keypress()`. Extracted a private `send()` so
+  `post`/new `del()` share transport (existing endpoints unchanged). RAM search is
+  *not* here — the plan defers it to Phase 1 as a pure `readRam` helper. Gate green
+  (**shared 174 tests**, 97.35% lines). Changeset `shared-lite-parity-phase0.md`
+  (`@amspirit/shared`, `minor`). **Not live‑validated** (pure client, no UI yet).
+  See `doc/sessions/2026-07-04-lite-parity-phase0.md`. **Next: Phase 1.1 — the
+  `amspirit.z80.history` view fed by `getHistory()`.**
+- **Prior (2026-07-04): lite debug‑webview parity — analysis & catch‑up plan.**
   amspirit‑lite's embedded debug UI grew to **10 tabs / ~40 endpoints**; we mapped
   the gap vs our 3 packages and wrote a phased plan in
   **`doc/lite-parity-plan.md`** (scope chosen: **Debug + scripting**; audio / disk
@@ -234,7 +247,8 @@
 | Memory watchpoints (read/write) | ⬜ | **needs an emulator data-breakpoint endpoint** (none today) — costliest |
 | Peripheral-chip views (Gate Array / PSG / FDC / CRTC) | ✅ | 2026-06-21, branch `feat/amspirit-z80-hardware-views`. 4 docked webviews polling `/api/state` (+`/api/memmap` for GA); shared `getState()`/`getMemmap()` typed (TDD); pure `hardware-views.ts` formatters (TDD) + generic `HardwarePanel`; scope table gained `kind:"flags"` so bit-groups render as chips. z80 201 tests, gate green. Changeset `minor`. Not yet live-validated |
 | Peripheral views — PPI (8255) | ⬜ | **blocked**: `/api/state` exposes no PPI data (core `Core_PPI_Read_Internal_Value` exists but isn't serialized) — needs an `amspirit-lite` API extension |
-| **Lite parity — instruction history (`/api/history`)** | ⬜ | Phase 1. New `amspirit.z80.history` view; client `getHistory()` (TDD) missing. See `doc/lite-parity-plan.md` |
+| **Lite parity — Phase 0 client foundations** | ✅ | 2026-07-04, branch `docs/lite-parity-plan`. `EmulatorClient`: `getHistory()`/`execAt()`/`runScript`/`getScriptState`/`abortScript`/`setConfig()`/`keytype()`/`keypress()`; new types `Z80HistoryEntry`/`ScriptState`/`EmulatorConfigUpdate`; private `send()` shared by `post`/`del`. TDD (shared 174). Changeset `minor`. Not live-validated |
+| **Lite parity — instruction history (`/api/history`)** | 🟡 | Phase 1. Client `getHistory()` **done** (Phase 0); the `amspirit.z80.history` view still to build. See `doc/lite-parity-plan.md` |
 | **Lite parity — disassembler zone analysis** | ⬜ | Phase 1. "Analyze from PC" / "Reset zones" over existing codemap coverage; must be **mapping‑aware** (not flat 64 KB) |
 | **Lite parity — RAM search (Find/Next)** | ⬜ | Phase 1. Pure search over `readRam`; search correct bank / `view=cpu` space |
 | **Lite parity — memmap bar + banking awareness** | ⬜ | Phase 0/1. Render ROM/RAM per region + `ram_mode`/`ram_page` in Memory/Disasm views (`getMemmap()` today feeds only Gate Array) |

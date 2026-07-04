@@ -608,4 +608,144 @@ describe("EmulatorClient", () => {
       await fake.start()
     })
   })
+
+  describe("getHistory", () => {
+    it("GETs /api/history and maps the last executed instructions", async () => {
+      fake.responder = jsonResponder([
+        { pc: 47426, hex: "3E0100BB" },
+        { pc: 47428, hex: "CD00BB00" },
+      ])
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.getHistory()).resolves.toEqual([
+        { pc: 47426, hex: "3E0100BB" },
+        { pc: 47428, hex: "CD00BB00" },
+      ])
+      expect(fake.recorded.at(0)?.method).toBe("GET")
+      expect(fake.recorded.at(0)?.url).toBe("/api/history")
+    })
+
+    it("returns an empty array when the emulator has no history", async () => {
+      fake.responder = jsonResponder([])
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.getHistory()).resolves.toEqual([])
+    })
+
+    it("fills missing entry fields with safe defaults", async () => {
+      fake.responder = jsonResponder([{}, { pc: 5 }])
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.getHistory()).resolves.toEqual([
+        { pc: 0, hex: "" },
+        { pc: 5, hex: "" },
+      ])
+    })
+  })
+
+  describe("execAt", () => {
+    it("POSTs {addr} as JSON to /api/exec", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.execAt(0x8000)
+      const rec = fake.recorded.at(0)
+      expect(rec?.method).toBe("POST")
+      expect(rec?.url).toBe("/api/exec")
+      expect(rec?.headers["content-type"]).toMatch(/application\/json/)
+      expect(JSON.parse(rec?.body ?? "{}")).toEqual({ addr: 0x8000 })
+    })
+  })
+
+  describe("runScript", () => {
+    it("POSTs the source as text to /api/script (CSL by default)", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.runScript("KEY RUN")
+      const rec = fake.recorded.at(0)
+      expect(rec?.method).toBe("POST")
+      expect(rec?.url).toBe("/api/script")
+      expect(rec?.headers["content-type"]).toMatch(/text\/plain/)
+      expect(rec?.body).toBe("KEY RUN")
+    })
+
+    it("adds ?lang=lua for a Lua script", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.runScript("print('hi')", { lang: "lua" })
+      expect(fake.recorded.at(0)?.url).toBe("/api/script?lang=lua")
+    })
+  })
+
+  describe("getScriptState", () => {
+    it("GETs /api/script and maps running/error", async () => {
+      fake.responder = jsonResponder({ running: true, error: "" })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.getScriptState()).resolves.toEqual({ running: true, error: "" })
+      expect(fake.recorded.at(0)?.method).toBe("GET")
+      expect(fake.recorded.at(0)?.url).toBe("/api/script")
+    })
+
+    it("defaults to not-running with no error when fields are absent", async () => {
+      fake.responder = jsonResponder({})
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.getScriptState()).resolves.toEqual({ running: false, error: "" })
+    })
+  })
+
+  describe("abortScript", () => {
+    it("DELETEs /api/script", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.abortScript()
+      const rec = fake.recorded.at(0)
+      expect(rec?.method).toBe("DELETE")
+      expect(rec?.url).toBe("/api/script")
+    })
+  })
+
+  describe("setConfig", () => {
+    it("POSTs snake_cased model/CRTC fields to /api/config", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.setConfig({ cpcModel: 2, crtcType: 1, romLang: "EN" })
+      const rec = fake.recorded.at(0)
+      expect(rec?.method).toBe("POST")
+      expect(rec?.url).toBe("/api/config")
+      expect(rec?.headers["content-type"]).toMatch(/application\/json/)
+      expect(JSON.parse(rec?.body ?? "{}")).toEqual({
+        cpc_model: 2,
+        crtc_type: 1,
+        rom_lang: "EN",
+      })
+    })
+
+    it("maps soft/hard reset to do_soft_reset/do_hard_reset", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.setConfig({ softReset: true })
+      expect(JSON.parse(fake.recorded.at(0)?.body ?? "{}")).toEqual({ do_soft_reset: true })
+      await client.setConfig({ hardReset: true })
+      expect(JSON.parse(fake.recorded.at(1)?.body ?? "{}")).toEqual({ do_hard_reset: true })
+    })
+
+    it("omits fields that were not provided", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.setConfig({ cpcModel: 0 })
+      expect(JSON.parse(fake.recorded.at(0)?.body ?? "{}")).toEqual({ cpc_model: 0 })
+    })
+  })
+
+  describe("keytype", () => {
+    it("POSTs {text} as JSON to /api/keytype", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.keytype("RUN\r")
+      const rec = fake.recorded.at(0)
+      expect(rec?.method).toBe("POST")
+      expect(rec?.url).toBe("/api/keytype")
+      expect(rec?.headers["content-type"]).toMatch(/application\/json/)
+      expect(JSON.parse(rec?.body ?? "{}")).toEqual({ text: "RUN\r" })
+    })
+  })
+
+  describe("keypress", () => {
+    it("POSTs {vk} as JSON to /api/keypress", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.keypress(32)
+      const rec = fake.recorded.at(0)
+      expect(rec?.method).toBe("POST")
+      expect(rec?.url).toBe("/api/keypress")
+      expect(JSON.parse(rec?.body ?? "{}")).toEqual({ vk: 32 })
+    })
+  })
 })

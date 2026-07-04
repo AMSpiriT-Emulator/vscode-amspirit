@@ -218,6 +218,36 @@ export interface EmulatorConfig {
   romLang: string
 }
 
+/** One entry of the last-20 executed-instruction history from `/api/history`. */
+export interface Z80HistoryEntry {
+  /** Address of the instruction. */
+  pc: number
+  /** Up to 4 opcode bytes at `pc` (CPU-visible fetch), uppercase hex. */
+  hex: string
+}
+
+/** CSL/Lua scripting engine state from `GET /api/script`. */
+export interface ScriptState {
+  /** `true` while a script is running. */
+  running: boolean
+  /** Error message from the last script, empty when none. */
+  error: string
+}
+
+/** Mutable machine configuration for `POST /api/config` (all fields optional). */
+export interface EmulatorConfigUpdate {
+  /** CPC model index (0=464, 1=664, 2=6128, …); triggers an implicit reset. */
+  cpcModel?: number
+  /** CRTC type (0–4); triggers an implicit reset. */
+  crtcType?: number
+  /** ROM language: `"FR"`, `"EN"`, `"SP"`, `"DA"`. */
+  romLang?: string
+  /** Trigger a soft reset. */
+  softReset?: boolean
+  /** Trigger a hard reset. */
+  hardReset?: boolean
+}
+
 /** Line number `0xFFFF` reported by the emulator when no program is running. */
 export const DIRECT_MODE_LINE = 0xffff
 
@@ -567,6 +597,78 @@ export class EmulatorClient {
     return res.hex ?? ""
   }
 
+  /** Last 20 executed Z80 instructions (oldest first) via `GET /api/history`. */
+  async getHistory(): Promise<Z80HistoryEntry[]> {
+    const raw = await this.getJson<{ pc?: number; hex?: string }[]>(
+      "/api/history",
+      this.debugTimeoutMs,
+    )
+    return (raw ?? []).map((e) => ({ pc: e.pc ?? 0, hex: e.hex ?? "" }))
+  }
+
+  /** Redirect the Z80 PC to `addr` (no RAM write) via `POST /api/exec`. */
+  async execAt(addr: number): Promise<void> {
+    await this.post("/api/exec", JSON.stringify({ addr }), "application/json", this.debugTimeoutMs)
+  }
+
+  /**
+   * Launch a script via `POST /api/script`. Defaults to CSL; pass `lang:"lua"`
+   * for raw Lua 5.4. The source is sent as the request body.
+   */
+  async runScript(source: string, opts: { lang?: "csl" | "lua" } = {}): Promise<void> {
+    const path = opts.lang === "lua" ? "/api/script?lang=lua" : "/api/script"
+    await this.post(path, source, "text/plain; charset=utf-8", this.debugTimeoutMs)
+  }
+
+  /** Current CSL/Lua scripting-engine state via `GET /api/script`. */
+  async getScriptState(): Promise<ScriptState> {
+    const raw = await this.getJson<{ running?: boolean; error?: string }>(
+      "/api/script",
+      this.debugTimeoutMs,
+    )
+    return { running: raw.running === true, error: raw.error ?? "" }
+  }
+
+  /** Interrupt the running script via `DELETE /api/script`. */
+  async abortScript(): Promise<void> {
+    await this.del("/api/script", this.debugTimeoutMs)
+  }
+
+  /**
+   * Change machine configuration via `POST /api/config` — model, CRTC type,
+   * ROM language, and soft/hard reset. Only the provided fields are sent;
+   * changing the model or CRTC triggers an implicit reset in the emulator.
+   */
+  async setConfig(config: EmulatorConfigUpdate): Promise<void> {
+    const body: Record<string, unknown> = {}
+    if (config.cpcModel !== undefined) body.cpc_model = config.cpcModel
+    if (config.crtcType !== undefined) body.crtc_type = config.crtcType
+    if (config.romLang !== undefined) body.rom_lang = config.romLang
+    if (config.softReset) body.do_soft_reset = true
+    if (config.hardReset) body.do_hard_reset = true
+    await this.post("/api/config", JSON.stringify(body), "application/json", this.debugTimeoutMs)
+  }
+
+  /** Autotype `text` into the emulator via `POST /api/keytype` (use `\r` for Enter). */
+  async keytype(text: string): Promise<void> {
+    await this.post(
+      "/api/keytype",
+      JSON.stringify({ text }),
+      "application/json",
+      this.debugTimeoutMs,
+    )
+  }
+
+  /** Send a single CPC virtual key code via `POST /api/keypress`. */
+  async keypress(vk: number): Promise<void> {
+    await this.post(
+      "/api/keypress",
+      JSON.stringify({ vk }),
+      "application/json",
+      this.debugTimeoutMs,
+    )
+  }
+
   private async getJson<T>(path: string, timeoutMs: number): Promise<T> {
     const body = await this.get(path, timeoutMs)
     return JSON.parse(body) as T
@@ -612,6 +714,20 @@ export class EmulatorClient {
     contentType: string,
     timeoutMs: number,
   ): Promise<string> {
+    return this.send("POST", path, timeoutMs, { body, contentType })
+  }
+
+  /** DELETE with no body (e.g. `DELETE /api/script` to abort a script). */
+  private del(path: string, timeoutMs: number): Promise<string> {
+    return this.send("DELETE", path, timeoutMs)
+  }
+
+  private send(
+    method: string,
+    path: string,
+    timeoutMs: number,
+    payload?: { body: string; contentType: string },
+  ): Promise<string> {
     return new Promise((resolve, reject) => {
       let settled = false
       const settle = (fn: () => void): void => {
@@ -619,19 +735,15 @@ export class EmulatorClient {
         settled = true
         fn()
       }
-      const buf = Buffer.from(body, "utf-8")
+      const headers: http.OutgoingHttpHeaders = {}
+      let buf: Buffer | undefined
+      if (payload) {
+        buf = Buffer.from(payload.body, "utf-8")
+        headers["Content-Type"] = payload.contentType
+        headers["Content-Length"] = buf.length
+      }
       const req = http.request(
-        {
-          hostname: this.host,
-          port: this.port,
-          path,
-          method: "POST",
-          timeout: timeoutMs,
-          headers: {
-            "Content-Type": contentType,
-            "Content-Length": buf.length,
-          },
-        },
+        { hostname: this.host, port: this.port, path, method, timeout: timeoutMs, headers },
         (res) => {
           let data = ""
           res.setEncoding("utf-8")
@@ -646,7 +758,7 @@ export class EmulatorClient {
         req.destroy()
         settle(() => reject(new Error("timeout")))
       })
-      req.write(buf)
+      if (buf) req.write(buf)
       req.end()
     })
   }
