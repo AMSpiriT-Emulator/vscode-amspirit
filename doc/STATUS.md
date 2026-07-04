@@ -6,7 +6,18 @@
 
 ## Where we are
 
-- **Latest (2026-06-24, branch `feat/sse-integration`, UNCOMMITTED): CRTC view —
+- **Latest (2026-07-04): lite debug‑webview parity — analysis & catch‑up plan.**
+  amspirit‑lite's embedded debug UI grew to **10 tabs / ~40 endpoints**; we mapped
+  the gap vs our 3 packages and wrote a phased plan in
+  **`doc/lite-parity-plan.md`** (scope chosen: **Debug + scripting**; audio / disk
+  / CRT‑shader / UI‑language are explicit non‑goals). Main gaps in scope:
+  instruction history (`/api/history`), disassembler zone analysis, RAM search,
+  live screen capture, CSL/Lua scripting (`/api/script`), and **memory‑mapping /
+  banking awareness** (memmap bar + mapping‑aware search — `getMemmap()` today
+  feeds only the Gate Array view). Step‑Back reconciles with the existing
+  *reverse‑debug* roadmap item (blocked on an emulator history endpoint). No code
+  yet — plan only. **Next: land Phase 0 (client wrappers, TDD) then Phase 1.**
+- **Prior (2026-06-24, branch `feat/sse-integration`, UNCOMMITTED): CRTC view —
   full 6845 register file.** The emulator's `/api/state.crtc` now carries `regs`
   (R0–R13), `selected_reg`, `rasterline`, `vsync` (core `build_crtc_json`; doc
   verified up to date — R14–R17 / counters / HSYNC / VMA still commented out).
@@ -223,6 +234,13 @@
 | Memory watchpoints (read/write) | ⬜ | **needs an emulator data-breakpoint endpoint** (none today) — costliest |
 | Peripheral-chip views (Gate Array / PSG / FDC / CRTC) | ✅ | 2026-06-21, branch `feat/amspirit-z80-hardware-views`. 4 docked webviews polling `/api/state` (+`/api/memmap` for GA); shared `getState()`/`getMemmap()` typed (TDD); pure `hardware-views.ts` formatters (TDD) + generic `HardwarePanel`; scope table gained `kind:"flags"` so bit-groups render as chips. z80 201 tests, gate green. Changeset `minor`. Not yet live-validated |
 | Peripheral views — PPI (8255) | ⬜ | **blocked**: `/api/state` exposes no PPI data (core `Core_PPI_Read_Internal_Value` exists but isn't serialized) — needs an `amspirit-lite` API extension |
+| **Lite parity — instruction history (`/api/history`)** | ⬜ | Phase 1. New `amspirit.z80.history` view; client `getHistory()` (TDD) missing. See `doc/lite-parity-plan.md` |
+| **Lite parity — disassembler zone analysis** | ⬜ | Phase 1. "Analyze from PC" / "Reset zones" over existing codemap coverage; must be **mapping‑aware** (not flat 64 KB) |
+| **Lite parity — RAM search (Find/Next)** | ⬜ | Phase 1. Pure search over `readRam`; search correct bank / `view=cpu` space |
+| **Lite parity — memmap bar + banking awareness** | ⬜ | Phase 0/1. Render ROM/RAM per region + `ram_mode`/`ram_page` in Memory/Disasm views (`getMemmap()` today feeds only Gate Array) |
+| **Lite parity — live screen capture + bp overlay** | ⬜ | Phase 2. Needs PNG endpoint verified in `web_png.cpp` (undocumented in the `.md`) |
+| **Lite parity — CSL/Lua scripting (`/api/script`)** | ⬜ | Phase 4. Run active `.csl`/`.lua`; also covers *SNA/DSK load via `/api/script`* below |
+| **Lite parity — Step Back / timeline** | ⬜ | Phase 3 = *reverse‑debug* row below. Blocked on an emulator history HTTP endpoint |
 | Peripheral views — full CRTC register file (R0–R13) | ✅ | 2026-06-23, branch `feat/sse-integration`. `/api/state.crtc` now carries `regs` R0–R13 + `selected_reg`/`rasterline`/`vsync` (core `build_crtc_json`; R14–R17 + counters/HSYNC/VMA still commented out). Shared `CrtcState` + `getState()` mapping (TDD); `buildCrtcScopes(crtc,emu)` shows the register file (named decimal), chip variant, selected reg, raster line and real CRTC VSYNC. Kept strictly CRTC — dropped machine context (model/frame/FPS) and the GA HSYNC proxy; no derived "screen address" (R12/R13 are the raw 6845 MA start, not a CPU address). Gate green (shared 160 / z80 218). Changeset `crtc-register-file.md` (`minor` shared+z80). Not yet live-validated |
 
 ## Guardrail baseline
