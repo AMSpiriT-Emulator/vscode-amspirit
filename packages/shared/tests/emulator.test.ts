@@ -62,9 +62,9 @@ describe("EmulatorClient", () => {
   })
 
   describe("constructor", () => {
-    it("uses default port 8765 and host 127.0.0.1", () => {
+    it("uses default port 6128 and host 127.0.0.1", () => {
       const c = new EmulatorClient()
-      expect(c.port).toBe(8765)
+      expect(c.port).toBe(6128)
       expect(c.host).toBe("127.0.0.1")
     })
 

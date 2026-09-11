@@ -61,7 +61,7 @@ class FakeTransport {
 function makeEvents(fake: FakeTransport, opts: EmulatorEventsOptions = {}) {
   return new EmulatorEvents({
     host: "127.0.0.1",
-    port: 8765,
+    port: 6128,
     transport: fake.transport,
     ...opts,
   })
@@ -73,7 +73,7 @@ describe("EmulatorEvents", () => {
     const ev = makeEvents(fake, { topics: ["z80_bp", "basic_bp", "pause"] })
     ev.start()
     expect(fake.connections).toHaveLength(1)
-    expect(fake.last.url).toMatchObject({ host: "127.0.0.1", port: 8765 })
+    expect(fake.last.url).toMatchObject({ host: "127.0.0.1", port: 6128 })
     expect(fake.last.url.path).toBe("/api/events?topics=z80_bp,basic_bp,pause")
   })
 

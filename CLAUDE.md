@@ -28,7 +28,7 @@ doc/
 ```
 
 The emulator is an **external dependency**, not in this repo. Its HTTP API lives
-at `127.0.0.1:8765` by default; relevant builds are `amspirit-lite-sdl` and
+at `127.0.0.1:6128` by default; relevant builds are `amspirit-lite-sdl` and
 `amspirit-lite-qt` (transport is plain HTTP, so the extension is build-agnostic).
 The emulator source (for API reference) is typically a sibling checkout at
 `../amspirit-lite` — see `src/doc/web_server_api.md` and

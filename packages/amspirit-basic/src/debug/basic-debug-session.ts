@@ -210,7 +210,7 @@ export class BasicDebugSession extends LoggingDebugSession {
 
   private connect(args: BasicDebugConfig): void {
     const host = args.host ?? "127.0.0.1"
-    const port = args.port ?? 8765
+    const port = args.port ?? 6128
     this.client = this.createClient(host, port)
     this.events = this.createEvents(host, port)
     this.events?.start()

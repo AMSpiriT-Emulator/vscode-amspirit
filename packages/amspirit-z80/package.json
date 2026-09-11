@@ -121,7 +121,7 @@
               "port": {
                 "type": "number",
                 "description": "Port of the emulator web debug server (matches amspirit.webPort).",
-                "default": 8765
+                "default": 6128
               },
               "program": {
                 "type": "string",
@@ -168,7 +168,7 @@
               },
               "port": {
                 "type": "number",
-                "default": 8765
+                "default": 6128
               },
               "stopOnEntry": {
                 "type": "boolean",
@@ -183,7 +183,7 @@
             "type": "amspirit-z80",
             "request": "attach",
             "name": "Attach to AMSpiriT (Z80)",
-            "port": 8765
+            "port": 6128
           }
         ],
         "configurationSnippets": [
@@ -196,7 +196,7 @@
               "name": "Launch Z80 program",
               "program": "^\"\\${file}\"",
               "stopOnEntry": true,
-              "port": 8765
+              "port": 6128
             }
           },
           {
@@ -207,7 +207,7 @@
               "request": "attach",
               "name": "Attach to AMSpiriT (Z80)",
               "program": "^\"\\${file}\"",
-              "port": 8765
+              "port": 6128
             }
           }
         ]
@@ -265,7 +265,7 @@
         },
         "amspirit-z80.webPort": {
           "type": "integer",
-          "default": 8765,
+          "default": 6128,
           "minimum": 1,
           "maximum": 65535,
           "order": 2,

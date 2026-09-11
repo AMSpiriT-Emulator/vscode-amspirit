@@ -16,7 +16,7 @@ export interface SettingsReadResult {
 
 const DEFAULTS: AmspiritSettings = {
   emulatorPath: "",
-  webPort: 8765,
+  webPort: 6128,
   autoLaunch: false,
   emulatorArgs: [],
 }

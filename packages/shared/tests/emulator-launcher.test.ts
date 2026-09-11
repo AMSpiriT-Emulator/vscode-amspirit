@@ -24,17 +24,17 @@ describe("EmulatorLauncher", () => {
     const spawn = vi.fn().mockReturnValue(child)
     const launcher = new EmulatorLauncher(spawn)
 
-    const result = launcher.launch("/bin/emu", 8765, ["--no-splash"])
+    const result = launcher.launch("/bin/emu", 6128, ["--no-splash"])
 
     expect(result).toBe(child)
-    expect(spawn).toHaveBeenCalledWith("/bin/emu", 8765, ["--no-splash"])
+    expect(spawn).toHaveBeenCalledWith("/bin/emu", 6128, ["--no-splash"])
     expect(launcher.isRunning).toBe(true)
   })
 
   it("refuses to launch twice while running", () => {
     const launcher = new EmulatorLauncher(vi.fn().mockReturnValue(fakeChild()))
-    launcher.launch("/bin/emu", 8765, [])
-    expect(() => launcher.launch("/bin/emu", 8765, [])).toThrow(/already running/i)
+    launcher.launch("/bin/emu", 6128, [])
+    expect(() => launcher.launch("/bin/emu", 6128, [])).toThrow(/already running/i)
   })
 
   it("allows relaunch after the process exits", () => {
@@ -43,11 +43,11 @@ describe("EmulatorLauncher", () => {
     const spawn = vi.fn().mockReturnValueOnce(child1).mockReturnValueOnce(child2)
     const launcher = new EmulatorLauncher(spawn)
 
-    launcher.launch("/bin/emu", 8765, [])
+    launcher.launch("/bin/emu", 6128, [])
     child1.triggerExit(0)
     expect(launcher.isRunning).toBe(false)
 
-    launcher.launch("/bin/emu", 8765, [])
+    launcher.launch("/bin/emu", 6128, [])
     expect(launcher.isRunning).toBe(true)
     expect(spawn).toHaveBeenCalledTimes(2)
   })
@@ -55,7 +55,7 @@ describe("EmulatorLauncher", () => {
   it("notifies the onExit callback when the child exits", () => {
     const child = fakeChild()
     const onExit = vi.fn()
-    new EmulatorLauncher(vi.fn().mockReturnValue(child)).launch("/bin/emu", 8765, [], { onExit })
+    new EmulatorLauncher(vi.fn().mockReturnValue(child)).launch("/bin/emu", 6128, [], { onExit })
     child.triggerExit(42)
     expect(onExit).toHaveBeenCalledWith(42)
   })
@@ -63,7 +63,7 @@ describe("EmulatorLauncher", () => {
   it("dispose kills a running child", () => {
     const child = fakeChild()
     const launcher = new EmulatorLauncher(vi.fn().mockReturnValue(child))
-    launcher.launch("/bin/emu", 8765, [])
+    launcher.launch("/bin/emu", 6128, [])
     launcher.dispose()
     expect(child.killed).toBe(true)
     expect(launcher.isRunning).toBe(false)
@@ -79,12 +79,12 @@ describe("EmulatorLauncher", () => {
       throw new Error("ENOENT")
     })
     const launcher = new EmulatorLauncher(spawn)
-    expect(() => launcher.launch("/bad/path", 8765, [])).toThrow(/ENOENT/)
+    expect(() => launcher.launch("/bad/path", 6128, [])).toThrow(/ENOENT/)
     expect(launcher.isRunning).toBe(false)
 
     // Subsequent launches must still be possible.
     spawn.mockReturnValueOnce(fakeChild())
-    expect(() => launcher.launch("/bin/emu", 8765, [])).not.toThrow()
+    expect(() => launcher.launch("/bin/emu", 6128, [])).not.toThrow()
     expect(launcher.isRunning).toBe(true)
   })
 
@@ -93,7 +93,7 @@ describe("EmulatorLauncher", () => {
     const onError = vi.fn()
     const onExit = vi.fn()
     const launcher = new EmulatorLauncher(vi.fn().mockReturnValue(child))
-    launcher.launch("/bin/emu", 8765, [], { onError, onExit })
+    launcher.launch("/bin/emu", 6128, [], { onError, onExit })
     ;(child as unknown as EventEmitter).emit("error", new Error("spawn failed"))
     expect(launcher.isRunning).toBe(false)
     expect(onError).toHaveBeenCalledWith(expect.any(Error))
