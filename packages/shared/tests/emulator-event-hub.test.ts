@@ -59,7 +59,7 @@ function makeHub() {
     created.push(f)
     return f as unknown as EmulatorEvents
   }
-  const hub = new EmulatorEventHub(factory, "127.0.0.1", 8765)
+  const hub = new EmulatorEventHub(factory, "127.0.0.1", 6128)
   return { hub, created, last: () => created.at(-1) as FakeEvents }
 }
 
@@ -69,7 +69,7 @@ describe("EmulatorEventHub", () => {
     hub.start()
     expect(created).toHaveLength(1)
     expect(last().host).toBe("127.0.0.1")
-    expect(last().port).toBe(8765)
+    expect(last().port).toBe(6128)
     expect(last().started).toBe(true)
   })
 
@@ -134,7 +134,7 @@ describe("EmulatorEventHub", () => {
   it("retarget to the same target is a no-op", () => {
     const { hub, created } = makeHub()
     hub.start()
-    hub.retarget("127.0.0.1", 8765)
+    hub.retarget("127.0.0.1", 6128)
     expect(created).toHaveLength(1)
   })
 

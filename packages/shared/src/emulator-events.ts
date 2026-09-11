@@ -107,7 +107,7 @@ export interface EmulatorEventsOptions {
 
 const DEFAULTS = {
   host: "127.0.0.1",
-  port: 8765,
+  port: 6128,
   reconnect: true,
   reconnectDelayMs: 1000,
 } as const

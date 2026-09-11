@@ -52,7 +52,7 @@ assembly straight from VS Code.
      "mapFile": "${workspaceFolder}/game.sld",
      "binary": "${workspaceFolder}/game.bin",
      "stopOnEntry": true,
-     "port": 8765
+     "port": 6128
    }
    ```
 

@@ -26,9 +26,9 @@ describe("spawnEmulator", () => {
     spawnMock.mockReset()
     spawnMock.mockReturnValue({ pid: 1 })
 
-    spawnEmulator("/bin/emu", 8765)
+    spawnEmulator("/bin/emu", 6128)
 
-    expect(spawnMock).toHaveBeenCalledWith("/bin/emu", ["--web-server", "--web-port", "8765"], {
+    expect(spawnMock).toHaveBeenCalledWith("/bin/emu", ["--web-server", "--web-port", "6128"], {
       stdio: "ignore",
       detached: false,
     })

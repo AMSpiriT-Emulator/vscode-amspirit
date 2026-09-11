@@ -11,7 +11,7 @@ export interface EmulatorClientOptions {
 }
 
 const DEFAULTS = {
-  port: 8765,
+  port: 6128,
   host: "127.0.0.1",
   pingTimeoutMs: 2000,
   injectTimeoutMs: 5000,

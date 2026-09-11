@@ -162,7 +162,7 @@ export class Z80DebugSession extends LoggingDebugSession {
     args: DebugProtocol.AttachRequestArguments & Z80DebugConfig,
   ): Promise<void> {
     const host = args.host ?? "127.0.0.1"
-    const port = args.port ?? 8765
+    const port = args.port ?? 6128
     this.client = this.createClient(host, port)
     this.openEvents(host, port)
     this.stopOnEntry = args.stopOnEntry === true
@@ -189,7 +189,7 @@ export class Z80DebugSession extends LoggingDebugSession {
     args: DebugProtocol.LaunchRequestArguments & Z80DebugConfig,
   ): Promise<void> {
     const host = args.host ?? "127.0.0.1"
-    const port = args.port ?? 8765
+    const port = args.port ?? 6128
     const client = this.createClient(host, port)
     this.client = client
     this.openEvents(host, port)

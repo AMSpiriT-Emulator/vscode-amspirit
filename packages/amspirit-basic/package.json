@@ -78,7 +78,7 @@
               "port": {
                 "type": "number",
                 "description": "Port of the emulator web debug server (matches amspirit.webPort).",
-                "default": 8765
+                "default": 6128
               },
               "stopOnEntry": {
                 "type": "boolean",
@@ -103,7 +103,7 @@
               },
               "port": {
                 "type": "number",
-                "default": 8765
+                "default": 6128
               },
               "stopOnEntry": {
                 "type": "boolean",
@@ -117,7 +117,7 @@
             "type": "amspirit-basic",
             "request": "attach",
             "name": "Attach to AMSpiriT",
-            "port": 8765
+            "port": 6128
           }
         ],
         "configurationSnippets": [
@@ -128,7 +128,7 @@
               "type": "amspirit-basic",
               "request": "attach",
               "name": "Attach to AMSpiriT",
-              "port": 8765
+              "port": 6128
             }
           },
           {
@@ -342,7 +342,7 @@
         },
         "amspirit.webPort": {
           "type": "integer",
-          "default": 8765,
+          "default": 6128,
           "minimum": 1,
           "maximum": 65535,
           "order": 2,

@@ -14,7 +14,7 @@ describe("readSettings", () => {
     const s = readSettings(makeReader({}))
     expect(s).toEqual({
       emulatorPath: "",
-      webPort: 8765,
+      webPort: 6128,
       autoLaunch: false,
       emulatorArgs: [],
     })
@@ -36,10 +36,10 @@ describe("readSettings", () => {
   })
 
   it("falls back to default port when the value is out of range", () => {
-    expect(readSettings(makeReader({ webPort: 0 })).webPort).toBe(8765)
-    expect(readSettings(makeReader({ webPort: 70000 })).webPort).toBe(8765)
-    expect(readSettings(makeReader({ webPort: Number.NaN })).webPort).toBe(8765)
-    expect(readSettings(makeReader({ webPort: -1 })).webPort).toBe(8765)
+    expect(readSettings(makeReader({ webPort: 0 })).webPort).toBe(6128)
+    expect(readSettings(makeReader({ webPort: 70000 })).webPort).toBe(6128)
+    expect(readSettings(makeReader({ webPort: Number.NaN })).webPort).toBe(6128)
+    expect(readSettings(makeReader({ webPort: -1 })).webPort).toBe(6128)
   })
 
   it("filters out non-string entries from emulatorArgs", () => {
@@ -67,10 +67,10 @@ describe("readSettingsWithWarnings", () => {
 
   it("warns when the port is out of range", () => {
     const { settings, warnings } = readSettingsWithWarnings(makeReader({ webPort: 0 }))
-    expect(settings.webPort).toBe(8765)
+    expect(settings.webPort).toBe(6128)
     expect(warnings).toHaveLength(1)
     expect(warnings[0]).toMatch(/webPort/)
-    expect(warnings[0]).toMatch(/8765/)
+    expect(warnings[0]).toMatch(/6128/)
   })
 
   it("warns when emulatorArgs contains non-string entries", () => {
