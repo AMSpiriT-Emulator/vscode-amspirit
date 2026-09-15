@@ -647,6 +647,14 @@ export class EmulatorClient {
     return res.hex ?? ""
   }
 
+  /**
+   * Clear the execution bitmap via `DELETE /api/codemap`. The emulator also
+   * drops the instruction history, so the views start from a clean coverage.
+   */
+  async clearCodemap(): Promise<void> {
+    await this.del("/api/codemap", this.debugTimeoutMs)
+  }
+
   /** Last 20 executed Z80 instructions (oldest first) via `GET /api/history`. */
   async getHistory(): Promise<Z80HistoryEntry[]> {
     const raw = await this.getJson<{ pc?: number; hex?: string }[]>(

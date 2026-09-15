@@ -14,6 +14,7 @@ import {
   type DisasmRow,
   stepBase,
 } from "../disasm-view/disasm-view-model.js"
+import { analyzeZones } from "../disasm-view/zone-analysis.js"
 import { firmwareLabel } from "../firmware-labels.js"
 import { formatDisassembly } from "../memory-view/disasm-export.js"
 import { type BankOption, memoryBanks } from "../memory-view/memory-model.js"
@@ -31,6 +32,8 @@ const MAX_INSTR_LEN = 4
 const DEFAULT_BASE = 0x4000
 /** Bytes read around the anchor to decode the window (generous; trimmed by count). */
 const READ_SPAN = (ROWS + LEAD) * MAX_INSTR_LEN
+/** The whole 16-bit space, read in one go for the zone analysis. */
+const ADDRESS_SPACE = 0x10000
 
 /** Default view before the machine config is known: the CPU-visible mapping. */
 const CPU_VIEW: BankOption = { id: "cpu", label: "CPU view", bank: 0, cpuView: true }
@@ -47,6 +50,22 @@ function symbolMapPath(mapFile?: string, program?: string): string | undefined {
   return [`${stem}.sld`, `${program}.sld`, `${stem}.map`, `${program}.map`].find((p) =>
     existsSync(p),
   )
+}
+
+/**
+ * A {@link ByteReader} over an already-read `snapshot` that starts at `start`.
+ * Reads wrap in the 16-bit space, and a short snapshot wraps on its own length,
+ * so a decode near the end never walks past the buffer.
+ */
+function bufferReader(snapshot: readonly number[], start: number): ByteReader {
+  return (addr, len) => {
+    const out: number[] = []
+    for (let i = 0; i < len; i++) {
+      const idx = ((addr + i - start) & 0xffff) % snapshot.length
+      out.push(snapshot[idx] ?? 0)
+    }
+    return out
+  }
 }
 
 /**
@@ -71,6 +90,12 @@ export class DisasmPanel implements vscode.WebviewViewProvider {
   private bankView: BankOption = CPU_VIEW
   /** Last window rendered, kept so paging/export know the visible range. */
   private rows: DisasmRow[] = []
+  /**
+   * Last zone analysis, tagged with the view it was traced through. A trace
+   * only describes the mapping it read, so a trace from another view is stale.
+   * `undefined` = none run.
+   */
+  private zones: { viewId: string; code: ReadonlySet<number> } | undefined
   /** Drives refresh from the SSE hub; the listing re-anchors on stop signals. */
   private readonly scheduler: RefreshScheduler
   /** Last snapshot posted, serialized — skip posting identical snapshots. */
@@ -104,6 +129,10 @@ export class DisasmPanel implements vscode.WebviewViewProvider {
         } else if (m.type === "selectBank") {
           this.bankView = this.banks.find((b) => b.id === m.id) ?? CPU_VIEW
           void this.tick()
+        } else if (m.type === "analyze") {
+          void this.analyze()
+        } else if (m.type === "resetZones") {
+          void this.resetZones()
         } else if (m.type === "page") {
           void this.scroll(m.delta)
         } else if (m.type === "exportAsm") {
@@ -174,6 +203,8 @@ export class DisasmPanel implements vscode.WebviewViewProvider {
       // Coverage/PC are CPU addresses; meaningful only on the central views.
       const central = this.bankView.bank === 0
       const codemapHex = central ? await client.getCodemap().catch(() => "") : ""
+      // Drop a trace read through a mapping the listing no longer shows.
+      const zones = this.zones?.viewId === this.bankView.id ? this.zones.code : undefined
       return buildDisasmRows({
         read,
         base: this.base,
@@ -181,6 +212,7 @@ export class DisasmPanel implements vscode.WebviewViewProvider {
         instructionCount: ROWS,
         codemapHex,
         resolve: this.labelResolver(),
+        ...(zones ? { zones } : {}),
         // PC is a CPU address; only flag it on the central views.
         ...(central ? { pc: r.PC } : {}),
       })
@@ -200,21 +232,49 @@ export class DisasmPanel implements vscode.WebviewViewProvider {
   ): Promise<ByteReader | undefined> {
     const start = (anchor - LEAD * MAX_INSTR_LEN) & 0xffff
     try {
-      const snapshot = await client.readRam(start, READ_SPAN + LEAD * MAX_INSTR_LEN, {
-        cpuView: this.bankView.cpuView,
-        bank: this.bankView.bank,
-      })
-      return (addr, len) => {
-        const out: number[] = []
-        for (let i = 0; i < len; i++) {
-          const idx = ((addr + i - start) & 0xffff) % snapshot.length
-          out.push(snapshot[idx] ?? 0)
-        }
-        return out
-      }
+      const span = READ_SPAN + LEAD * MAX_INSTR_LEN
+      return bufferReader(await client.readRam(start, span, this.readOpts()), start)
     } catch {
       return undefined
     }
+  }
+
+  /** Read options selecting the mapping the listing currently shows. */
+  private readOpts(): { cpuView: boolean; bank: number } {
+    return { cpuView: this.bankView.cpuView, bank: this.bankView.bank }
+  }
+
+  /**
+   * Trace the code reachable from the program counter and keep the zones, so
+   * the listing shows real code as code and the rest as `DB` data. The trace
+   * reads one 64 KB snapshot of the selected view, so it follows the mapping
+   * the listing shows.
+   */
+  private async analyze(): Promise<void> {
+    const client = this.makeClient()
+    try {
+      const pc = (await client.getZ80()).PC & 0xffff
+      const snapshot = await client.readRam(0, ADDRESS_SPACE, this.readOpts())
+      const analysis = analyzeZones(bufferReader(snapshot, 0), [pc])
+      this.zones = { viewId: this.bankView.id, code: analysis.code }
+      if (analysis.truncated) {
+        void vscode.window.showWarningMessage(
+          "AMSpiriT Z80: the zone analysis hit its instruction budget — some code stays unmarked.",
+        )
+      }
+      await this.tick()
+    } catch {
+      void vscode.window.showWarningMessage("AMSpiriT Z80: could not analyze the code zones.")
+    }
+  }
+
+  /** Drop both zone sources: the static analysis and the emulator's coverage. */
+  private async resetZones(): Promise<void> {
+    this.zones = undefined
+    await this.makeClient()
+      .clearCodemap()
+      .catch(() => {})
+    await this.tick()
   }
 
   /**
@@ -228,10 +288,11 @@ export class DisasmPanel implements vscode.WebviewViewProvider {
     if (!bounds) return
     const { start, span } = bounds
     try {
-      const bytes = await this.makeClient().readRam(start, span + 1 + MAX_INSTR_LEN, {
-        cpuView: this.bankView.cpuView,
-        bank: this.bankView.bank,
-      })
+      const bytes = await this.makeClient().readRam(
+        start,
+        span + 1 + MAX_INSTR_LEN,
+        this.readOpts(),
+      )
       const instructions = disassemble(bytes, start, span + 1).filter(
         (ins) => ((ins.address - start) & 0xffff) <= span,
       )

@@ -24,6 +24,10 @@ interface DisasmListProps {
   /** Called to export to an `.asm` listing — the selected `[start, end]` range,
    * or the visible window when no range is supplied. */
   onExportAsm?: (start?: number, end?: number) => void
+  /** Called to run the static zone analysis from the program counter. */
+  onAnalyze?: () => void
+  /** Called to drop the zones — the static analysis and the runtime coverage. */
+  onResetZones?: () => void
 }
 
 const hex4 = (n: number): string => (n & 0xffff).toString(16).toUpperCase().padStart(4, "0")
@@ -54,6 +58,8 @@ export function DisasmList({
   onGoto,
   onPage,
   onExportAsm,
+  onAnalyze,
+  onResetZones,
 }: DisasmListProps) {
   const [input, setInput] = useState("")
   // Range selection (by instruction address) for the `.asm` export.
@@ -128,10 +134,16 @@ export function DisasmList({
           />
           <span>Follow PC</span>
         </label>
-        <button className={styles.export} type="button" onClick={exportAsm}>
+        <button className={styles.toolButton} type="button" onClick={exportAsm}>
           {selLo !== null && selHi !== null
             ? `Export ${hex4(selLo)}-${hex4(selHi)} .asm`
             : "Export .asm"}
+        </button>
+        <button className={styles.toolButton} type="button" onClick={() => onAnalyze?.()}>
+          Analyze from PC
+        </button>
+        <button className={styles.toolButton} type="button" onClick={() => onResetZones?.()}>
+          Reset zones
         </button>
         {banks && banks.length > 0 && (
           <select
@@ -154,6 +166,9 @@ export function DisasmList({
         </span>
         <span className={styles.legendItem} data-kind="executed">
           Executed
+        </span>
+        <span className={styles.legendItem} data-kind="analyzed">
+          Analyzed
         </span>
         <span className={styles.legendItem} data-kind="data">
           Data (DB)
@@ -181,6 +196,7 @@ export function DisasmList({
                   className={styles.row}
                   data-pc={row.isPc ? "true" : undefined}
                   data-executed={row.executed ? "true" : undefined}
+                  data-analyzed={row.analyzed ? "true" : undefined}
                   data-data={row.data ? "true" : undefined}
                   data-selected={
                     selLo !== null && selHi !== null && row.addr >= selLo && row.addr <= selHi

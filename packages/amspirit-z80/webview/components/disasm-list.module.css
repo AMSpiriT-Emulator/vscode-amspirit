@@ -59,7 +59,8 @@
   cursor: pointer;
 }
 
-.export {
+/* Secondary-button look, shared by every toolbar action. */
+.toolButton {
   font-family: inherit;
   color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
   background: var(--vscode-button-secondaryBackground, transparent);
@@ -70,7 +71,7 @@
   cursor: pointer;
 }
 
-.export:hover {
+.toolButton:hover {
   background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
 }
 
@@ -120,6 +121,15 @@
   background: var(--vscode-diffEditor-insertedTextBackground, rgba(99, 184, 99, 0.18));
 }
 
+.legendItem[data-kind="analyzed"]::before {
+  content: "";
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 2px;
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.4));
+  background: var(--vscode-diffEditor-diagonalFill, rgba(204, 167, 0, 0.18));
+}
+
 .legendItem[data-kind="data"] {
   opacity: 0.55;
 }
@@ -157,6 +167,11 @@
 /* An instruction the Z80 has executed since reset (code vs data shading). */
 .row[data-executed] .bytes {
   background: var(--vscode-diffEditor-insertedTextBackground, rgba(99, 184, 99, 0.18));
+}
+
+/* Code the static analysis reached, which the Z80 has not executed yet. */
+.row[data-analyzed]:not([data-executed]) .bytes {
+  background: var(--vscode-diffEditor-diagonalFill, rgba(204, 167, 0, 0.18));
 }
 
 /* When coverage is known, rows the Z80 never reached are rendered as `DB` data

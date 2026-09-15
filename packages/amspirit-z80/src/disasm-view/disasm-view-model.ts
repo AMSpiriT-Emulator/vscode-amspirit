@@ -24,10 +24,13 @@ export interface DisasmRow {
   isPc: boolean
   /** Whether the Z80 has executed this instruction (code-coverage shading). */
   executed: boolean
+  /** Whether the static zone analysis reached this instruction. */
+  analyzed: boolean
   /**
-   * Likely data, not code: coverage is known yet the Z80 never reached this
-   * instruction (and it isn't the imminent PC). `false` when coverage is
-   * unavailable — we can't tell code from data without it.
+   * Likely data, not code: the classification is known (runtime coverage, a
+   * static analysis, or both) yet neither reached this instruction, and it
+   * isn't the imminent PC. `false` when nothing classifies the window — we
+   * can't tell code from data without it.
    */
   data: boolean
 }
@@ -47,6 +50,11 @@ export interface DisasmRowsOptions {
   codemapHex?: string
   /** Resolve an address to a firmware/symbol label (operand + definition naming). */
   resolve?: (addr: number) => string | undefined
+  /**
+   * Instruction addresses the static flow analysis reached ({@link analyzeZones}).
+   * Unioned with the runtime coverage, as the emulator's own disassembler does.
+   */
+  zones?: ReadonlySet<number>
 }
 
 const hex4 = (n: number): string => (n & 0xffff).toString(16).toUpperCase().padStart(4, "0")
@@ -76,7 +84,16 @@ export function stepBase(read: ByteReader, base: number, deltaInstructions: numb
  * Pure; the panel reads the bytes and acts on the rows.
  */
 export function buildDisasmRows(opts: DisasmRowsOptions): DisasmRow[] {
-  const { read, base, instructionOffset, instructionCount, pc, codemapHex = "", resolve } = opts
+  const {
+    read,
+    base,
+    instructionOffset,
+    instructionCount,
+    pc,
+    codemapHex = "",
+    resolve,
+    zones,
+  } = opts
   const window = decodeWindow(read, base, instructionOffset, instructionCount)
   const instructions = window
     .filter(isInstructionRow)
@@ -94,20 +111,22 @@ export function buildDisasmRows(opts: DisasmRowsOptions): DisasmRow[] {
       return `#${digits.toUpperCase()}`
     })
 
-  // Coverage is "known" only when the emulator returned a full bitmap; without
-  // it we can't classify code vs data, so nothing is marked as data.
-  const coverageKnown = codemapHex.length >= 16384
+  // Coverage is "known" only when the emulator returned a full bitmap. A static
+  // analysis classifies the window on its own; without either, nothing is data.
+  const classified = codemapHex.length >= 16384 || zones !== undefined
 
   return window.map((row) => {
     const label = labelFor(row.addr)
     const isPc = pc !== undefined && row.addr === (pc & 0xffff)
     const executed = isExecuted(codemapHex, row.addr)
+    const analyzed = zones?.has(row.addr) ?? false
     const common = {
       addr: row.addr,
       address: hex4(row.addr),
       isPc,
       executed,
-      data: coverageKnown && !executed && !isPc && isInstructionRow(row),
+      analyzed,
+      data: classified && !executed && !analyzed && !isPc && isInstructionRow(row),
       ...(label ? { label } : {}),
     }
     if (!isInstructionRow(row)) return { ...common, bytes: "", text: "..." }

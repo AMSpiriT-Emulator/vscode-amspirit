@@ -491,6 +491,16 @@ describe("EmulatorClient", () => {
     })
   })
 
+  describe("clearCodemap", () => {
+    it("DELETEs /api/codemap", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.clearCodemap()
+      const rec = fake.recorded.at(0)
+      expect(rec?.method).toBe("DELETE")
+      expect(rec?.url).toBe("/api/codemap")
+    })
+  })
+
   describe("getZ80", () => {
     it("GETs /api/z80 and returns the register snapshot", async () => {
       fake.responder = jsonResponder({

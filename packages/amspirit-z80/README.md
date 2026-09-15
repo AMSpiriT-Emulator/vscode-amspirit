@@ -24,7 +24,8 @@ assembly straight from VS Code.
     selector, pointer-register highlight, code-coverage shading, inline byte
     editing and range-select → label-aware disassembly.
   - **Disassembly** — a live, label-aware listing (firmware + symbol-map labels,
-    code-vs-data) with Follow PC, paging and range-export to `.asm`.
+    code-vs-data) with Follow PC, paging, zone analysis from the PC and
+    range-export to `.asm`.
 
 ## Requirements
 
