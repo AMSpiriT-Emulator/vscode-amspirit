@@ -28,11 +28,14 @@ doc/
 ```
 
 The emulator is an **external dependency**, not in this repo. Its HTTP API lives
-at `127.0.0.1:8765` by default; relevant builds are `amspirit-lite-sdl` and
-`amspirit-lite-qt` (transport is plain HTTP, so the extension is build-agnostic).
-The emulator source (for API reference) is typically a sibling checkout at
-`../amspirit-lite` — see `src/doc/web_server_api.md` and
-`src/amspirit-helpers/src/web_server.cpp` there.
+at `127.0.0.1:6128` by default (was `8765` before lite 1.14); relevant builds are
+`amspirit-lite-sdl`, `amspirit-lite-qt` and `amspirit-lite-headless` (transport
+is plain HTTP, so the extension is build-agnostic). A running emulator documents
+its own API at `GET /api/doc` (one row per endpoint) and `GET /api/doc/<name>`
+(full detail for one endpoint). The emulator source (for API reference) is a
+sibling checkout at `../amspirit-lite` (`~/Developer/z80/amspirit-lite`) — see
+`src/doc/web_server_api.md` and `src/amspirit-helpers/src/web_handle.cpp` there
+(`web_server.cpp` only holds transport + SSE).
 
 ## Commands
 

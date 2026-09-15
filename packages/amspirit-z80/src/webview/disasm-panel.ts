@@ -288,7 +288,7 @@ export class DisasmPanel implements vscode.WebviewViewProvider {
   private async ensureBanks(client: EmulatorClient): Promise<void> {
     if (this.banks.length > 0) return
     try {
-      this.banks = memoryBanks((await client.getConfig()).extendedRam)
+      this.banks = memoryBanks((await client.getConfig()).ramKb)
     } catch {
       // leave empty; retried next tick
     }

@@ -28,7 +28,7 @@ build that exposes the web debug server works** — currently the **SDL**
 (`amspirit-lite-sdl`) and **Qt** (`amspirit-lite-qt`) desktop builds:
 
 ```bash
-amspirit-lite-sdl --web-server --web-port 8765   # or: amspirit-lite-qt --web-server
+amspirit-lite-sdl --web-server --web-port 6128   # or: amspirit-lite-qt --web-server
 ```
 
 Point the extension at the binary via `amspirit.emulatorPath`, or run
@@ -49,7 +49,7 @@ or use the built-in **Attach to AMSpiriT** default. A typical
 ```jsonc
 {
   "configurations": [
-    { "type": "amspirit-basic", "request": "attach", "name": "Attach to AMSpiriT", "port": 8765 },
+    { "type": "amspirit-basic", "request": "attach", "name": "Attach to AMSpiriT", "port": 6128 },
     { "type": "amspirit-basic", "request": "launch", "name": "Launch current BASIC", "program": "${file}", "stopOnEntry": true }
   ]
 }
@@ -73,7 +73,7 @@ What you get:
 |---|---|---|---|
 | `program` | launch | `${file}` | `.bas` file injected before debugging |
 | `host` | attach / launch | `127.0.0.1` | Emulator web-debug host |
-| `port` | attach / launch | `8765` | Emulator web-debug port (matches `amspirit.webPort`) |
+| `port` | attach / launch | `6128` | Emulator web-debug port (matches `amspirit.webPort`) |
 | `stopOnEntry` | attach / launch | `true` (launch) / `false` (attach) | Pause as soon as debugging starts |
 
 > Stepping operates at the BASIC level. The emulator interprets BASIC, so the
@@ -102,7 +102,7 @@ What you get:
 | Setting | Default | Description |
 |---|---|---|
 | `amspirit.emulatorPath` | _(empty)_ | Absolute path to the `amspirit-lite-sdl` binary |
-| `amspirit.webPort` | `8765` | Port of the emulator's web debug server (`--web-port`) |
+| `amspirit.webPort` | `6128` | Port of the emulator's web debug server (`--web-port`) |
 | `amspirit.autoLaunch` | `false` | Launch the emulator at activation if unreachable |
 | `amspirit.emulatorArgs` | `[]` | Extra args appended after `--web-server --web-port <port>` |
 

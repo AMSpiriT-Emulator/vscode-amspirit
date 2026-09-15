@@ -5,7 +5,7 @@
       "type": "amspirit-basic",
       "request": "attach",
       "name": "Attach to AMSpiriT",
-      "port": 8765,
+      "port": 6128,
       "stopOnEntry": false
     },
     {
@@ -23,7 +23,7 @@
       "binary": "${workspaceFolder}/hello.bin",
       "mapFile": "${workspaceFolder}/hello.sld",
       "stopOnEntry": true,
-      "port": 8765,
+      "port": 6128,
       "preLaunchTask": "sjasmplus: assemble hello"
     },
     {
@@ -34,7 +34,7 @@
       "binary": "${workspaceFolder}/hello-rasm.bin",
       "mapFile": "${workspaceFolder}/hello-rasm.map",
       "stopOnEntry": true,
-      "port": 8765,
+      "port": 6128,
       "preLaunchTask": "rasm: assemble hello-rasm"
     },
     {
@@ -45,7 +45,7 @@
       "binary": "${workspaceFolder}/vectors.bin",
       "mapFile": "${workspaceFolder}/vectors.sld",
       "stopOnEntry": true,
-      "port": 8765,
+      "port": 6128,
       "preLaunchTask": "sjasmplus: assemble vectors"
     },
     {
@@ -53,7 +53,7 @@
       "request": "attach",
       "name": "Attach Z80 (current file)",
       "program": "${file}",
-      "port": 8765,
+      "port": 6128,
       "stopOnEntry": false
     }
   ]

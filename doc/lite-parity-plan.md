@@ -64,9 +64,11 @@ Ten tabs over ~40 HTTP endpoints + one SSE stream (`/api/events`):
 ### Memory‑mapping / banking awareness (cross‑cutting — important)
 The lite Debug tab treats the **memory configuration** as a first‑class concern:
 `/api/memmap` reports ROM/RAM per 16 KB region + banking (`rmr`, `ram_mode` the
-`&7Fxx` value 0–7, `ram_page`, `ext`), `/api/ram` takes `bank=` (central 0 vs
-extended pages) and `view=cpu` (memory *as the Z80 sees it*, ROM overlays + RAM
-banking applied). It renders a **memmap bar** and keeps every read/write/search
+`&7Fxx` value 0–7, `ram_page`, `ext`), `/api/ram` takes `bank=` (**16 KB banks**
+since lite 1.14: 0–3 = central 64 KB, 4+ = extension, `addr` carries across
+banks) and `view=cpu` (memory *as the Z80 sees it*, ROM overlays + RAM banking
+applied). `POST /api/ram` takes `bank` too (2026‑09‑15: our `writeRam` does not
+send it yet). It renders a **memmap bar** and keeps every read/write/search
 config‑aware.
 
 Where we stand: our Memory view already exposes the **bank selector** (central +
@@ -106,20 +108,34 @@ RAM search stays a pure helper over `readRam`. These primitives unblock the rest
 3. **RAM search** in the Memory view (pure `memory-model.ts` search + Find/Next UI).
 
 **Phase 2 — live screen capture.** Webview view rendering the emulator PNG,
-refreshed via `RefreshScheduler`, with a current‑breakpoint overlay. *Prereq:*
-confirm the exact PNG endpoint/params in `amspirit-lite/src/amspirit-helpers/src/web_png.cpp`
-(not in `web_server_api.md`).
+refreshed via `RefreshScheduler`, with a current‑breakpoint overlay. *Prereq
+resolved (2026‑09‑15):* `GET /api/screenshot[?crop&live&full]` is documented —
+`image/png`, `503` before the first frame, and `X-Beam-X/Y` + `X-Crop-X/Y/W/H`
+headers give the beam position in the same space `POST /api/raster_bp?x&y` takes.
+So the view can also **arm a raster breakpoint by clicking the screen**.
 
 **Phase 3 — Step Back / timeline** (reconciles with STATUS *reverse‑debug*).
-Depends on the emulator exposing its recorded Z80 history over HTTP
-(`session_record_z80_history` exists internally; no endpoint yet). **Action:**
-raise the API need on `amspirit-lite` first; implement `stepBack`/`reverseContinue`
-DAP once the endpoint lands. Blocked until then.
+*Unblocked (2026‑09‑15):* the emulator now exposes a **timelapse** —
+`POST /api/tl_back` steps one snapshot back, and `emu` (`/api/ping`,
+`/api/state`) carries `tl_active`, `tl_steps_back`, `tl_steps_fwd` and
+`tl_step_kind` (`"frame"` / `"basic"` / `"z80"`). Only *back* has an endpoint
+so far (no `tl_fwd`), and `/api/screenshot` forces `live=0` while rewound.
+`/api/history` entries also now carry registers (`a`, `f`, `bc`, `de`, `hl`,
+`sp`, `ix`, `iy`, `a2`, `f2`, …) next to `pc`/`hex`. **Action:** wrap `tlBack()`
++ the `tl_*` fields in `EmulatorClient` (TDD), then a DAP `stepBack` gated on
+`tl_steps_back > 0`; check how the timelapse is enabled on the emulator side
+(flag / config) before wiring.
 
 **Phase 4 — CSL/Lua scripting.** "Run script" command (active `.csl`/`.lua`
-buffer → `runScript`), state indicator + abort. Also covers the existing
-STATUS follow‑up *SNA/DSK load via `/api/script`* (DeZog parity). Good synergy
-with editing scripts in VS Code.
+buffer → `runScript`), state indicator + abort. `GET /api/script` now also
+returns `output` (the `print()` capture, 64 KiB cap) — surface it in an output
+channel. `POST /api/eval` + `GET /api/eval?seq=N` (persistent Lua console,
+request/response) is a natural REPL. Network scripts run **sandboxed** (no
+`io`/`os`/`require`; jailed `fs.*`) unless the emulator runs with
+`--lua-full-stdlib`. The former STATUS follow‑up *SNA/DSK load via `/api/script`*
+now has a direct route: **`POST /api/media?name=<file>&drive=<0|1>`** takes the
+raw SNA/DSK/HFE/IPF/CPR/CRO/BIN bytes (headerless `.bin` needs
+`name=game@4000[@ENTRY].bin`); `.cdt` is not supported there.
 
 **Phase 5 (optional) — config & input.** Palette commands to change model/CRTC,
 reset, and send keystrokes. Virtual keyboard itself deprioritised (redundant with
@@ -127,6 +143,29 @@ the emulator window).
 
 ### Sequencing note
 Phase 0 first (unblocks all), then 1 → 2 → 4 as independent PRs (each its own
-changeset). Phase 3 is gated on an emulator API addition and should be scheduled
-only once that endpoint exists.
+changeset). Phase 3 was gated on an emulator API addition; that landed
+(`/api/tl_back`, see above), so it can now be scheduled after Phase 1.
+
+## 5. API changes since this plan was written (lite 1.14 → 1.15, 2026‑09‑15)
+
+Source of truth: a running emulator's `GET /api/doc` (+ `/api/doc/<name>`) and
+`amspirit-lite/src/doc/web_server_api.md`. What changed for us:
+
+| Change | Impact on this repo |
+|---|---|
+| Default port **`6128`** (was `8765`) | Defaults switched everywhere (client, settings, manifests, docs). Done. |
+| `/api/ram` `bank` = **16 KB banks** (was 64 KB bank64s); `POST /api/ram` takes `bank` | `memoryBanks()` addresses each extended bank64 by its first 16 KB bank; `writeRam` still central‑only. Done (read side). |
+| `/api/config` adds `ram_kb` (total, 128/192/320/576); `extended_ram` is a raw index | `EmulatorConfig.ramKb`; bank count derived from it. Done. |
+| `emu.frame` → **`emu.frames`**; new `frame_ms`, `autotyping`, `autotype_remaining`, `tl_*`, `ram_apply_seq` | `EmuState.frames` + `ramApplySeq` mapped; `tl_*` pending Phase 3. |
+| `POST /api/ram` / `/api/exec` answer `{ok, seq}`; readback must wait for `emu.ram_apply_seq >= seq` | `writeRam`/`execAt` return `seq`. **Launch should wait on it** instead of the dirty‑prefetch workaround — to try. |
+| **`400 {error, field}`** for a rejected request (was `200` + no effect); `405 {error, allow}` for an undocumented method | `send()` rejects with the message. Done. |
+| SSE `frame` event every **10 frames (~5 Hz)**, not per frame | Comment fixed; `RefreshScheduler` already throttles. |
+| `/api/z80_bp` accepts **`Bnn:hhhh` physical locations**; a CPU address is resolved against the live mapping on apply (fires on the byte, not the address) | Bank‑aware breakpoints possible (symbol maps carry banks). Follow‑up. |
+| New: `/api/tl_back`, `/api/screenshot` (documented), `/api/beam`, `/api/raster_bp`, `/api/media`, `/api/disk`, `/api/eval`, `/api/quit`, `/api/license`, `/api/doc/<name>` | Phases 2/3/4 above. |
+| `/api/history` entries carry registers | History view could show them (Phase 3 timeline). |
+| `/api/basic_bp` doc says "line numbers"; the handler still parses **statement addresses** (`h_basic_bp`) | No change; our client is right. Watch for a future flip. |
+
+Known emulator limitation (documented upstream): `bank=4+` reads
+`Memory_Extended[]`, **not** the live banked RAM the Z80 writes through
+`OUT (&7Fxx)`; use `view=cpu` to see what is paged in.
 </content>

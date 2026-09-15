@@ -62,9 +62,9 @@ describe("EmulatorClient", () => {
   })
 
   describe("constructor", () => {
-    it("uses default port 8765 and host 127.0.0.1", () => {
+    it("uses default port 6128 and host 127.0.0.1", () => {
       const c = new EmulatorClient()
-      expect(c.port).toBe(8765)
+      expect(c.port).toBe(6128)
       expect(c.host).toBe("127.0.0.1")
     })
 
@@ -336,6 +336,29 @@ describe("EmulatorClient", () => {
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.writeRam(0, [0])).rejects.toThrow(/rejected RAM write/)
     })
+
+    it("resolves with the apply seq the emulator issued for the queued write", async () => {
+      fake.responder = jsonResponder({ ok: true, seq: 7 })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.writeRam(0x8000, [0x3e])).resolves.toBe(7)
+    })
+
+    it("resolves undefined when the emulator issues no seq (older builds)", async () => {
+      fake.responder = jsonResponder({ ok: true })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.writeRam(0x8000, [0x3e])).resolves.toBeUndefined()
+    })
+
+    it("surfaces the emulator's reason on a 400 instead of the generic message", async () => {
+      fake.responder = (_req, res) => {
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end(
+          '{"error":"field \\"data\\" must be a string of hexadecimal digits","field":"data"}',
+        )
+      }
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.writeRam(0, [0])).rejects.toThrow(/hexadecimal digits/)
+    })
   })
 
   describe("step", () => {
@@ -415,17 +438,25 @@ describe("EmulatorClient", () => {
       fake.responder = jsonResponder({
         cpc_model: 2,
         crtc_type: 1,
-        extended_ram: 256,
+        extended_ram: 3,
+        ram_kb: 320,
         rom_lang: "EN",
       })
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.getConfig()).resolves.toEqual({
         cpcModel: 2,
         crtcType: 1,
-        extendedRam: 256,
+        extendedRam: 3,
+        ramKb: 320,
         romLang: "EN",
       })
       expect(fake.recorded.at(0)?.url).toBe("/api/config")
+    })
+
+    it("falls back to the 128 KB floor when ram_kb is absent (older builds)", async () => {
+      fake.responder = jsonResponder({ cpc_model: 2 })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.getConfig()).resolves.toMatchObject({ ramKb: 128 })
     })
   })
 
@@ -505,7 +536,7 @@ describe("EmulatorClient", () => {
           rasterline: 87,
           vsync: true,
         },
-        emu: { fps: 50, frame: 99, paused: true, cpc_model: 2, crtc_type: 1 },
+        emu: { fps: 50, frames: 99, paused: true, cpc_model: 2, crtc_type: 1, ram_apply_seq: 7 },
       })
       const client = new EmulatorClient({ port: fake.port })
       const s = await client.getState()
@@ -539,7 +570,14 @@ describe("EmulatorClient", () => {
         rasterline: 87,
         vsync: true,
       })
-      expect(s.emu).toEqual({ fps: 50, frame: 99, paused: true, cpcModel: 2, crtcType: 1 })
+      expect(s.emu).toEqual({
+        fps: 50,
+        frames: 99,
+        paused: true,
+        cpcModel: 2,
+        crtcType: 1,
+        ramApplySeq: 7,
+      })
     })
 
     it("fills missing sub-objects with safe defaults", async () => {
@@ -650,6 +688,12 @@ describe("EmulatorClient", () => {
       expect(rec?.headers["content-type"]).toMatch(/application\/json/)
       expect(JSON.parse(rec?.body ?? "{}")).toEqual({ addr: 0x8000 })
     })
+
+    it("resolves with the apply seq so callers can wait for the redirect", async () => {
+      fake.responder = jsonResponder({ ok: true, seq: 12 })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.execAt(0x8000)).resolves.toBe(12)
+    })
   })
 
   describe("runScript", () => {
@@ -746,6 +790,38 @@ describe("EmulatorClient", () => {
       expect(rec?.method).toBe("POST")
       expect(rec?.url).toBe("/api/keypress")
       expect(JSON.parse(rec?.body ?? "{}")).toEqual({ vk: 32 })
+    })
+  })
+
+  // The emulator answers 400 {error,field} (or 405 {error,allow}) for a request
+  // it cannot apply — it never reports success for a request it ignored — so a
+  // mutating call must reject with that reason rather than resolve silently.
+  describe("request errors", () => {
+    it("rejects a POST with the emulator's error message on a 400", async () => {
+      fake.responder = (_req, res) => {
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end('{"error":"field \\"vk\\" must be between 0 and 255","field":"vk"}')
+      }
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.keypress(300)).rejects.toThrow(/field "vk" must be between 0 and 255/)
+    })
+
+    it("rejects a DELETE with the status when the body carries no error", async () => {
+      fake.responder = (_req, res) => {
+        res.writeHead(405, { "Content-Type": "text/plain", Allow: "GET, POST" })
+        res.end("Method Not Allowed")
+      }
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.abortScript()).rejects.toThrow(/HTTP 405/)
+    })
+
+    it("rejects a POST with the status when the error body is not JSON", async () => {
+      fake.responder = (_req, res) => {
+        res.writeHead(400, { "Content-Type": "text/plain" })
+        res.end("Bad Request")
+      }
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.step()).rejects.toThrow(/HTTP 400/)
     })
   })
 })

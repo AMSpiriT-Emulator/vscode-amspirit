@@ -140,21 +140,42 @@ describe("pointerMarks", () => {
 })
 
 describe("memoryBanks", () => {
-  it("offers CPU view + main RAM on a stock machine (no expansion)", () => {
-    expect(memoryBanks(0)).toEqual([
+  // `/api/ram`'s `bank` counts 16 KB banks (lite >= 1.14): 0-3 = central 64 KB,
+  // 4+ = extension. One selector entry per extended bank64 => bank 4, 8, 12, ...
+  it("offers CPU view + main RAM + the one banked 64 KB every machine has (128 KB floor)", () => {
+    expect(memoryBanks(128)).toEqual([
       { id: "cpu", label: "CPU view", bank: 0, cpuView: true },
       { id: "ram", label: "Main RAM", bank: 0, cpuView: false },
+      { id: "bank1", label: "Bank 1 (B04-B07)", bank: 4, cpuView: false },
     ])
   })
 
-  it("adds one extended bank per 64 KB of expansion RAM", () => {
-    const banks = memoryBanks(256)
-    expect(banks.map((b) => b.id)).toEqual(["cpu", "ram", "bank1", "bank2", "bank3", "bank4"])
-    expect(banks.at(-1)).toEqual({ id: "bank4", label: "Bank 4", bank: 4, cpuView: false })
+  it("adds one extended bank64 per 64 KB beyond the central 64 KB, addressed by its first 16 KB bank", () => {
+    const banks = memoryBanks(576)
+    expect(banks.map((b) => b.id)).toEqual([
+      "cpu",
+      "ram",
+      "bank1",
+      "bank2",
+      "bank3",
+      "bank4",
+      "bank5",
+      "bank6",
+      "bank7",
+      "bank8",
+    ])
+    expect(banks.at(-1)).toEqual({
+      id: "bank8",
+      label: "Bank 8 (B20-B23)",
+      bank: 32,
+      cpuView: false,
+    })
   })
 
-  it("treats partial/garbage sizes as no extra banks", () => {
-    expect(memoryBanks(32).map((b) => b.id)).toEqual(["cpu", "ram"])
+  it("treats a central-only / partial / garbage total as no extra banks", () => {
+    expect(memoryBanks(64).map((b) => b.id)).toEqual(["cpu", "ram"])
+    expect(memoryBanks(96).map((b) => b.id)).toEqual(["cpu", "ram"])
+    expect(memoryBanks(0).map((b) => b.id)).toEqual(["cpu", "ram"])
     expect(memoryBanks(-100).map((b) => b.id)).toEqual(["cpu", "ram"])
   })
 })

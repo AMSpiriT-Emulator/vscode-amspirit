@@ -11,7 +11,7 @@ export interface EmulatorClientOptions {
 }
 
 const DEFAULTS = {
-  port: 8765,
+  port: 6128,
   host: "127.0.0.1",
   pingTimeoutMs: 2000,
   injectTimeoutMs: 5000,
@@ -163,12 +163,23 @@ export interface CrtcState {
 /** Emulator status from `/api/state` (`emu`). */
 export interface EmuState {
   fps: number
-  frame: number
+  /**
+   * Completed emulated frames since startup. The only emulated-time clock over
+   * HTTP: `0` means the emulation loop has not run yet (PC is 0, RAM is the
+   * post-reset fill), so an automation client paces on this, not wall time.
+   */
+  frames: number
   paused: boolean
   /** CPC model: 0=464, 1=664, 2=6128, 4=6128+, 5=464+, 6=GX4000. */
   cpcModel: number
   /** CRTC type (0–4). */
   crtcType: number
+  /**
+   * Bumped once per queued RAM write / PC redirect the main thread applied.
+   * Compare with the `seq` returned by `writeRam` / `execAt` before trusting a
+   * readback.
+   */
+  ramApplySeq: number
 }
 
 /** Full chip snapshot from `GET /api/state`. */
@@ -213,8 +224,13 @@ export interface EmulatorConfig {
   /** CPC model index (0=464, 1=664, 2=6128, …). */
   cpcModel: number
   crtcType: number
-  /** Expansion RAM in KB beyond the base machine (0 on a stock machine). */
+  /** Raw `CORE_EXTENDED_RAM_*` index of the banked half (not a size). */
   extendedRam: number
+  /**
+   * Total RAM in KB, central 64 KB included: 128, 192, 320 or 576. The core
+   * always provides one banked 64 KB bank64, so 128 is the floor.
+   */
+  ramKb: number
   romLang: string
 }
 
@@ -422,10 +438,11 @@ export class EmulatorClient {
       }
       emu?: {
         fps?: number
-        frame?: number
+        frames?: number
         paused?: boolean
         cpc_model?: number
         crtc_type?: number
+        ram_apply_seq?: number
       }
     }>("/api/state", this.debugTimeoutMs)
     const ga = raw.ga ?? {}
@@ -472,10 +489,11 @@ export class EmulatorClient {
       },
       emu: {
         fps: emu.fps ?? 0,
-        frame: emu.frame ?? 0,
+        frames: emu.frames ?? 0,
         paused: emu.paused ?? false,
         cpcModel: emu.cpc_model ?? 0,
         crtcType: emu.crtc_type ?? 0,
+        ramApplySeq: emu.ram_apply_seq ?? 0,
       },
     }
   }
@@ -521,6 +539,12 @@ export class EmulatorClient {
    * Read `len` bytes from `addr` via `/api/ram`. By default reads raw central
    * RAM; with `cpuView`, reads memory as the Z80 sees it (ROM/RAM mapping
    * applied) — use this to disassemble around PC, which often points into ROM.
+   *
+   * `bank` counts **16 KB banks** (lite ≥ 1.14): 0–3 = central 64 KB, 4+ =
+   * extension (`B04`…). An `addr` above `0x3FFF` carries into the next bank,
+   * so `bank=4, addr=0, len=65536` reads a whole extended bank64. (Before
+   * 1.14 the same parameter counted 64 KB bank64s — nothing on the wire can
+   * tell the two apart, so callers must send the new unit.)
    */
   async readRam(
     addr: number,
@@ -528,8 +552,7 @@ export class EmulatorClient {
     opts: { cpuView?: boolean; bank?: number } = {},
   ): Promise<number[]> {
     const params = [`addr=${addr}`, `len=${len}`]
-    // bank 0 = central RAM, 1..N = extended page N-1; the CPU-visible view (ROM
-    // mapped in) only applies to the central bank.
+    // The CPU-visible view (ROM mapped in) only applies to the central bank.
     if (opts.bank) params.push(`bank=${opts.bank}`)
     if (opts.cpuView) params.push("view=cpu")
     const res = await this.getJson<{ hex?: string; error?: string }>(
@@ -548,12 +571,15 @@ export class EmulatorClient {
       cpc_model?: number
       crtc_type?: number
       extended_ram?: number
+      ram_kb?: number
       rom_lang?: string
     }>("/api/config", this.debugTimeoutMs)
     return {
       cpcModel: raw.cpc_model ?? 0,
       crtcType: raw.crtc_type ?? 0,
       extendedRam: raw.extended_ram ?? 0,
+      // Builds before `ram_kb` all had the 128 KB floor.
+      ramKb: raw.ram_kb ?? 128,
       romLang: raw.rom_lang ?? "",
     }
   }
@@ -562,12 +588,16 @@ export class EmulatorClient {
    * Write `bytes` to CPC RAM at `addr` via `POST /api/ram`. With `exec`, the
    * Z80 jumps to `entry` (default `addr`) after the write — used to load and run
    * an assembled program. Throws if the emulator does not acknowledge.
+   *
+   * The write is queued, not applied in place: resolves with the `seq` that
+   * `EmuState.ramApplySeq` reaches once the main thread has applied it
+   * (`undefined` on builds that issue none). Poll that before reading back.
    */
   async writeRam(
     addr: number,
     bytes: readonly number[],
     opts: { exec?: boolean; entry?: number } = {},
-  ): Promise<void> {
+  ): Promise<number | undefined> {
     const data = bytes.map((b) => (b & 0xff).toString(16).padStart(2, "0")).join("")
     const body: { addr: number; data: string; exec?: boolean; entry?: number } = { addr, data }
     if (opts.exec) body.exec = true
@@ -578,13 +608,9 @@ export class EmulatorClient {
       "application/json",
       this.debugTimeoutMs,
     )
-    let parsed: { ok?: boolean }
-    try {
-      parsed = JSON.parse(res) as { ok?: boolean }
-    } catch {
-      parsed = {}
-    }
+    const parsed = parseAck(res)
     if (!parsed.ok) throw new Error("Emulator rejected RAM write")
+    return parsed.seq
   }
 
   /**
@@ -606,9 +632,18 @@ export class EmulatorClient {
     return (raw ?? []).map((e) => ({ pc: e.pc ?? 0, hex: e.hex ?? "" }))
   }
 
-  /** Redirect the Z80 PC to `addr` (no RAM write) via `POST /api/exec`. */
-  async execAt(addr: number): Promise<void> {
-    await this.post("/api/exec", JSON.stringify({ addr }), "application/json", this.debugTimeoutMs)
+  /**
+   * Redirect the Z80 PC to `addr` (no RAM write) via `POST /api/exec`. Same
+   * queued-apply contract as `writeRam`: resolves with the apply `seq`.
+   */
+  async execAt(addr: number): Promise<number | undefined> {
+    const res = await this.post(
+      "/api/exec",
+      JSON.stringify({ addr }),
+      "application/json",
+      this.debugTimeoutMs,
+    )
+    return parseAck(res).seq
   }
 
   /**
@@ -750,7 +785,14 @@ export class EmulatorClient {
           res.on("data", (chunk: string) => {
             data += chunk
           })
-          res.on("end", () => settle(() => resolve(data)))
+          res.on("end", () => {
+            const status = res.statusCode ?? 0
+            if (status < 200 || status >= 300) {
+              settle(() => reject(new Error(describeError(status, data))))
+              return
+            }
+            settle(() => resolve(data))
+          })
         },
       )
       req.on("error", (err) => settle(() => reject(err)))
@@ -761,6 +803,34 @@ export class EmulatorClient {
       if (buf) req.write(buf)
       req.end()
     })
+  }
+}
+
+/**
+ * The reason behind a non-2xx answer. The emulator rejects a request it cannot
+ * apply with `400 {"error":…,"field":…}` (or `405 {"error":…,"allow":…}`), and
+ * that message is what the user needs to see; fall back to the bare status.
+ */
+function describeError(status: number, body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { error?: unknown }
+    if (typeof parsed.error === "string" && parsed.error !== "") return parsed.error
+  } catch {
+    // not JSON — fall through
+  }
+  return `HTTP ${status}`
+}
+
+/** `{ok, seq}` acknowledgement of a queued mutation; tolerant of junk bodies. */
+function parseAck(body: string): { ok: boolean; seq: number | undefined } {
+  try {
+    const parsed = JSON.parse(body) as { ok?: unknown; seq?: unknown }
+    return {
+      ok: parsed.ok === true,
+      seq: typeof parsed.seq === "number" ? parsed.seq : undefined,
+    }
+  } catch {
+    return { ok: false, seq: undefined }
   }
 }
 

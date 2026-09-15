@@ -157,7 +157,7 @@ export class MemoryPanel implements vscode.WebviewViewProvider {
     const { rows, marks, executed } = await this.readWindow(client)
     this.post({
       type: "snapshot",
-      // Editing writes central RAM (`/api/ram` has no bank arg), so it's only
+      // Editing writes central RAM (the extension does not send `bank` yet), so it's only
       // offered on the central-bank views (CPU view / Main RAM).
       snapshot: { rows, marks, executed, banks: this.banks, editable: this.bankView.bank === 0 },
     })
@@ -229,7 +229,7 @@ export class MemoryPanel implements vscode.WebviewViewProvider {
   private async ensureBanks(client: EmulatorClient): Promise<void> {
     if (this.banks.length > 0) return
     try {
-      this.banks = memoryBanks((await client.getConfig()).extendedRam)
+      this.banks = memoryBanks((await client.getConfig()).ramKb)
     } catch {
       // leave empty; retried next tick
     }
