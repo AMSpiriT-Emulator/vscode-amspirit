@@ -307,6 +307,17 @@
 | **Lite parity — Step Back / timeline** | 🟡 | Phase 3 = *reverse‑debug* row above: Step Back ✅ (2026-09-15), Reverse Continue / forward navigation pending an emulator endpoint |
 | Peripheral views — full CRTC register file (R0–R13) | ✅ | 2026-06-23, branch `feat/sse-integration`. `/api/state.crtc` now carries `regs` R0–R13 + `selected_reg`/`rasterline`/`vsync` (core `build_crtc_json`; R14–R17 + counters/HSYNC/VMA still commented out). Shared `CrtcState` + `getState()` mapping (TDD); `buildCrtcScopes(crtc,emu)` shows the register file (named decimal), chip variant, selected reg, raster line and real CRTC VSYNC. Kept strictly CRTC — dropped machine context (model/frame/FPS) and the GA HSYNC proxy; no derived "screen address" (R12/R13 are the raw 6845 MA start, not a CPU address). Gate green (shared 160 / z80 218). Changeset `crtc-register-file.md` (`minor` shared+z80). Not yet live-validated |
 
+## Dev-host gotcha (2026-09-15)
+
+VS Code 1.136 starts every extension host with `--experimental-network-inspection`.
+When js-debug attaches to the Extension Development Host with its network view
+on, Node throws `TypeError: Missing dataLength in event` (`node:inspector`) on
+every HTTP response chunk, so **no `EmulatorClient` request completes** and the
+extension shows "not connected" / a launch does nothing. Fix: set
+`"debug.javascript.enableNetworkView": false` in the *root* workspace
+`.vscode/settings.json` (git-ignored, so re-add it on a fresh clone) and restart
+the dev host. `experimentalNetworking` is not an `extensionHost` launch option.
+
 ## Guardrail baseline
 
 `pnpm precommit` is the gate (build → Biome → typecheck → test:coverage → knip);
