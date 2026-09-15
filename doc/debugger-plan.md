@@ -18,7 +18,7 @@
 Source : [`amspirit-lite/src/amspirit-helpers/src/web_server.cpp`](../../amspirit-lite/src/amspirit-helpers/src/web_server.cpp)
 Doc : [`amspirit-lite/doc/web_server_api.md`](../../amspirit-lite/doc/web_server_api.md)
 
-Serveur HTTP **mono-thread, sans keep-alive**, bind `127.0.0.1:8765` :
+Serveur HTTP **mono-thread, sans keep-alive**, bind `127.0.0.1:6128` :
 
 | Endpoint | Méthode | Rôle |
 |---|---|---|
@@ -72,14 +72,14 @@ L'extension doit implémenter un **Debug Adapter** DAP. La question devient : qu
 |---|---|---|
 | **A. HTTP existant + polling** | Zéro modif émulateur | Latence, gaspillage CPU, pas d'événements push |
 | **B. HTTP + SSE (`/api/events`)** | Ajout minimal côté émulateur, garde HTTP pour les commandes | Mi-figue mi-raisin, 2 modèles à maintenir |
-| **C. WebSocket sur le même port 8765** | Bidirectionnel, événements push, faible overhead, déjà standard | Ajout d'une lib WS côté C++ (mais embed simple possible) |
+| **C. WebSocket sur le même port 6128** | Bidirectionnel, événements push, faible overhead, déjà standard | Ajout d'une lib WS côté C++ (mais embed simple possible) |
 | **D. Socket TCP brut + protocole binaire (style GDB Remote)** | Performant, le fichier `gdb_server.cpp` suggère que c'était l'intention | Protocole custom à spécifier, plus de code C++ |
 | **E. Implémenter le vrai protocole GDB Remote Serial** | Réutilise outils existants (gdb, lldb) | Très lourd pour le bénéfice côté VS Code, et VS Code parle DAP pas GDB |
 
 **Reco : C (WebSocket) à terme, A (HTTP+polling) en MVP.**
 Justification :
 - MVP testable **sans toucher à l'émulateur** → on livre vite, on valide l'UX DAP.
-- Migration WS = ajout incrémental (`/ws` upgrade sur le port 8765, ajouter une nouvelle `WebPending::breakpoints` côté C++).
+- Migration WS = ajout incrémental (`/ws` upgrade sur le port 6128, ajouter une nouvelle `WebPending::breakpoints` côté C++).
 - Le Debug Adapter expose une interface `EmulatorTransport` → A et C cohabitent derrière la même abstraction.
 
 ---
@@ -107,7 +107,7 @@ Justification :
 │  └─────────────────────┘                       │                    │
 └────────────────────────────────────────────────┼────────────────────┘
                                                  │
-                                       HTTP :8765│ (puis WS :8765/ws)
+                                       HTTP :6128│ (puis WS :6128/ws)
                                                  ▼
                                   ┌──────────────────────────────┐
                                   │      amspirit-lite (C++)     │
@@ -233,7 +233,7 @@ packages/amspirit-debugger/
       "configurationAttributes": {
         "attach": {
           "properties": {
-            "port": { "type": "number", "default": 8765 },
+            "port": { "type": "number", "default": 6128 },
             "host": { "type": "string", "default": "127.0.0.1" },
             "stopOnEntry": { "type": "boolean", "default": false }
           }
@@ -243,13 +243,13 @@ packages/amspirit-debugger/
           "properties": {
             "program":     { "type": "string", "description": "Chemin du .bas à injecter" },
             "emulatorPath":{ "type": "string" },
-            "port":        { "type": "number", "default": 8765 },
+            "port":        { "type": "number", "default": 6128 },
             "stopOnEntry": { "type": "boolean", "default": true }
           }
         }
       },
       "initialConfigurations": [
-        { "type": "amspirit", "request": "attach", "name": "Attach AMSpiriT", "port": 8765 }
+        { "type": "amspirit", "request": "attach", "name": "Attach AMSpiriT", "port": 6128 }
       ]
     }],
     "commands": [

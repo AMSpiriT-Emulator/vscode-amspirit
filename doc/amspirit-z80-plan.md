@@ -9,7 +9,7 @@
 ## 0. Contexte & objectif
 
 L'émulateur AMSpiriT Lite expose un serveur de debug HTTP (`--web-server`,
-`127.0.0.1:8765`). L'extension `amspirit-basic` est un debugger DAP **BASIC**.
+`127.0.0.1:6128`). L'extension `amspirit-basic` est un debugger DAP **BASIC**.
 On ajoute un **3ᵉ package** `packages/amspirit-z80` : un debugger DAP
 **assembleur Z80**, type de debug `amspirit-z80`, qui réutilise `@amspirit/shared`
 (`EmulatorClient`, `disassemble`, `Z80Registers`). **Aucune modification de

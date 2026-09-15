@@ -3,10 +3,10 @@ import { buildZ80Indicator } from "../src/status-bar/z80-indicator.js"
 
 describe("buildZ80Indicator", () => {
   it("shows an active icon and the port when connected", () => {
-    const view = buildZ80Indicator("connected", 8765)
-    expect(view.text).toBe("$(vm-active) AMSpiriT Z80 :8765")
+    const view = buildZ80Indicator("connected", 6128)
+    expect(view.text).toBe("$(vm-active) AMSpiriT Z80 :6128")
     expect(view.tooltip).toContain("Connected")
-    expect(view.tooltip).toContain("8765")
+    expect(view.tooltip).toContain("6128")
     expect(view.command).toBe("amspirit.z80.launch")
   })
 
