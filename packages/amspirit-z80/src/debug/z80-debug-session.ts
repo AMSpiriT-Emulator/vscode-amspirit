@@ -263,7 +263,12 @@ export class Z80DebugSession extends LoggingDebugSession {
    * {@link DAP_TRACE_PATH}: the base never raises the log level by itself.
    */
   private setupTrace(args: Z80DebugConfig): void {
-    if (args.trace) logger.setup(Logger.LogLevel.Verbose, DAP_TRACE_PATH)
+    if (!args.trace) return
+    // `setup` needs the logger `start()` would have created; an inline adapter
+    // (DebugAdapterInlineImplementation) never goes through `start()`.
+    logger.init((e) => this.sendEvent(e), undefined, false)
+    // The file gets every level; only warnings reach the Debug Console.
+    logger.setup(Logger.LogLevel.Warn, DAP_TRACE_PATH)
   }
 
   /** Reject the launch with a message VS Code shows to the user. */
