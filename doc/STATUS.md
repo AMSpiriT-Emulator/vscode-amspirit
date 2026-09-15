@@ -6,6 +6,22 @@
 
 ## Where we are
 
+- **Latest (2026-09-15, branch `docs/lite-parity-plan`, commits `9b04fc8`…
+  `f069cc9`): first dev-host validation + follow-ups.** Dev host unblocked
+  (VS Code's `--experimental-network-inspection` + js-debug network view broke
+  every HTTP request; fix = `debug.javascript.enableNetworkView: false`, see
+  "Dev-host gotcha"). **Z80 launch validated live**; Step Back validated by DAP
+  replay against headless 1.14.3 and Qt 1.15.2 (the reported "broken step
+  back" was Step Out at top level). New `trace` launch attribute writes the DAP
+  exchange to `<tmpdir>/amspirit-z80-dap.log`. Step Out is now **refused when
+  the return address is outside the program** (`planStepOut`, pure). BASIC
+  launch waits until the listing **differs from the pre-injection one**
+  (`listingEquals`, pure) — closes the P1 where a same-numbered edit verified a
+  breakpoint at its old address. Gate green (**shared 195 / basic 88 / z80
+  238**). Changesets `z80-step-out-no-caller.md`,
+  `basic-launch-waits-for-injection.md`. See
+  `doc/sessions/2026-09-15-dev-host-validation.md`. **Next: click-through of
+  Step Back / Step Out in the dev host (read the trace), then Phase 1.2.**
 - **Latest (2026-09-15, branch `docs/lite-parity-plan`, commits `03250ee` +
   `bf505ae`): 6 debugger review fixes, then lite parity Phase 3 — Step Back.**
   Fixes (TDD): CPU-view memory edits resolve the physical bank via `getMemmap()`
@@ -292,7 +308,7 @@
 | rasm SNA/DSK load modes | ⬜ | DeZog parity. Direct route since lite 1.15: `POST /api/media?name=<file>&drive=` (raw SNA/DSK/HFE/IPF/CPR/CRO/BIN bytes; headerless `.bin` via `name=game@4000[@ENTRY].bin`) — no script needed |
 | Conditional / hit-count breakpoints + logpoints | ⬜ | client-side (re-`continue` on unmet condition); logpoints via `OutputEvent` |
 | `writeMemory` (`supportsWriteMemoryRequest`) | 🟡 | Memory View edits any view inline: CPU view resolves the physical bank via `/api/memmap` (`writeTarget`), bank views write their own bank (`writeRam({bank})`, 2026-09-15); the DAP `writeMemoryRequest` itself is still unwired |
-| Reverse-debug (`stepBack`/`reverseContinue`) | 🟡 | **`stepBack` landed 2026-09-15** (commit `bf505ae`, both debuggers): `tlBack()` + `getTimelapse()` in shared, `checkStepBack` gate (timelapse active, newest snapshots of the session's kind, `stepsBack > 0`), stop reported once `stepsBack` dropped. Emulator must run with `--enable-timelapse`. `reverseContinue` is declined (no emulator endpoint). Not live-validated |
+| Reverse-debug (`stepBack`/`reverseContinue`) | 🟡 | **`stepBack` landed 2026-09-15** (commit `bf505ae`, both debuggers): `tlBack()` + `getTimelapse()` in shared, `checkStepBack` gate (timelapse active, newest snapshots of the session's kind, `stepsBack > 0`), stop reported once `stepsBack` dropped. Emulator must run with `--enable-timelapse`. `reverseContinue` is declined (no emulator endpoint). **Validated by DAP replay** vs headless 1.14.3 + Qt 1.15.2; UI click-through pending. Gap: a step-over of `CALL` (run-to) saves no snapshot |
 | Memory watchpoints (read/write) | ⬜ | **needs an emulator data-breakpoint endpoint** (none today) — costliest |
 | Peripheral-chip views (Gate Array / PSG / FDC / CRTC) | ✅ | 2026-06-21, branch `feat/amspirit-z80-hardware-views`. 4 docked webviews polling `/api/state` (+`/api/memmap` for GA); shared `getState()`/`getMemmap()` typed (TDD); pure `hardware-views.ts` formatters (TDD) + generic `HardwarePanel`; scope table gained `kind:"flags"` so bit-groups render as chips. z80 201 tests, gate green. Changeset `minor`. Not yet live-validated |
 | Peripheral views — PPI (8255) | ⬜ | **blocked**: `/api/state` exposes no PPI data (core `Core_PPI_Read_Internal_Value` exists but isn't serialized) — needs an `amspirit-lite` API extension |
