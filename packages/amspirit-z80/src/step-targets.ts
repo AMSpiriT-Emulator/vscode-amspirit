@@ -33,3 +33,29 @@ export function returnAddress(bytes: readonly number[]): number | undefined {
   if (lo === undefined || hi === undefined) return undefined
   return (lo | (hi << 8)) & 0xffff
 }
+
+/**
+ * What `stepOut` should do:
+ * - `runTo`: the return address on the stack is an instruction of the program,
+ *   so set a temporary breakpoint there and resume.
+ * - `noCaller`: it is not (top level of the program, where the stack still
+ *   holds the firmware's return address, or no readable stack). Running there
+ *   would run the whole program to its final RET, so refuse instead.
+ */
+export type StepOutPlan =
+  | { kind: "runTo"; addr: number }
+  | { kind: "noCaller"; addr: number | undefined }
+
+/**
+ * Decide how to step out. `stackBytes` are the two bytes read at SP;
+ * `isProgramAddress` says whether an address belongs to the debugged program
+ * (a symbol-map instruction start).
+ */
+export function planStepOut(
+  stackBytes: readonly number[],
+  isProgramAddress: (addr: number) => boolean,
+): StepOutPlan {
+  const addr = returnAddress(stackBytes)
+  if (addr !== undefined && isProgramAddress(addr)) return { kind: "runTo", addr }
+  return { kind: "noCaller", addr }
+}

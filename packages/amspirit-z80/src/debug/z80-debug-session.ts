@@ -29,7 +29,7 @@ import type { DebugProtocol } from "@vscode/debugprotocol"
 import { type ReadMem, reconstructCallStack } from "../call-stack.js"
 import { firmwareLabel } from "../firmware-labels.js"
 import { launchEntryReached, stepSettled } from "../step-landing.js"
-import { planStepOver, returnAddress } from "../step-targets.js"
+import { planStepOut, planStepOver } from "../step-targets.js"
 import { parseSymbolMap } from "../symbol-map/parse-symbol-map.js"
 import type { SymbolMap } from "../symbol-map/symbol-map.js"
 import { BreakpointSet } from "./breakpoint-set.js"
@@ -509,13 +509,27 @@ export class Z80DebugSession extends LoggingDebugSession {
 
   protected override async stepOutRequest(response: DebugProtocol.StepOutResponse): Promise<void> {
     const client = this.client
+    const symbols = this.symbols
     if (client) {
       try {
         const sp = (await client.getZ80()).SP
-        const ret = returnAddress(await client.readRam(sp, 2, { cpuView: true }))
-        if (ret !== undefined) {
+        const stack = await client.readRam(sp, 2, { cpuView: true })
+        // Without a symbol map nothing bounds the program: keep the plain run-to.
+        const inProgram = symbols
+          ? (addr: number) => symbols.addressToLine(addr) !== undefined
+          : () => true
+        const plan = planStepOut(stack, inProgram)
+        if (plan.kind === "runTo") {
           this.sendResponse(response)
-          await this.runToTemp(ret, "step")
+          await this.runToTemp(plan.addr, "step")
+          return
+        }
+        if (plan.addr !== undefined) {
+          const hex = plan.addr.toString(16).toUpperCase().padStart(4, "0")
+          this.failRequest(
+            response,
+            `Step Out: no caller inside the program (the return address &${hex} is outside it).`,
+          )
           return
         }
       } catch {

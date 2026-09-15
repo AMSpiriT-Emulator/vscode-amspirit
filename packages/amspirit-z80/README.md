@@ -10,7 +10,8 @@ assembly straight from VS Code.
 - **Source-level breakpoints** — set them in the margin of your `.asm`; they are
   resolved to PC addresses through the assembler's symbol map.
 - **Execution control** — continue, pause, step-into, step-over (runs over
-  `CALL`/`RST`), step-out and **step-back** (undo the last step through the
+  `CALL`/`RST`), step-out (refused at the program's top level, where the only
+  caller is the firmware) and **step-back** (undo the last step through the
   emulator timelapse: start the emulator with `--enable-timelapse`, see
   `amspirit-z80.emulatorArgs`).
 - **A dedicated tool suite** — open the **AMSpiriT Z80** view container in the
