@@ -4,6 +4,7 @@ import {
   breakpointAddresses,
   editorLineForBasicLine,
   indexListingByLine,
+  listingEquals,
   listingMatchesSource,
   parseBasicLineNumber,
   resolveBreakpoints,
@@ -121,5 +122,31 @@ describe("listingMatchesSource", () => {
 
   it("never matches a source with no numbered line", () => {
     expect(listingMatchesSource({ lines: [] }, ["", "REM nothing"])).toBe(false)
+  })
+})
+
+describe("listingEquals", () => {
+  const line = (num: number, addr: number, text = "REM"): BasicListing["lines"][number] => ({
+    addr,
+    num,
+    stmts: [{ addr: addr + 3, end: addr + 8, colon: false, text, vars: [] }],
+  })
+
+  it("is true for two decodes of the same program", () => {
+    const a: BasicListing = { lines: [line(10, 368), line(20, 378)] }
+    const b: BasicListing = { lines: [line(10, 368), line(20, 378)] }
+    expect(listingEquals(a, b)).toBe(true)
+  })
+
+  it("is false when a statement moved (an earlier line grew) or its text changed", () => {
+    const before: BasicListing = { lines: [line(10, 368), line(20, 378)] }
+    const moved: BasicListing = { lines: [line(10, 368), line(20, 420)] }
+    const edited: BasicListing = { lines: [line(10, 368), line(20, 378, "A=2")] }
+    expect(listingEquals(before, moved)).toBe(false)
+    expect(listingEquals(before, edited)).toBe(false)
+  })
+
+  it("is false when the line count differs", () => {
+    expect(listingEquals({ lines: [line(10, 368)] }, { lines: [] })).toBe(false)
   })
 })

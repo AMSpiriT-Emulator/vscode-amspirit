@@ -31,8 +31,47 @@ interface Call {
   args: readonly unknown[]
 }
 
-/** `listingLag` = how many listing reads return an empty decode before the real one. */
-function makeFake(calls: Call[], listingLag = 0): EmulatorClient {
+/** The same program before line 10 grew: same line numbers, line 20 at addr 381 (now 423). */
+const staleListing: BasicListing = {
+  lines: [
+    {
+      addr: 368,
+      num: 10,
+      stmts: [{ addr: 371, end: 378, colon: false, text: "A=1", vars: ["A"] }],
+    },
+    {
+      addr: 378,
+      num: 20,
+      stmts: [{ addr: 381, end: 395, colon: false, text: "A=A+1:GOTO 20", vars: ["A"] }],
+    },
+    { addr: 395, num: 100, stmts: [{ addr: 398, end: 402, colon: false, text: "END", vars: [] }] },
+  ],
+}
+const freshListing: BasicListing = {
+  lines: [
+    {
+      addr: 368,
+      num: 10,
+      stmts: [{ addr: 371, end: 420, colon: false, text: 'A=1:PRINT "LONGER LINE"', vars: ["A"] }],
+    },
+    {
+      addr: 420,
+      num: 20,
+      stmts: [{ addr: 423, end: 437, colon: false, text: "A=A+1:GOTO 20", vars: ["A"] }],
+    },
+    { addr: 437, num: 100, stmts: [{ addr: 440, end: 444, colon: false, text: "END", vars: [] }] },
+  ],
+}
+
+/**
+ * `listingLag` = how many listing reads return `lagging` (an empty decode by
+ * default) before the real one.
+ */
+function makeFake(
+  calls: Call[],
+  listingLag = 0,
+  lagging: BasicListing = { lines: [] },
+): EmulatorClient {
   const rec =
     (method: string, result: unknown) =>
     (...args: unknown[]): Promise<unknown> => {
@@ -45,7 +84,7 @@ function makeFake(calls: Call[], listingLag = 0): EmulatorClient {
     getBasicListing: (...args: unknown[]): Promise<BasicListing> => {
       calls.push({ method: "getBasicListing", args })
       listingReads += 1
-      return Promise.resolve(listingReads > listingLag ? listing : { lines: [] })
+      return Promise.resolve(listingReads > listingLag ? listing : lagging)
     },
     setBasicBreakpoints: rec("setBasicBreakpoints", undefined),
     pingState: rec("pingState", { ok: true, paused: false }),
@@ -93,9 +132,14 @@ function resp<T>(): T {
   return {} as unknown as T
 }
 
-function makeHarness(calls: Call[], onStopped?: () => void, listingLag = 0): Harness {
+function makeHarness(
+  calls: Call[],
+  onStopped?: () => void,
+  listingLag = 0,
+  lagging?: BasicListing,
+): Harness {
   return new Harness(
-    () => makeFake(calls, listingLag),
+    () => makeFake(calls, listingLag, lagging),
     () => doc,
     // No SSE push channel under test: exercise the polling fallback deterministically.
     () => undefined,
@@ -154,8 +198,9 @@ describe("BasicDebugSession launch sequence", () => {
     await launching
 
     expect(verified).toEqual([{ line: 2, verified: true }])
-    // The listing was read only after the tokenize (run=false) injection.
-    const listingIndex = calls.findIndex((c) => c.method === "getBasicListing")
+    // The listing that resolved the breakpoints was read after the tokenize
+    // (run=false) injection (the read before it only captures the old program).
+    const listingIndex = calls.map((c) => c.method).lastIndexOf("getBasicListing")
     const tokenizeIndex = calls.findIndex((c) => c.method === "injectBasic" && c.args[2] === false)
     expect(tokenizeIndex).toBeGreaterThanOrEqual(0)
     expect(listingIndex).toBeGreaterThan(tokenizeIndex)
@@ -181,6 +226,30 @@ describe("BasicDebugSession launch sequence", () => {
     expect(calls.findIndex((c) => postsAddr(c, 381))).toBeLessThan(runIndex)
 
     await session.disconnect()
+  })
+
+  it("does not trust the previous program's listing when only a line's content changed", async () => {
+    // Line 10 grew without renumbering: the old listing has the same line
+    // numbers, so line 20 would resolve to its OLD address (381) if the wait
+    // only compared line numbers. The new address is 423.
+    const calls: Call[] = []
+    const session = makeHarness(calls, undefined, 2, staleListing)
+    const original = listing.lines
+    listing.lines = freshListing.lines
+    try {
+      session.initialize()
+      const launching = session.launch({ program: PROGRAM, stopOnEntry: false })
+      const verified = await session.setBreakpoints([2])
+      session.configurationDone()
+      await launching
+
+      expect(verified).toEqual([{ line: 2, verified: true }])
+      expect(calls.some((c) => postsAddr(c, 423))).toBe(true)
+      expect(calls.some((c) => postsAddr(c, 381))).toBe(false)
+    } finally {
+      listing.lines = original
+      await session.disconnect()
+    }
   })
 
   it("arms the entry breakpoint before running when stopOnEntry is set", async () => {

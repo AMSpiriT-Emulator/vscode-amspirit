@@ -26,6 +26,7 @@ import type { DebugProtocol } from "@vscode/debugprotocol"
 import { readResolvedBasicVars } from "./basic-vars-reader.js"
 import {
   breakpointAddresses,
+  listingEquals,
   listingMatchesSource,
   resolveBreakpoints,
 } from "./breakpoint-mapper.js"
@@ -181,6 +182,10 @@ export class BasicDebugSession extends LoggingDebugSession {
     const sourceLines = this.readLines(args.program)
     const source = sourceLines.join("\n")
     try {
+      // What is in memory now; the injection is applied only once the listing
+      // differs from it (an edit that keeps every line number still moves the
+      // statements, which line numbers alone would not reveal).
+      const before = await client.getBasicListing().catch(() => undefined)
       // Tokenize WITHOUT running so `getBasicListing` can resolve addresses and
       // every breakpoint is armed before the program starts — otherwise line 1
       // executes before the breakpoints are set and we sail past them.
@@ -188,7 +193,7 @@ export class BasicDebugSession extends LoggingDebugSession {
       // The ack only means "queued": hold the breakpoint gate until the listing
       // is this program's, or a breakpoint set meanwhile reads an empty (or the
       // previous program's) listing and stays unverified for good.
-      const listing = await this.waitForListing(client, sourceLines)
+      const listing = await this.waitForListing(client, sourceLines, before)
       if (this.stopOnEntry) {
         this.entryAddr = listing?.lines[0]?.stmts[0]?.addr
         this.firstStopReason = "entry"
@@ -215,21 +220,25 @@ export class BasicDebugSession extends LoggingDebugSession {
   }
 
   /**
-   * The listing once it decodes `sourceLines` ({@link listingMatchesSource}),
-   * polled because injection is async: the emulator tokenizes a frame or two
-   * after the ack. Gives up after a bounded wait and returns the last read
-   * (`undefined` if none), so a program the emulator cannot tokenize still
-   * launches.
+   * The listing once it decodes `sourceLines` ({@link listingMatchesSource})
+   * and differs from `before`, the listing read prior to injecting: the
+   * emulator applies the injection a frame later, and until then it still
+   * serves the previous program. Polled with a bound; on timeout returns the
+   * last read (`undefined` if none), which covers a re-launch of an unchanged
+   * program (the listing never changes, and is right) and a program the
+   * emulator cannot tokenize.
    */
   private async waitForListing(
     client: EmulatorClient,
     sourceLines: readonly string[],
+    before: BasicListing | undefined,
   ): Promise<BasicListing | undefined> {
     let last: BasicListing | undefined
     for (let attempt = 0; attempt < 10; attempt++) {
       try {
         last = await client.getBasicListing()
-        if (listingMatchesSource(last, sourceLines)) return last
+        const applied = before === undefined || !listingEquals(before, last)
+        if (applied && listingMatchesSource(last, sourceLines)) return last
       } catch {
         // retry
       }
