@@ -1,5 +1,6 @@
 import * as cp from "node:child_process"
 import * as http from "node:http"
+import type { TimelapseState } from "./step-back.js"
 
 export interface EmulatorClientOptions {
   port?: number
@@ -162,6 +163,8 @@ export interface CrtcState {
 
 /** Emulator status from `/api/state` (`emu`). */
 export interface EmuState {
+  /** Timelapse (rewind) state, `emu.tl_*`. Inactive on builds without it. */
+  timelapse: TimelapseState
   fps: number
   /**
    * Completed emulated frames since startup. The only emulated-time clock over
@@ -436,14 +439,7 @@ export class EmulatorClient {
         rasterline?: number
         vsync?: boolean
       }
-      emu?: {
-        fps?: number
-        frames?: number
-        paused?: boolean
-        cpc_model?: number
-        crtc_type?: number
-        ram_apply_seq?: number
-      }
+      emu?: RawEmu
     }>("/api/state", this.debugTimeoutMs)
     const ga = raw.ga ?? {}
     const psg = raw.psg ?? {}
@@ -494,8 +490,28 @@ export class EmulatorClient {
         cpcModel: emu.cpc_model ?? 0,
         crtcType: emu.crtc_type ?? 0,
         ramApplySeq: emu.ram_apply_seq ?? 0,
+        timelapse: mapTimelapse(emu),
       },
     }
+  }
+
+  /**
+   * Timelapse state via `GET /api/ping` (`emu.tl_*`): whether a Step Back is
+   * possible and of which kind. Inactive on builds without a timelapse.
+   */
+  async getTimelapse(): Promise<TimelapseState> {
+    const raw = await this.getJson<{ emu?: RawEmu }>("/api/ping", this.pingTimeoutMs)
+    return mapTimelapse(raw.emu ?? {})
+  }
+
+  /**
+   * Rewind one timelapse snapshot via `POST /api/tl_back`. Queued: applied on
+   * the next frame tick, and only when the newest snapshot's kind matches
+   * `TimelapseState.stepKind` (see `checkStepBack`). Poll `getTimelapse()`
+   * with `stepBackApplied` before reading the machine state back.
+   */
+  async tlBack(): Promise<void> {
+    await this.post("/api/tl_back", "", "text/plain", this.debugTimeoutMs)
   }
 
   /**
@@ -830,6 +846,30 @@ function describeError(status: number, body: string): string {
 }
 
 /** `{ok, seq}` acknowledgement of a queued mutation; tolerant of junk bodies. */
+/** The `emu` object as the emulator serializes it (`/api/ping`, `/api/state`). */
+interface RawEmu {
+  fps?: number
+  frames?: number
+  paused?: boolean
+  cpc_model?: number
+  crtc_type?: number
+  ram_apply_seq?: number
+  tl_active?: boolean
+  tl_steps_back?: number
+  tl_steps_fwd?: number
+  tl_step_kind?: string
+}
+
+function mapTimelapse(emu: RawEmu): TimelapseState {
+  const kind = emu.tl_step_kind
+  return {
+    active: emu.tl_active ?? false,
+    stepsBack: emu.tl_steps_back ?? 0,
+    stepsFwd: emu.tl_steps_fwd ?? 0,
+    stepKind: kind === "z80" || kind === "basic" ? kind : "frame",
+  }
+}
+
 function parseAck(body: string): { ok: boolean; seq: number | undefined } {
   try {
     const parsed = JSON.parse(body) as { ok?: unknown; seq?: unknown }

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs"
 import { basename, dirname, isAbsolute, resolve } from "node:path"
 import {
+  checkStepBack,
   type DisasmInstruction,
   decodeInstruction,
   type EmulatorClient,
@@ -8,6 +9,8 @@ import {
   errorMessage,
   StopPoller,
   StopWatcher,
+  stepBackApplied,
+  type TimelapseState,
 } from "@amspirit/shared"
 import {
   ContinuedEvent,
@@ -161,6 +164,9 @@ export class Z80DebugSession extends LoggingDebugSession {
     response.body.supportsConfigurationDoneRequest = true
     response.body.supportsTerminateRequest = true
     response.body.supportsSteppingGranularity = true
+    // Step Back rides the emulator timelapse; the request itself explains when
+    // the emulator was started without one.
+    response.body.supportsStepBack = true
     this.sendResponse(response)
     this.sendEvent(new InitializedEvent())
   }
@@ -494,6 +500,81 @@ export class Z80DebugSession extends LoggingDebugSession {
       }
     }
     await this.stepOne(response)
+  }
+
+  /**
+   * Undo the last Z80 step through the emulator timelapse (`tlBack`). The
+   * emulator saves a snapshot before each step, so this restores the machine
+   * to just before it. Refused, with the reason shown to the user, when the
+   * timelapse is off, holds another kind of snapshot, or has nothing behind.
+   */
+  protected override async stepBackRequest(
+    response: DebugProtocol.StepBackResponse,
+  ): Promise<void> {
+    const client = this.client
+    if (!client) {
+      this.sendResponse(response)
+      return
+    }
+    let before: TimelapseState
+    try {
+      before = await client.getTimelapse()
+    } catch (e) {
+      this.failRequest(response, errorMessage(e))
+      return
+    }
+    const check = checkStepBack(before, "z80")
+    if (!check.ok) {
+      this.failRequest(response, check.reason)
+      return
+    }
+    this.atLaunchEntry = false
+    try {
+      await client.tlBack()
+    } catch (e) {
+      this.failRequest(response, errorMessage(e))
+      return
+    }
+    this.sendResponse(response)
+    this.monitorStepBackApplied(client, before)
+  }
+
+  protected override reverseContinueRequest(response: DebugProtocol.ReverseContinueResponse): void {
+    // The emulator has no "rewind until" endpoint; a silent success here would
+    // leave VS Code waiting for a stop that never comes.
+    this.failRequest(response, "Reverse Continue is not available. Use Step Back to undo one step.")
+  }
+
+  /** Reject a request with a message VS Code shows to the user. */
+  private failRequest(response: DebugProtocol.Response, message: string): void {
+    this.sendErrorResponse(response, 2002, "{message}", { message })
+  }
+
+  /**
+   * Poll the timelapse until the queued `tl_back` is applied ({@link
+   * stepBackApplied}), then report one stop. Bounded like a step, so a rewind
+   * the emulator refused at apply time still resolves.
+   */
+  private monitorStepBackApplied(client: EmulatorClient, before: TimelapseState): void {
+    this.poller?.cancel()
+    this.monitorRun += 1
+    let attempts = 0
+    const poller = new StopPoller(async () => {
+      attempts += 1
+      try {
+        if (stepBackApplied(before, await client.getTimelapse())) return true
+      } catch {
+        // transient read error; keep polling
+      }
+      return attempts >= STEP_SETTLE_MAX_POLLS
+    })
+    this.poller = poller
+    if (this.disposed) return
+    void poller.start().then((result) => {
+      if (result === "stopped" && this.poller === poller && !this.disposed) {
+        this.sendStopped("step")
+      }
+    })
   }
 
   /**

@@ -59,7 +59,9 @@ What you get:
 
 - **Breakpoints** in the `.bas` gutter — set on the line number.
 - **Continue / Pause**, **Step Over** (advance one line), **Step Into** (advance
-  one statement), and **Run to Cursor**.
+  one statement), **Step Back** (undo the last step; needs the emulator started
+  with `--enable-timelapse`, see `amspirit.emulatorArgs`), and **Run to
+  Cursor**.
 - The **current line** is highlighted as execution advances.
 - The **Variables** view decodes the live Locomotive BASIC variables — integers,
   reals and strings — straight from CPC RAM.

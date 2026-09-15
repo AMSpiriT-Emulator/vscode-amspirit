@@ -59,6 +59,8 @@ export type {
 export { readSettings, readSettingsWithWarnings } from "./settings.js"
 export type { SseEvent } from "./sse-parse.js"
 export { SseParser } from "./sse-parse.js"
+export type { StepBackCheck, TimelapseState, TimelapseStepKind } from "./step-back.js"
+export { checkStepBack, stepBackApplied } from "./step-back.js"
 export type { PausedProbe, StopPollerOptions, StopReason } from "./stop-poller.js"
 export { StopPoller } from "./stop-poller.js"
 export type { StopWatcherEventSource, StopWatcherOptions } from "./stop-watcher.js"
