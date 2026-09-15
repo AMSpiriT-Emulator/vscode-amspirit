@@ -6,6 +6,34 @@
 
 ## Where we are
 
+- **Latest (2026-09-16, branch `docs/lite-parity-plan`, commits `2fe7aec`
+  → `783b679`): lite parity Phase 1.2 — disassembler zone analysis (TDD), then
+  a cleanup pass.** New pure `zone-analysis.ts` (`analyzeZones`, 10 tests): a
+  flow trace from the PC that follows both paths of a conditional branch and the
+  `CALL`/`JR`/`JP`/`RST` targets, and stops at `RET`, `HALT`, an indirect jump
+  or a **8000-instruction budget**. The reference is the emulator's own
+  `z80analyze` (`amspirit-lite/src/assets/amspirit-lite.html` ~1745) — there is
+  **no zone endpoint**, the trace runs in the extension. `buildDisasmRows`
+  gained a `zones` option + an `analyzed` row field, and now classifies code as
+  the **union "runtime coverage ∪ static zones"**, like lite. The view gained
+  **Analyze from PC** / **Reset zones** buttons, an "Analyzed" legend and amber
+  shading; `DisasmPanel.analyze()` reads **one 64 KB snapshot of the selected
+  view**, so the trace is mapping-aware. A trace carries the view it was read
+  through, so the listing ignores it after a bank change. Reset clears the
+  analysis **and** `/api/codemap` (new shared `clearCodemap()`).
+  The cleanup commit (`783b679`) moved the **Step Back contract into
+  `@amspirit/shared`** — `requestStepBack()` + `stepBackAppliedProbe()`, 5 tests
+  — which removes ~55 duplicated lines from the two DAP adapters and ends their
+  drift. `planStepOut()` now takes the program-bounds predicate as optional, so
+  the "no symbol map" rule is a tested branch of the pure module, and
+  `StepOutPlan` gained a third variant. `EmulatorClient` gained a private
+  `postJson()`. The History view dropped its `/api/ping` gate, so it makes one
+  request per refresh instead of two. Gate green (**shared 201 / basic 88 /
+  z80 254**). Changeset `disasm-zone-analysis.md` (2 packages, `minor`); the
+  cleanup needs none (behaviour unchanged, `shared` is private).
+  **Nothing live-validated.** See
+  `doc/sessions/2026-09-15-disasm-zone-analysis.md`. **Next: dev-host
+  click-through of Analyze / Reset, then Phase 1.3 — RAM search.**
 - **Latest (2026-09-15, branch `docs/lite-parity-plan`, commits `9b04fc8`…
   `f069cc9`): first dev-host validation + follow-ups.** Dev host unblocked
   (VS Code's `--experimental-network-inspection` + js-debug network view broke
@@ -315,7 +343,7 @@
 | **Lite parity — API catch-up (lite 1.14/1.15)** | ✅ | 2026-09-15. Port `6128`; `send()` rejects on non-2xx with `{error}`; `/api/ram` 16 KB `bank` + `EmulatorConfig.ramKb` → `memoryBanks(ramKb)`; `EmuState.frames`/`ramApplySeq`; `writeRam`/`execAt` return `seq`. Deltas table in `doc/lite-parity-plan.md` §5. Client live-validated read-only vs headless 1.14.3 |
 | **Lite parity — Phase 0 client foundations** | ✅ | 2026-07-04, branch `docs/lite-parity-plan`. `EmulatorClient`: `getHistory()`/`execAt()`/`runScript`/`getScriptState`/`abortScript`/`setConfig()`/`keytype()`/`keypress()`; new types `Z80HistoryEntry`/`ScriptState`/`EmulatorConfigUpdate`; private `send()` shared by `post`/`del`. TDD (shared 174). Changeset `minor`. Not live-validated |
 | **Lite parity — instruction history (`/api/history`)** | ✅ | Phase 1.1, commit `67626c3`. `amspirit.z80.history` docked webview: last-executed Z80 instructions newest-first, decoded to `addr · bytes · mnemonic` (shared disassembler), current PC highlighted; refreshed off the SSE-fed `RefreshScheduler`. Pure `history-view-model` (5 tests) + RTL `HistoryList` (3) + `HistoryPanel`. Exported `Z80HistoryEntry` from the shared barrel. z80 226 tests. Changeset `minor`. Not live-validated |
-| **Lite parity — disassembler zone analysis** | ⬜ | Phase 1. "Analyze from PC" / "Reset zones" over existing codemap coverage; must be **mapping‑aware** (not flat 64 KB) |
+| **Lite parity — disassembler zone analysis** | ✅ | Phase 1.2, commit `2fe7aec`. Pure `analyzeZones` (flow trace from PC, both branch paths, `CALL`/`JR`/`JP`/`RST` targets, stops at `RET`/`HALT`/indirect jump, 8000-instruction budget — lite's `z80analyze` semantics). `buildDisasmRows` unions coverage ∪ zones (`analyzed` field); "Analyze from PC" / "Reset zones" buttons; the trace reads a 64 KB snapshot **of the selected view**, so it is mapping-aware, and a trace from another view is ignored. Reset also `DELETE`s `/api/codemap` (new shared `clearCodemap()`). z80 254 tests. Changeset `minor`. Not live-validated |
 | **Lite parity — RAM search (Find/Next)** | ⬜ | Phase 1. Pure search over `readRam`; search correct bank / `view=cpu` space |
 | **Lite parity — memmap bar + banking awareness** | ⬜ | Phase 0/1. Render ROM/RAM per region + `ram_mode`/`ram_page` in Memory/Disasm views (`getMemmap()` today feeds only Gate Array). Bank selector already uses the 16 KB unit (2026-09-15); `writeRam` bank + `Bnn:hhhh` breakpoints are follow-ups |
 | **Lite parity — live screen capture + bp overlay** | ⬜ | Phase 2. `GET /api/screenshot[?crop&live&full]` now documented (PNG + `X-Beam-*`/`X-Crop-*` headers); pairs with `POST /api/raster_bp?x&y` for click-to-arm |
@@ -338,3 +366,7 @@ the dev host. `experimentalNetworking` is not an `extensionHost` launch option.
 
 `pnpm precommit` is the gate (build → Biome → typecheck → test:coverage → knip);
 CI adds `pnpm audit:prod`. Keep all green; don't lower coverage thresholds.
+
+Baseline at 2026-09-16 (Phase 1.2 + cleanup): **shared 201 / basic 88 /
+z80 254** tests, all green; lines 97.52% (shared) / 98.8% (basic) / 98.92%
+(z80); Biome and knip clean.
