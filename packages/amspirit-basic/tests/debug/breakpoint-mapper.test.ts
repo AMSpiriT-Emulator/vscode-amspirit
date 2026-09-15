@@ -4,6 +4,7 @@ import {
   breakpointAddresses,
   editorLineForBasicLine,
   indexListingByLine,
+  listingMatchesSource,
   parseBasicLineNumber,
   resolveBreakpoints,
 } from "../../src/debug/breakpoint-mapper.js"
@@ -87,5 +88,38 @@ describe("editorLineForBasicLine", () => {
 
   it("returns undefined when the BASIC line is not in the document", () => {
     expect(editorLineForBasicLine(999, doc)).toBeUndefined()
+  })
+})
+
+describe("listingMatchesSource", () => {
+  const line = (num: number): BasicListing["lines"][number] => ({
+    addr: num * 10,
+    num,
+    stmts: [{ addr: num * 10 + 3, end: num * 10 + 8, colon: false, text: "REM", vars: [] }],
+  })
+
+  it("matches when the listing carries exactly the source's line numbers, in order", () => {
+    const listing: BasicListing = { lines: [line(10), line(20), line(100)] }
+    expect(listingMatchesSource(listing, ["10 A=1", "20 A=A+1:GOTO 20", "100 END"])).toBe(true)
+  })
+
+  it("rejects an empty listing (the injection is still being tokenized)", () => {
+    expect(listingMatchesSource({ lines: [] }, ["10 A=1"])).toBe(false)
+  })
+
+  it("rejects the listing of a previous program still in memory", () => {
+    const stale: BasicListing = { lines: [line(10), line(20)] }
+    expect(listingMatchesSource(stale, ["10 A=1", "20 A=A+1", "30 END"])).toBe(false)
+    const other: BasicListing = { lines: [line(10), line(30)] }
+    expect(listingMatchesSource(other, ["10 A=1", "20 A=A+1"])).toBe(false)
+  })
+
+  it("ignores source lines without a BASIC line number (blank or comment lines)", () => {
+    const listing: BasicListing = { lines: [line(10), line(20)] }
+    expect(listingMatchesSource(listing, ["", "10 A=1", "   ", "20 END", ""])).toBe(true)
+  })
+
+  it("never matches a source with no numbered line", () => {
+    expect(listingMatchesSource({ lines: [] }, ["", "REM nothing"])).toBe(false)
   })
 })

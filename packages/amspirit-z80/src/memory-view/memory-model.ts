@@ -1,3 +1,5 @@
+import type { MemmapState } from "@amspirit/shared"
+
 /** Options controlling how a flat byte buffer is laid out into rows. */
 export interface MemoryRowsOptions {
   /** 16-bit address of the first byte. */
@@ -203,4 +205,30 @@ export function buildMemoryRows(bytes: readonly number[], opts: MemoryRowsOption
     })
   }
   return rows
+}
+
+/** Where a byte edit must go, or why it cannot go anywhere. */
+export type WriteTarget = { bank: number; addr: number } | { error: string }
+
+/**
+ * Resolve the `(addr, bank)` pair a `writeRam` must use so the edited byte is
+ * the one the view shows. A raw bank view reads and writes the same pair. The
+ * CPU view reads through the live mapping, so the write must follow it too:
+ * the 16 KB region at `addr` names the physical bank the Z80 sees there (an
+ * extended bank when one is paged in). A region under ROM is refused — the
+ * byte shown is ROM, and the RAM below it is not what the user is editing.
+ * Pure.
+ */
+export function writeTarget(
+  view: BankOption,
+  addr: number,
+  memmap: MemmapState | undefined,
+): WriteTarget {
+  if (!view.cpuView) return { bank: view.bank, addr }
+  const base = addr & 0xc000
+  const region = memmap?.regions.find((r) => r.base === base)
+  if (!region) return { error: "memory mapping unknown" }
+  if (region.rom) return { error: "ROM is mapped at this address" }
+  if (region.ramBank === undefined) return { error: "memory mapping unknown" }
+  return { bank: region.ramBank, addr: addr & 0x3fff }
 }

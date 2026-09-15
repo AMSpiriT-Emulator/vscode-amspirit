@@ -58,6 +58,26 @@ export function resolveBreakpoints(
   })
 }
 
+/**
+ * Whether `listing` is the decode of `documentLines`: the same BASIC line
+ * numbers, in the same order. `injectBasic` only queues the text; the emulator
+ * tokenizes it a frame or two later, and until then `/api/basic_listing` is
+ * empty or still describes the previous program. A source with no numbered
+ * line never matches, so a caller cannot mistake "nothing to load" for "done".
+ */
+export function listingMatchesSource(
+  listing: BasicListing,
+  documentLines: readonly string[],
+): boolean {
+  const expected: number[] = []
+  for (const text of documentLines) {
+    const num = parseBasicLineNumber(text)
+    if (num !== undefined) expected.push(num)
+  }
+  if (expected.length === 0 || listing.lines.length !== expected.length) return false
+  return listing.lines.every((line, i) => line.num === expected[i])
+}
+
 /** Statement addresses of the verified breakpoints, ready for `/api/basic_bp`. */
 export function breakpointAddresses(resolved: readonly ResolvedBreakpoint[]): number[] {
   const addrs: number[] = []

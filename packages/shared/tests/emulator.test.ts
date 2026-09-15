@@ -349,6 +349,22 @@ describe("EmulatorClient", () => {
       await expect(client.writeRam(0x8000, [0x3e])).resolves.toBeUndefined()
     })
 
+    it("sends the 16 KB bank so a write can target extended RAM (lite >= 1.14)", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.writeRam(0x0123, [0xc9], { bank: 6 })
+      expect(JSON.parse(fake.recorded.at(0)?.body ?? "{}")).toEqual({
+        addr: 0x0123,
+        data: "c9",
+        bank: 6,
+      })
+    })
+
+    it("omits bank for a central-RAM write (bank 0 is the emulator default)", async () => {
+      const client = new EmulatorClient({ port: fake.port })
+      await client.writeRam(0x8000, [0x00], { bank: 0 })
+      expect(JSON.parse(fake.recorded.at(0)?.body ?? "{}")).toEqual({ addr: 0x8000, data: "00" })
+    })
+
     it("surfaces the emulator's reason on a 400 instead of the generic message", async () => {
       fake.responder = (_req, res) => {
         res.writeHead(400, { "Content-Type": "application/json" })

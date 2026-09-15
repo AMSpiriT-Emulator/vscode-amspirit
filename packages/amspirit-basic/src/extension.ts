@@ -233,11 +233,9 @@ export function activate(context: vscode.ExtensionContext): void {
       ),
     ),
     vscode.commands.registerCommand("amspirit.debugger.openPanel", () =>
-      DebuggerPanel.show(
-        context.extensionUri,
-        () => new EmulatorClient({ port: loadSettings().webPort }),
-        hub,
-      ),
+      // Same emulator as the debugger: the active session's host/port when it
+      // overrides them, else the configured client.
+      DebuggerPanel.show(context.extensionUri, () => new EmulatorClient(currentTarget()), hub),
     ),
   )
 

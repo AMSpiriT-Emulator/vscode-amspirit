@@ -31,16 +31,22 @@ interface Call {
   args: readonly unknown[]
 }
 
-function makeFake(calls: Call[]): EmulatorClient {
+/** `listingLag` = how many listing reads return an empty decode before the real one. */
+function makeFake(calls: Call[], listingLag = 0): EmulatorClient {
   const rec =
     (method: string, result: unknown) =>
     (...args: unknown[]): Promise<unknown> => {
       calls.push({ method, args })
       return Promise.resolve(result)
     }
+  let listingReads = 0
   return {
     injectBasic: rec("injectBasic", undefined),
-    getBasicListing: rec("getBasicListing", listing),
+    getBasicListing: (...args: unknown[]): Promise<BasicListing> => {
+      calls.push({ method: "getBasicListing", args })
+      listingReads += 1
+      return Promise.resolve(listingReads > listingLag ? listing : { lines: [] })
+    },
     setBasicBreakpoints: rec("setBasicBreakpoints", undefined),
     pingState: rec("pingState", { ok: true, paused: false }),
     setPaused: rec("setPaused", undefined),
@@ -87,9 +93,9 @@ function resp<T>(): T {
   return {} as unknown as T
 }
 
-function makeHarness(calls: Call[], onStopped?: () => void): Harness {
+function makeHarness(calls: Call[], onStopped?: () => void, listingLag = 0): Harness {
   return new Harness(
-    () => makeFake(calls),
+    () => makeFake(calls, listingLag),
     () => doc,
     // No SSE push channel under test: exercise the polling fallback deterministically.
     () => undefined,
@@ -153,6 +159,26 @@ describe("BasicDebugSession launch sequence", () => {
     const tokenizeIndex = calls.findIndex((c) => c.method === "injectBasic" && c.args[2] === false)
     expect(tokenizeIndex).toBeGreaterThanOrEqual(0)
     expect(listingIndex).toBeGreaterThan(tokenizeIndex)
+
+    await session.disconnect()
+  })
+
+  it("waits for the listing to reflect the injected program before resolving breakpoints", async () => {
+    // injectBasic acks the queued injection; the emulator tokenizes a frame or
+    // two later. Without stopOnEntry nothing used to wait, so a breakpoint set
+    // meanwhile read an empty listing and stayed unverified for good.
+    const calls: Call[] = []
+    const session = makeHarness(calls, undefined, 2)
+
+    session.initialize()
+    const launching = session.launch({ program: PROGRAM, stopOnEntry: false })
+    const verified = await session.setBreakpoints([2])
+    session.configurationDone()
+    await launching
+
+    expect(verified).toEqual([{ line: 2, verified: true }])
+    const runIndex = calls.findIndex(isRun)
+    expect(calls.findIndex((c) => postsAddr(c, 381))).toBeLessThan(runIndex)
 
     await session.disconnect()
   })

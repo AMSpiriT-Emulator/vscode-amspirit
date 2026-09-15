@@ -18,6 +18,7 @@ import {
   memoryBanks,
   type PointerMark,
   pointerMarks,
+  writeTarget,
 } from "../memory-view/memory-model.js"
 import { parseSymbolMap } from "../symbol-map/parse-symbol-map.js"
 import type { SymbolMap } from "../symbol-map/symbol-map.js"
@@ -157,21 +158,27 @@ export class MemoryPanel implements vscode.WebviewViewProvider {
     const { rows, marks, executed } = await this.readWindow(client)
     this.post({
       type: "snapshot",
-      // Editing writes central RAM (the extension does not send `bank` yet), so it's only
-      // offered on the central-bank views (CPU view / Main RAM).
-      snapshot: { rows, marks, executed, banks: this.banks, editable: this.bankView.bank === 0 },
+      snapshot: { rows, marks, executed, banks: this.banks, editable: true },
     })
   }
 
   /**
-   * Write a single byte to central RAM (`writeRam`) and refresh. No-op on
-   * extended banks (the write endpoint can't target them). The changed byte
-   * flashes on the next tick via the grid's diff highlight.
+   * Write a single byte where the current view reads it (`writeTarget`) and
+   * refresh. The CPU view resolves the live mapping first, so an edit at an
+   * address paged to an extended bank lands in that bank, not in central RAM
+   * under it. The changed byte flashes on the next tick via the grid's diff
+   * highlight.
    */
   private async writeByte(address: number, value: number): Promise<void> {
-    if (this.bankView.bank !== 0) return
+    const client = this.makeClient()
     try {
-      await this.makeClient().writeRam(address, [value])
+      const memmap = this.bankView.cpuView ? await client.getMemmap() : undefined
+      const target = writeTarget(this.bankView, address, memmap)
+      if ("error" in target) {
+        void vscode.window.showWarningMessage(`AMSpiriT Z80: cannot write memory: ${target.error}.`)
+        return
+      }
+      await client.writeRam(target.addr, [value], { bank: target.bank })
       await this.tick()
     } catch {
       void vscode.window.showWarningMessage("AMSpiriT Z80: could not write memory.")

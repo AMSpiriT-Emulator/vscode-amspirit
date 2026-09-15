@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs"
 import { basename } from "node:path"
-import { type EmulatorClient, EmulatorEvents, StopWatcher } from "@amspirit/shared"
+import {
+  type BasicListing,
+  type EmulatorClient,
+  EmulatorEvents,
+  StopWatcher,
+} from "@amspirit/shared"
 import {
   ContinuedEvent,
   InitializedEvent,
@@ -14,7 +19,11 @@ import {
 } from "@vscode/debugadapter"
 import type { DebugProtocol } from "@vscode/debugprotocol"
 import { readResolvedBasicVars } from "./basic-vars-reader.js"
-import { breakpointAddresses, resolveBreakpoints } from "./breakpoint-mapper.js"
+import {
+  breakpointAddresses,
+  listingMatchesSource,
+  resolveBreakpoints,
+} from "./breakpoint-mapper.js"
 import {
   buildStackFrame,
   buildStateVariables,
@@ -159,14 +168,19 @@ export class BasicDebugSession extends LoggingDebugSession {
       return
     }
     this.programPath = args.program
-    const source = this.readLines(args.program).join("\n")
+    const sourceLines = this.readLines(args.program)
+    const source = sourceLines.join("\n")
     try {
       // Tokenize WITHOUT running so `getBasicListing` can resolve addresses and
       // every breakpoint is armed before the program starts — otherwise line 1
       // executes before the breakpoints are set and we sail past them.
       await client.injectBasic(source, false, false)
+      // The ack only means "queued": hold the breakpoint gate until the listing
+      // is this program's, or a breakpoint set meanwhile reads an empty (or the
+      // previous program's) listing and stays unverified for good.
+      const listing = await this.waitForListing(client, sourceLines)
       if (this.stopOnEntry) {
-        this.entryAddr = await this.resolveEntryAddr(client)
+        this.entryAddr = listing?.lines[0]?.stmts[0]?.addr
         this.firstStopReason = "entry"
       }
     } catch {
@@ -191,21 +205,27 @@ export class BasicDebugSession extends LoggingDebugSession {
   }
 
   /**
-   * Address of the first statement, retried because injection is async — the
-   * listing is empty until the emulator finishes tokenizing (a frame or two).
+   * The listing once it decodes `sourceLines` ({@link listingMatchesSource}),
+   * polled because injection is async: the emulator tokenizes a frame or two
+   * after the ack. Gives up after a bounded wait and returns the last read
+   * (`undefined` if none), so a program the emulator cannot tokenize still
+   * launches.
    */
-  private async resolveEntryAddr(client: EmulatorClient): Promise<number | undefined> {
+  private async waitForListing(
+    client: EmulatorClient,
+    sourceLines: readonly string[],
+  ): Promise<BasicListing | undefined> {
+    let last: BasicListing | undefined
     for (let attempt = 0; attempt < 10; attempt++) {
       try {
-        const listing = await client.getBasicListing()
-        const addr = listing.lines[0]?.stmts[0]?.addr
-        if (addr !== undefined) return addr
+        last = await client.getBasicListing()
+        if (listingMatchesSource(last, sourceLines)) return last
       } catch {
         // retry
       }
       await new Promise((resolve) => setTimeout(resolve, 60))
     }
-    return undefined
+    return last
   }
 
   private connect(args: BasicDebugConfig): void {

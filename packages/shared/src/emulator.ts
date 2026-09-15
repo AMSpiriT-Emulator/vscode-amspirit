@@ -592,16 +592,24 @@ export class EmulatorClient {
    * The write is queued, not applied in place: resolves with the `seq` that
    * `EmuState.ramApplySeq` reaches once the main thread has applied it
    * (`undefined` on builds that issue none). Poll that before reading back.
+   *
+   * `bank` is a 16 KB bank like `readRam`'s (0–3 central, 4+ extended); the
+   * emulator adds `addr >> 14` to it, so the same `(addr, bank)` pair reads and
+   * writes the same byte. Omitted at 0 (the emulator default).
    */
   async writeRam(
     addr: number,
     bytes: readonly number[],
-    opts: { exec?: boolean; entry?: number } = {},
+    opts: { exec?: boolean; entry?: number; bank?: number } = {},
   ): Promise<number | undefined> {
     const data = bytes.map((b) => (b & 0xff).toString(16).padStart(2, "0")).join("")
-    const body: { addr: number; data: string; exec?: boolean; entry?: number } = { addr, data }
+    const body: { addr: number; data: string; exec?: boolean; entry?: number; bank?: number } = {
+      addr,
+      data,
+    }
     if (opts.exec) body.exec = true
     if (opts.entry !== undefined) body.entry = opts.entry
+    if (opts.bank) body.bank = opts.bank
     const res = await this.post(
       "/api/ram",
       JSON.stringify(body),

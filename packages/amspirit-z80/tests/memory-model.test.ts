@@ -1,3 +1,4 @@
+import type { MemmapState } from "@amspirit/shared"
 import { describe, expect, it } from "vitest"
 import {
   buildMemoryRows,
@@ -8,6 +9,7 @@ import {
   parseByte,
   pointerMarks,
   scrollBase,
+  writeTarget,
 } from "../src/memory-view/memory-model.js"
 
 // A "parking" address outside every window the tests use, so only the
@@ -252,5 +254,51 @@ describe("executedOffsets", () => {
   })
   it("returns nothing for an empty or malformed bitmap", () => {
     expect(executedOffsets("", 0xc000, 16)).toEqual([])
+  })
+})
+
+describe("writeTarget", () => {
+  // A 6128 with the firmware ROM paged in low, extended bank B07 paged at &C000
+  // (RAM mode 2 style), central banks elsewhere.
+  const memmap: MemmapState = {
+    regions: [
+      { base: 0x0000, name: "0000", rom: true, romBank: 255 },
+      { base: 0x4000, name: "4000", rom: false, ramBank: 1 },
+      { base: 0x8000, name: "8000", rom: false, ramBank: 2 },
+      { base: 0xc000, name: "C000", rom: false, ramBank: 7, ext: true },
+    ],
+    rmr: 0x8c,
+    ramMode: 2,
+    ramPage: 0,
+  }
+  const cpu = { id: "cpu", label: "CPU view", bank: 0, cpuView: true }
+  const main = { id: "ram", label: "Main RAM", bank: 0, cpuView: false }
+  const bank1 = { id: "bank1", label: "Bank 1 (B04-B07)", bank: 4, cpuView: false }
+
+  it("writes a raw bank view where it reads: same (addr, bank) pair", () => {
+    expect(writeTarget(main, 0xc123, undefined)).toEqual({ bank: 0, addr: 0xc123 })
+    expect(writeTarget(bank1, 0x8000, undefined)).toEqual({ bank: 4, addr: 0x8000 })
+  })
+
+  it("resolves a CPU-view address to the physical bank the Z80 sees there", () => {
+    // &C123 is paged to B07: byte 0x123 of that bank, not central bank 3.
+    expect(writeTarget(cpu, 0xc123, memmap)).toEqual({ bank: 7, addr: 0x0123 })
+    expect(writeTarget(cpu, 0x4000, memmap)).toEqual({ bank: 1, addr: 0x0000 })
+  })
+
+  it("refuses a CPU-view write where ROM is mapped (the byte shown is not RAM)", () => {
+    const r = writeTarget(cpu, 0x0010, memmap)
+    expect(r).toHaveProperty("error")
+    expect(r).toMatchObject({ error: expect.stringMatching(/ROM/) })
+  })
+
+  it("refuses a CPU-view write when the mapping is unknown", () => {
+    expect(writeTarget(cpu, 0x4000, undefined)).toHaveProperty("error")
+    expect(writeTarget(cpu, 0x4000, { ...memmap, regions: [] })).toHaveProperty("error")
+    const noBank: MemmapState = {
+      ...memmap,
+      regions: [{ base: 0x4000, name: "4000", rom: false }],
+    }
+    expect(writeTarget(cpu, 0x4000, noBank)).toHaveProperty("error")
   })
 })

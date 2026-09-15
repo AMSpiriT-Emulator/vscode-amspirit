@@ -5,6 +5,7 @@ import {
   decodeInstruction,
   type EmulatorClient,
   EmulatorEvents,
+  errorMessage,
   StopPoller,
   StopWatcher,
 } from "@amspirit/shared"
@@ -25,6 +26,7 @@ import { launchEntryReached, stepSettled } from "../step-landing.js"
 import { planStepOver, returnAddress } from "../step-targets.js"
 import { parseSymbolMap } from "../symbol-map/parse-symbol-map.js"
 import type { SymbolMap } from "../symbol-map/symbol-map.js"
+import { BreakpointSet } from "./breakpoint-set.js"
 
 const THREAD_ID = 1
 /**
@@ -117,7 +119,13 @@ export class Z80DebugSession extends LoggingDebugSession {
   /** One-shot breakpoint at the program entry (stop-on-entry), dropped after. */
   private entryAddr: number | undefined
   /** Last user breakpoint addresses; a temporary bp is merged then dropped. */
-  private userBpAddrs: number[] = []
+  /** User breakpoints per source file; the emulator gets their union. */
+  private readonly userBps = new BreakpointSet()
+  /**
+   * One-shot breakpoint armed by a run-to (step-over / step-out). Tracked so a
+   * manual pause, which cancels the run-to monitor, still disarms it.
+   */
+  private tempBpAddr: number | undefined
   /** Opens on `configurationDone`, gating the launch RUN until breakpoints are set. */
   private readonly configured = new Gate()
 
@@ -198,17 +206,17 @@ export class Z80DebugSession extends LoggingDebugSession {
     this.loadSymbols(args)
 
     const binaryPath = this.resolveBinaryPath(args)
-    let bytes: number[] | undefined
-    if (binaryPath) {
-      try {
-        bytes = this.readBinary(binaryPath)
-      } catch {
-        // No binary to load; fall through and just respond.
-      }
+    if (!binaryPath) {
+      this.failLaunch(response, "Set `program` or `binary` in the launch configuration.")
+      return
     }
-    if (bytes === undefined) {
-      this.configured.open()
-      this.sendResponse(response)
+    let bytes: number[]
+    try {
+      bytes = this.readBinary(binaryPath)
+    } catch (e) {
+      // A silent success here would leave the user debugging whatever the
+      // emulator already runs, with no load, no entry stop and no monitor.
+      this.failLaunch(response, `Cannot read binary ${binaryPath}: ${errorMessage(e)}`)
       return
     }
 
@@ -232,6 +240,12 @@ export class Z80DebugSession extends LoggingDebugSession {
       // best effort; the session stays attached to current memory
     }
     this.sendResponse(response)
+  }
+
+  /** Reject the launch with a message VS Code shows to the user. */
+  private failLaunch(response: DebugProtocol.LaunchResponse, message: string): void {
+    this.closeEvents()
+    this.sendErrorResponse(response, 2001, "{message}", { message })
   }
 
   /** Explicit `binary`, else `<program-without-ext>.bin`. */
@@ -296,7 +310,9 @@ export class Z80DebugSession extends LoggingDebugSession {
       addrs.push(...resolved)
       verified.push({ verified: resolved.length > 0, line: bp.line })
     }
-    this.userBpAddrs = dedupe(addrs)
+    // The request names one source file: replace that file's set only, so the
+    // breakpoints of the other files keep the "verified" state VS Code shows.
+    this.userBps.replace(path ?? args.source.name ?? "", addrs)
 
     if (this.client) {
       try {
@@ -310,12 +326,18 @@ export class Z80DebugSession extends LoggingDebugSession {
     this.sendResponse(response)
   }
 
-  /** User breakpoints plus the internal one-shot entry breakpoint (deduped). */
+  /** Every user breakpoint plus the internal one-shot ones (entry, run-to). */
   private bpAddrsToPost(): number[] {
-    if (this.entryAddr === undefined || this.userBpAddrs.includes(this.entryAddr)) {
-      return this.userBpAddrs
-    }
-    return [...this.userBpAddrs, this.entryAddr]
+    const addrs = new Set(this.userBps.all())
+    if (this.entryAddr !== undefined) addrs.add(this.entryAddr)
+    if (this.tempBpAddr !== undefined) addrs.add(this.tempBpAddr)
+    return [...addrs]
+  }
+
+  /** Re-post the current set (best effort; the emulator may be unreachable). */
+  private syncBreakpoints(): void {
+    const client = this.client
+    if (client) void client.setZ80Breakpoints(this.bpAddrsToPost()).catch(() => {})
   }
 
   /**
@@ -326,8 +348,18 @@ export class Z80DebugSession extends LoggingDebugSession {
     if (this.entryAddr === undefined) return
     this.entryAddr = undefined
     this.firstStopReason = "breakpoint"
-    const client = this.client
-    if (client) void client.setZ80Breakpoints(this.userBpAddrs).catch(() => {})
+    this.syncBreakpoints()
+  }
+
+  /**
+   * Disarm the run-to breakpoint, whether the run-to completed or a pause cut
+   * it short. Left armed, it would fire on a later `continue` when the
+   * subroutine returns, as an unexplained stop.
+   */
+  private clearTempBreakpoint(): void {
+    if (this.tempBpAddr === undefined) return
+    this.tempBpAddr = undefined
+    this.syncBreakpoints()
   }
 
   protected override async stackTraceRequest(
@@ -416,6 +448,8 @@ export class Z80DebugSession extends LoggingDebugSession {
         // best effort
       }
     }
+    // Cancelling the monitor above skipped the run-to's own cleanup.
+    this.clearTempBreakpoint()
     this.sendResponse(response)
     this.sendStopped("pause")
   }
@@ -594,19 +628,15 @@ export class Z80DebugSession extends LoggingDebugSession {
   private async runToTemp(addr: number, reason: string): Promise<void> {
     const client = this.client
     if (!client) return
-    const withTemp = this.userBpAddrs.includes(addr)
-      ? this.userBpAddrs
-      : [...this.userBpAddrs, addr]
+    this.tempBpAddr = addr
     try {
-      await client.setZ80Breakpoints(withTemp)
+      await client.setZ80Breakpoints(this.bpAddrsToPost())
       await client.setPaused(false)
       this.sendEvent(new ContinuedEvent(THREAD_ID))
     } catch {
       // best effort
     }
-    this.monitorStop(reason, STOP_SETTLE_MS, () => {
-      void client.setZ80Breakpoints(this.userBpAddrs).catch(() => {})
-    })
+    this.monitorStop(reason, STOP_SETTLE_MS, () => this.clearTempBreakpoint())
   }
 
   /** Read + decode the instruction at the current PC (for step-over). */
@@ -701,9 +731,4 @@ function decodeOne(bytes: number[], address: number): DisasmInstruction | undefi
   } catch {
     return undefined
   }
-}
-
-/** Drop duplicate addresses while preserving order. */
-function dedupe(addrs: number[]): number[] {
-  return [...new Set(addrs)]
 }
