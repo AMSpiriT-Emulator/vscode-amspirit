@@ -6,6 +6,24 @@
 
 ## Where we are
 
+- **Latest (2026-09-15, branch `docs/lite-parity-plan`, commits `03250ee` +
+  `bf505ae`): 6 debugger review fixes, then lite parity Phase 3 — Step Back.**
+  Fixes (TDD): CPU-view memory edits resolve the physical bank via `getMemmap()`
+  and the new `writeRam({bank})` (`writeTarget`, pure; ROM refused); Z80
+  breakpoints kept **per source file** (`BreakpointSet`, pure); BASIC launch
+  waits until the listing decodes the injected program (`listingMatchesSource`,
+  pure) before answering breakpoints; the BASIC Variables panel follows the
+  session's host/port; a manual pause disarms the run-to temp breakpoint; a
+  missing binary **fails** the launch. Phase 3 (TDD): shared `TimelapseState`
+  (`emu.tl_*`) in `EmuState`, `getTimelapse()`, `tlBack()`, pure
+  `checkStepBack`/`stepBackApplied`; both DAP sessions expose `supportsStepBack`
+  (gated on an active timelapse whose newest snapshots are of the session's
+  kind; `reverseContinue` declined explicitly). Needs the emulator started with
+  `--enable-timelapse` (documented). Gate green (**shared 195 / basic 84 / z80
+  235**). Changesets `debugger-review-fixes.md`, `step-back-timelapse.md`.
+  **Nothing live-validated.** See
+  `doc/sessions/2026-09-15-review-fixes-and-step-back.md`. **Next: dev-host
+  validation (History view, bank write, Step Back) on 6128, then Phase 1.2.**
 - **Latest (2026-09-15, branch `docs/lite-parity-plan`, commit `d031b9b`): API
   catch-up with amspirit-lite 1.14/1.15.** The emulator moved to
   `~/Developer/z80/amspirit-lite` and its API evolved; deltas mapped in
@@ -273,8 +291,8 @@
 | Code coverage via `/api/codemap` | ✅ | `EmulatorClient.getCodemap()` (shared) + pure `executedOffsets` / `isExecuted`; Memory View shades executed bytes; **Disassembly View** shades executed code and renders un-reached bytes as `DB` data (code vs data) |
 | rasm SNA/DSK load modes | ⬜ | DeZog parity. Direct route since lite 1.15: `POST /api/media?name=<file>&drive=` (raw SNA/DSK/HFE/IPF/CPR/CRO/BIN bytes; headerless `.bin` via `name=game@4000[@ENTRY].bin`) — no script needed |
 | Conditional / hit-count breakpoints + logpoints | ⬜ | client-side (re-`continue` on unmet condition); logpoints via `OutputEvent` |
-| `writeMemory` (`supportsWriteMemoryRequest`) | 🟡 | Memory View edits central RAM inline via `writeRam` (`/api/ram`); the DAP `writeMemoryRequest` itself is still unwired (extended banks would need a bank-aware write) |
-| Reverse-debug (`stepBack`/`reverseContinue`) | ⬜ | **Unblocked 2026-09-15**: lite exposes a timelapse — `POST /api/tl_back` + `emu.tl_active/tl_steps_back/tl_steps_fwd/tl_step_kind` (no forward endpoint yet). Wrap in `EmulatorClient` (TDD) then DAP `stepBack` gated on `tl_steps_back > 0` |
+| `writeMemory` (`supportsWriteMemoryRequest`) | 🟡 | Memory View edits any view inline: CPU view resolves the physical bank via `/api/memmap` (`writeTarget`), bank views write their own bank (`writeRam({bank})`, 2026-09-15); the DAP `writeMemoryRequest` itself is still unwired |
+| Reverse-debug (`stepBack`/`reverseContinue`) | 🟡 | **`stepBack` landed 2026-09-15** (commit `bf505ae`, both debuggers): `tlBack()` + `getTimelapse()` in shared, `checkStepBack` gate (timelapse active, newest snapshots of the session's kind, `stepsBack > 0`), stop reported once `stepsBack` dropped. Emulator must run with `--enable-timelapse`. `reverseContinue` is declined (no emulator endpoint). Not live-validated |
 | Memory watchpoints (read/write) | ⬜ | **needs an emulator data-breakpoint endpoint** (none today) — costliest |
 | Peripheral-chip views (Gate Array / PSG / FDC / CRTC) | ✅ | 2026-06-21, branch `feat/amspirit-z80-hardware-views`. 4 docked webviews polling `/api/state` (+`/api/memmap` for GA); shared `getState()`/`getMemmap()` typed (TDD); pure `hardware-views.ts` formatters (TDD) + generic `HardwarePanel`; scope table gained `kind:"flags"` so bit-groups render as chips. z80 201 tests, gate green. Changeset `minor`. Not yet live-validated |
 | Peripheral views — PPI (8255) | ⬜ | **blocked**: `/api/state` exposes no PPI data (core `Core_PPI_Read_Internal_Value` exists but isn't serialized) — needs an `amspirit-lite` API extension |
@@ -286,7 +304,7 @@
 | **Lite parity — memmap bar + banking awareness** | ⬜ | Phase 0/1. Render ROM/RAM per region + `ram_mode`/`ram_page` in Memory/Disasm views (`getMemmap()` today feeds only Gate Array). Bank selector already uses the 16 KB unit (2026-09-15); `writeRam` bank + `Bnn:hhhh` breakpoints are follow-ups |
 | **Lite parity — live screen capture + bp overlay** | ⬜ | Phase 2. `GET /api/screenshot[?crop&live&full]` now documented (PNG + `X-Beam-*`/`X-Crop-*` headers); pairs with `POST /api/raster_bp?x&y` for click-to-arm |
 | **Lite parity — CSL/Lua scripting (`/api/script`)** | ⬜ | Phase 4. Run active `.csl`/`.lua`; also covers *SNA/DSK load via `/api/script`* below |
-| **Lite parity — Step Back / timeline** | ⬜ | Phase 3 = *reverse‑debug* row above. **Unblocked** (`/api/tl_back`, `emu.tl_*`) |
+| **Lite parity — Step Back / timeline** | 🟡 | Phase 3 = *reverse‑debug* row above: Step Back ✅ (2026-09-15), Reverse Continue / forward navigation pending an emulator endpoint |
 | Peripheral views — full CRTC register file (R0–R13) | ✅ | 2026-06-23, branch `feat/sse-integration`. `/api/state.crtc` now carries `regs` R0–R13 + `selected_reg`/`rasterline`/`vsync` (core `build_crtc_json`; R14–R17 + counters/HSYNC/VMA still commented out). Shared `CrtcState` + `getState()` mapping (TDD); `buildCrtcScopes(crtc,emu)` shows the register file (named decimal), chip variant, selected reg, raster line and real CRTC VSYNC. Kept strictly CRTC — dropped machine context (model/frame/FPS) and the GA HSYNC proxy; no derived "screen address" (R12/R13 are the raw 6845 MA start, not a CPU address). Gate green (shared 160 / z80 218). Changeset `crtc-register-file.md` (`minor` shared+z80). Not yet live-validated |
 
 ## Guardrail baseline
