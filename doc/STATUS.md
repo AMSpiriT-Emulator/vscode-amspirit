@@ -6,6 +6,23 @@
 
 ## Where we are
 
+- **Latest (2026-09-15, branch `docs/lite-parity-plan`, commit `d031b9b`): API
+  catch-up with amspirit-lite 1.14/1.15.** The emulator moved to
+  `~/Developer/z80/amspirit-lite` and its API evolved; deltas mapped in
+  `doc/lite-parity-plan.md` §5. Landed (TDD): **default port `6128`** (was
+  `8765`) across client/settings/manifests/docs; `send()` **rejects on non-2xx
+  with the emulator's `{error}`** (the API now answers `400 {error,field}` /
+  `405`); **`/api/ram` `bank` is 16 KB banks** → `memoryBanks(ramKb)` addresses
+  extended bank64s by their first bank (`B04`…) from the new `EmulatorConfig.
+  ramKb`; `EmuState.frame`→`frames` + `ramApplySeq`; `writeRam`/`execAt` return
+  the apply `seq`. Shared client **live-validated read-only** vs a headless
+  1.14.3 (`getHistory` 20 entries OK). Gate green (**shared 182 / basic 78 / z80
+  226**). Changeset `api-catchup-lite-1-15.md` (3 packages, `minor`). **Step
+  Back is now unblocked** upstream (`POST /api/tl_back` + `emu.tl_*`);
+  `/api/media` loads SNA/DSK/BIN directly; `/api/screenshot` documented. See
+  `doc/sessions/2026-09-15-api-catchup-lite-1-15.md`. **Next: dev-host
+  validation of the History view on port 6128, then Phase 1.2 (or pull Phase 3
+  forward).**
 - **Latest (2026-07-04, branch `docs/lite-parity-plan`, commit `67626c3`): lite
   parity Phase 1.1 — instruction-history view landed (TDD).** New
   `amspirit.z80.history` docked webview listing the last executed Z80
@@ -254,21 +271,22 @@
 | Memory View — **live-validated** vs real emulator | ✅ | confirmed on `amspirit-lite-qt` 1.11.0 (port 8765): dump + "Go to" + header render. Fixed the blank-at-breakpoint bug: gate on reachability (`ok`), not `pingState().paused` — the QT build wires `p_freeze=&s_paused` but the flag was fragile; `readRam` works whenever reachable. Panel now also targets the active debug session's host/port. Added a `Window: 0xXXXX` header (a zeroed window read as "empty") |
 | Memory View — label-aware "Go to" | ⬜ | resolve firmware/symbol-map labels in the goto field (crosses webview↔extension boundary) |
 | Code coverage via `/api/codemap` | ✅ | `EmulatorClient.getCodemap()` (shared) + pure `executedOffsets` / `isExecuted`; Memory View shades executed bytes; **Disassembly View** shades executed code and renders un-reached bytes as `DB` data (code vs data) |
-| rasm SNA/DSK load modes via `/api/script` | ⬜ | DeZog parity |
+| rasm SNA/DSK load modes | ⬜ | DeZog parity. Direct route since lite 1.15: `POST /api/media?name=<file>&drive=` (raw SNA/DSK/HFE/IPF/CPR/CRO/BIN bytes; headerless `.bin` via `name=game@4000[@ENTRY].bin`) — no script needed |
 | Conditional / hit-count breakpoints + logpoints | ⬜ | client-side (re-`continue` on unmet condition); logpoints via `OutputEvent` |
 | `writeMemory` (`supportsWriteMemoryRequest`) | 🟡 | Memory View edits central RAM inline via `writeRam` (`/api/ram`); the DAP `writeMemoryRequest` itself is still unwired (extended banks would need a bank-aware write) |
-| Reverse-debug (`stepBack`/`reverseContinue`) | ⬜ | emulator already records Z80 history (`session_record_z80_history`); expose via API then wire |
+| Reverse-debug (`stepBack`/`reverseContinue`) | ⬜ | **Unblocked 2026-09-15**: lite exposes a timelapse — `POST /api/tl_back` + `emu.tl_active/tl_steps_back/tl_steps_fwd/tl_step_kind` (no forward endpoint yet). Wrap in `EmulatorClient` (TDD) then DAP `stepBack` gated on `tl_steps_back > 0` |
 | Memory watchpoints (read/write) | ⬜ | **needs an emulator data-breakpoint endpoint** (none today) — costliest |
 | Peripheral-chip views (Gate Array / PSG / FDC / CRTC) | ✅ | 2026-06-21, branch `feat/amspirit-z80-hardware-views`. 4 docked webviews polling `/api/state` (+`/api/memmap` for GA); shared `getState()`/`getMemmap()` typed (TDD); pure `hardware-views.ts` formatters (TDD) + generic `HardwarePanel`; scope table gained `kind:"flags"` so bit-groups render as chips. z80 201 tests, gate green. Changeset `minor`. Not yet live-validated |
 | Peripheral views — PPI (8255) | ⬜ | **blocked**: `/api/state` exposes no PPI data (core `Core_PPI_Read_Internal_Value` exists but isn't serialized) — needs an `amspirit-lite` API extension |
+| **Lite parity — API catch-up (lite 1.14/1.15)** | ✅ | 2026-09-15. Port `6128`; `send()` rejects on non-2xx with `{error}`; `/api/ram` 16 KB `bank` + `EmulatorConfig.ramKb` → `memoryBanks(ramKb)`; `EmuState.frames`/`ramApplySeq`; `writeRam`/`execAt` return `seq`. Deltas table in `doc/lite-parity-plan.md` §5. Client live-validated read-only vs headless 1.14.3 |
 | **Lite parity — Phase 0 client foundations** | ✅ | 2026-07-04, branch `docs/lite-parity-plan`. `EmulatorClient`: `getHistory()`/`execAt()`/`runScript`/`getScriptState`/`abortScript`/`setConfig()`/`keytype()`/`keypress()`; new types `Z80HistoryEntry`/`ScriptState`/`EmulatorConfigUpdate`; private `send()` shared by `post`/`del`. TDD (shared 174). Changeset `minor`. Not live-validated |
 | **Lite parity — instruction history (`/api/history`)** | ✅ | Phase 1.1, commit `67626c3`. `amspirit.z80.history` docked webview: last-executed Z80 instructions newest-first, decoded to `addr · bytes · mnemonic` (shared disassembler), current PC highlighted; refreshed off the SSE-fed `RefreshScheduler`. Pure `history-view-model` (5 tests) + RTL `HistoryList` (3) + `HistoryPanel`. Exported `Z80HistoryEntry` from the shared barrel. z80 226 tests. Changeset `minor`. Not live-validated |
 | **Lite parity — disassembler zone analysis** | ⬜ | Phase 1. "Analyze from PC" / "Reset zones" over existing codemap coverage; must be **mapping‑aware** (not flat 64 KB) |
 | **Lite parity — RAM search (Find/Next)** | ⬜ | Phase 1. Pure search over `readRam`; search correct bank / `view=cpu` space |
-| **Lite parity — memmap bar + banking awareness** | ⬜ | Phase 0/1. Render ROM/RAM per region + `ram_mode`/`ram_page` in Memory/Disasm views (`getMemmap()` today feeds only Gate Array) |
-| **Lite parity — live screen capture + bp overlay** | ⬜ | Phase 2. Needs PNG endpoint verified in `web_png.cpp` (undocumented in the `.md`) |
+| **Lite parity — memmap bar + banking awareness** | ⬜ | Phase 0/1. Render ROM/RAM per region + `ram_mode`/`ram_page` in Memory/Disasm views (`getMemmap()` today feeds only Gate Array). Bank selector already uses the 16 KB unit (2026-09-15); `writeRam` bank + `Bnn:hhhh` breakpoints are follow-ups |
+| **Lite parity — live screen capture + bp overlay** | ⬜ | Phase 2. `GET /api/screenshot[?crop&live&full]` now documented (PNG + `X-Beam-*`/`X-Crop-*` headers); pairs with `POST /api/raster_bp?x&y` for click-to-arm |
 | **Lite parity — CSL/Lua scripting (`/api/script`)** | ⬜ | Phase 4. Run active `.csl`/`.lua`; also covers *SNA/DSK load via `/api/script`* below |
-| **Lite parity — Step Back / timeline** | ⬜ | Phase 3 = *reverse‑debug* row below. Blocked on an emulator history HTTP endpoint |
+| **Lite parity — Step Back / timeline** | ⬜ | Phase 3 = *reverse‑debug* row above. **Unblocked** (`/api/tl_back`, `emu.tl_*`) |
 | Peripheral views — full CRTC register file (R0–R13) | ✅ | 2026-06-23, branch `feat/sse-integration`. `/api/state.crtc` now carries `regs` R0–R13 + `selected_reg`/`rasterline`/`vsync` (core `build_crtc_json`; R14–R17 + counters/HSYNC/VMA still commented out). Shared `CrtcState` + `getState()` mapping (TDD); `buildCrtcScopes(crtc,emu)` shows the register file (named decimal), chip variant, selected reg, raster line and real CRTC VSYNC. Kept strictly CRTC — dropped machine context (model/frame/FPS) and the GA HSYNC proxy; no derived "screen address" (R12/R13 are the raw 6845 MA start, not a CPU address). Gate green (shared 160 / z80 218). Changeset `crtc-register-file.md` (`minor` shared+z80). Not yet live-validated |
 
 ## Guardrail baseline
