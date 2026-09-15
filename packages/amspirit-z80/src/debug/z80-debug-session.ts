@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs"
-import { basename, dirname, isAbsolute, resolve } from "node:path"
+import { tmpdir } from "node:os"
+import { basename, dirname, isAbsolute, join, resolve } from "node:path"
 import {
   checkStepBack,
   type DisasmInstruction,
@@ -15,7 +16,9 @@ import {
 import {
   ContinuedEvent,
   InitializedEvent,
+  Logger,
   LoggingDebugSession,
+  logger,
   Source,
   StackFrame,
   StoppedEvent,
@@ -64,7 +67,12 @@ interface Z80DebugConfig {
   host?: string
   port?: number
   stopOnEntry?: boolean
+  /** Log every DAP request, response and event to `amspirit-z80-dap.log` (OS temp dir). */
+  trace?: boolean
 }
+
+/** Where a traced session writes its DAP log. */
+const DAP_TRACE_PATH = join(tmpdir(), "amspirit-z80-dap.log")
 
 /** Reads a file's text; injectable for testing the (otherwise pure) modules. */
 export type FileReader = (path: string) => string
@@ -175,6 +183,7 @@ export class Z80DebugSession extends LoggingDebugSession {
     response: DebugProtocol.AttachResponse,
     args: DebugProtocol.AttachRequestArguments & Z80DebugConfig,
   ): Promise<void> {
+    this.setupTrace(args)
     const host = args.host ?? "127.0.0.1"
     const port = args.port ?? 6128
     this.client = this.createClient(host, port)
@@ -202,6 +211,7 @@ export class Z80DebugSession extends LoggingDebugSession {
     response: DebugProtocol.LaunchResponse,
     args: DebugProtocol.LaunchRequestArguments & Z80DebugConfig,
   ): Promise<void> {
+    this.setupTrace(args)
     const host = args.host ?? "127.0.0.1"
     const port = args.port ?? 6128
     const client = this.createClient(host, port)
@@ -246,6 +256,14 @@ export class Z80DebugSession extends LoggingDebugSession {
       // best effort; the session stays attached to current memory
     }
     this.sendResponse(response)
+  }
+
+  /**
+   * With `trace`, make the base class's request/response/event logging land in
+   * {@link DAP_TRACE_PATH}: the base never raises the log level by itself.
+   */
+  private setupTrace(args: Z80DebugConfig): void {
+    if (args.trace) logger.setup(Logger.LogLevel.Verbose, DAP_TRACE_PATH)
   }
 
   /** Reject the launch with a message VS Code shows to the user. */
