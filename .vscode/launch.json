@@ -5,6 +5,7 @@
       "name": "Run amspirit-basic",
       "type": "extensionHost",
       "request": "launch",
+      "experimentalNetworking": "off",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}/packages/amspirit-basic",
         "${workspaceFolder}/sandbox"
@@ -16,6 +17,7 @@
       "name": "Run amspirit-z80",
       "type": "extensionHost",
       "request": "launch",
+      "experimentalNetworking": "off",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}/packages/amspirit-z80",
         "${workspaceFolder}/sandbox"
