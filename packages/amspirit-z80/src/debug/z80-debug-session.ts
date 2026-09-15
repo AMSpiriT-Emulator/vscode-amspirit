@@ -2,15 +2,15 @@ import { existsSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { basename, dirname, isAbsolute, join, resolve } from "node:path"
 import {
-  checkStepBack,
   type DisasmInstruction,
   decodeInstruction,
   type EmulatorClient,
   EmulatorEvents,
   errorMessage,
+  requestStepBack,
   StopPoller,
   StopWatcher,
-  stepBackApplied,
+  stepBackAppliedProbe,
   type TimelapseState,
 } from "@amspirit/shared"
 import {
@@ -514,17 +514,16 @@ export class Z80DebugSession extends LoggingDebugSession {
       try {
         const sp = (await client.getZ80()).SP
         const stack = await client.readRam(sp, 2, { cpuView: true })
-        // Without a symbol map nothing bounds the program: keep the plain run-to.
-        const inProgram = symbols
-          ? (addr: number) => symbols.addressToLine(addr) !== undefined
-          : () => true
-        const plan = planStepOut(stack, inProgram)
+        const plan = planStepOut(
+          stack,
+          symbols ? (addr: number) => symbols.addressToLine(addr) !== undefined : undefined,
+        )
         if (plan.kind === "runTo") {
           this.sendResponse(response)
           await this.runToTemp(plan.addr, "step")
           return
         }
-        if (plan.addr !== undefined) {
+        if (plan.kind === "outsideProgram") {
           const hex = plan.addr.toString(16).toUpperCase().padStart(4, "0")
           this.failRequest(
             response,
@@ -553,27 +552,14 @@ export class Z80DebugSession extends LoggingDebugSession {
       this.sendResponse(response)
       return
     }
-    let before: TimelapseState
-    try {
-      before = await client.getTimelapse()
-    } catch (e) {
-      this.failRequest(response, errorMessage(e))
-      return
-    }
-    const check = checkStepBack(before, "z80")
-    if (!check.ok) {
-      this.failRequest(response, check.reason)
+    const outcome = await requestStepBack(client, "z80")
+    if (!outcome.ok) {
+      this.failRequest(response, outcome.reason)
       return
     }
     this.atLaunchEntry = false
-    try {
-      await client.tlBack()
-    } catch (e) {
-      this.failRequest(response, errorMessage(e))
-      return
-    }
     this.sendResponse(response)
-    this.monitorStepBackApplied(client, before)
+    this.monitorStepBackApplied(client, outcome.before)
   }
 
   protected override reverseContinueRequest(response: DebugProtocol.ReverseContinueResponse): void {
@@ -595,16 +581,7 @@ export class Z80DebugSession extends LoggingDebugSession {
   private monitorStepBackApplied(client: EmulatorClient, before: TimelapseState): void {
     this.poller?.cancel()
     this.monitorRun += 1
-    let attempts = 0
-    const poller = new StopPoller(async () => {
-      attempts += 1
-      try {
-        if (stepBackApplied(before, await client.getTimelapse())) return true
-      } catch {
-        // transient read error; keep polling
-      }
-      return attempts >= STEP_SETTLE_MAX_POLLS
-    })
+    const poller = new StopPoller(stepBackAppliedProbe(client, before, STEP_SETTLE_MAX_POLLS))
     this.poller = poller
     if (this.disposed) return
     void poller.start().then((result) => {

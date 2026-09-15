@@ -55,10 +55,14 @@ describe("planStepOut", () => {
   it("refuses when the return address leads outside the program (firmware caller)", () => {
     // At the program's top level the stack still holds the firmware's return
     // address: running there would run the whole program to its final RET.
-    expect(planStepOut([0xcc, 0x1b], inside)).toEqual({ kind: "noCaller", addr: 0x1bcc })
+    expect(planStepOut([0xcc, 0x1b], inside)).toEqual({ kind: "outsideProgram", addr: 0x1bcc })
   })
 
   it("refuses when the stack bytes are unavailable", () => {
-    expect(planStepOut([0x06], inside)).toEqual({ kind: "noCaller", addr: undefined })
+    expect(planStepOut([0x06], inside)).toEqual({ kind: "noStack" })
+  })
+
+  it("runs to the return address when no symbol map bounds the program", () => {
+    expect(planStepOut([0xcc, 0x1b])).toEqual({ kind: "runTo", addr: 0x1bcc })
   })
 })

@@ -626,13 +626,7 @@ export class EmulatorClient {
     if (opts.exec) body.exec = true
     if (opts.entry !== undefined) body.entry = opts.entry
     if (opts.bank) body.bank = opts.bank
-    const res = await this.post(
-      "/api/ram",
-      JSON.stringify(body),
-      "application/json",
-      this.debugTimeoutMs,
-    )
-    const parsed = parseAck(res)
+    const parsed = parseAck(await this.postJson("/api/ram", body))
     if (!parsed.ok) throw new Error("Emulator rejected RAM write")
     return parsed.seq
   }
@@ -669,13 +663,7 @@ export class EmulatorClient {
    * queued-apply contract as `writeRam`: resolves with the apply `seq`.
    */
   async execAt(addr: number): Promise<number | undefined> {
-    const res = await this.post(
-      "/api/exec",
-      JSON.stringify({ addr }),
-      "application/json",
-      this.debugTimeoutMs,
-    )
-    return parseAck(res).seq
+    return parseAck(await this.postJson("/api/exec", { addr })).seq
   }
 
   /**
@@ -713,27 +701,22 @@ export class EmulatorClient {
     if (config.romLang !== undefined) body.rom_lang = config.romLang
     if (config.softReset) body.do_soft_reset = true
     if (config.hardReset) body.do_hard_reset = true
-    await this.post("/api/config", JSON.stringify(body), "application/json", this.debugTimeoutMs)
+    await this.postJson("/api/config", body)
   }
 
   /** Autotype `text` into the emulator via `POST /api/keytype` (use `\r` for Enter). */
   async keytype(text: string): Promise<void> {
-    await this.post(
-      "/api/keytype",
-      JSON.stringify({ text }),
-      "application/json",
-      this.debugTimeoutMs,
-    )
+    await this.postJson("/api/keytype", { text })
   }
 
   /** Send a single CPC virtual key code via `POST /api/keypress`. */
   async keypress(vk: number): Promise<void> {
-    await this.post(
-      "/api/keypress",
-      JSON.stringify({ vk }),
-      "application/json",
-      this.debugTimeoutMs,
-    )
+    await this.postJson("/api/keypress", { vk })
+  }
+
+  /** `POST` a JSON body on the debug timeout — counterpart of {@link getJson}. */
+  private postJson(path: string, body: unknown): Promise<string> {
+    return this.post(path, JSON.stringify(body), "application/json", this.debugTimeoutMs)
   }
 
   private async getJson<T>(path: string, timeoutMs: number): Promise<T> {
@@ -853,7 +836,6 @@ function describeError(status: number, body: string): string {
   return `HTTP ${status}`
 }
 
-/** `{ok, seq}` acknowledgement of a queued mutation; tolerant of junk bodies. */
 /** The `emu` object as the emulator serializes it (`/api/ping`, `/api/state`). */
 interface RawEmu {
   fps?: number
@@ -878,6 +860,7 @@ function mapTimelapse(emu: RawEmu): TimelapseState {
   }
 }
 
+/** `{ok, seq}` acknowledgement of a queued mutation; tolerant of junk bodies. */
 function parseAck(body: string): { ok: boolean; seq: number | undefined } {
   try {
     const parsed = JSON.parse(body) as { ok?: unknown; seq?: unknown }

@@ -9,6 +9,8 @@
  * make that contract explicit for a DAP `stepBack`. Pure.
  */
 
+import { errorMessage } from "./errors.js"
+
 /** Kind of the snapshots the timelapse currently navigates. */
 export type TimelapseStepKind = "frame" | "basic" | "z80"
 
@@ -58,4 +60,65 @@ export function checkStepBack(tl: TimelapseState, kind: "z80" | "basic"): StepBa
  */
 export function stepBackApplied(before: TimelapseState, now: TimelapseState): boolean {
   return now.stepsBack < before.stepsBack
+}
+
+/** The subset of `EmulatorClient` the step-back driver needs. */
+interface TimelapseClient {
+  getTimelapse(): Promise<TimelapseState>
+  tlBack(): Promise<void>
+}
+
+/**
+ * Outcome of asking for a step back: the rewind is queued and `before` is the
+ * state to poll against, or the reason to show the user.
+ */
+export type StepBackOutcome = { ok: true; before: TimelapseState } | { ok: false; reason: string }
+
+/**
+ * Read the timelapse, {@link checkStepBack}, then queue the rewind. A transport
+ * error becomes a refusal reason, so the caller has one outcome to translate to
+ * DAP. The rewind only applies on the next frame tick — poll it with
+ * {@link stepBackAppliedProbe}.
+ */
+export async function requestStepBack(
+  client: TimelapseClient,
+  kind: "z80" | "basic",
+): Promise<StepBackOutcome> {
+  let before: TimelapseState
+  try {
+    before = await client.getTimelapse()
+  } catch (e) {
+    return { ok: false, reason: errorMessage(e) }
+  }
+  const check = checkStepBack(before, kind)
+  if (!check.ok) return { ok: false, reason: check.reason }
+  try {
+    await client.tlBack()
+  } catch (e) {
+    return { ok: false, reason: errorMessage(e) }
+  }
+  return { ok: true, before }
+}
+
+/**
+ * A `StopPoller` probe that reports done once the queued rewind is applied
+ * ({@link stepBackApplied}), or once `maxPolls` calls are spent. A transient
+ * read error does not end the poll: a rewind the emulator refused at apply time
+ * must still resolve, and the budget is what guarantees that.
+ */
+export function stepBackAppliedProbe(
+  client: Pick<TimelapseClient, "getTimelapse">,
+  before: TimelapseState,
+  maxPolls: number,
+): () => Promise<boolean> {
+  let attempts = 0
+  return async () => {
+    attempts += 1
+    try {
+      if (stepBackApplied(before, await client.getTimelapse())) return true
+    } catch {
+      // transient read error; keep polling
+    }
+    return attempts >= maxPolls
+  }
 }

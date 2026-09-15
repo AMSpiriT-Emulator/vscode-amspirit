@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { checkStepBack, stepBackApplied, type TimelapseState } from "../src/step-back.js"
+import {
+  checkStepBack,
+  requestStepBack,
+  stepBackApplied,
+  stepBackAppliedProbe,
+  type TimelapseState,
+} from "../src/step-back.js"
 
 const tl = (over: Partial<TimelapseState>): TimelapseState => ({
   active: true,
@@ -46,5 +52,73 @@ describe("stepBackApplied", () => {
   it("is false while the queued tl_back is still pending", () => {
     expect(stepBackApplied(tl({ stepsBack: 3 }), tl({ stepsBack: 3 }))).toBe(false)
     expect(stepBackApplied(tl({ stepsBack: 3 }), tl({ stepsBack: 4 }))).toBe(false)
+  })
+})
+
+describe("requestStepBack", () => {
+  const client = (tlState: TimelapseState, fail?: { get?: string; back?: string }) => {
+    const calls: string[] = []
+    return {
+      calls,
+      getTimelapse: async () => {
+        calls.push("get")
+        if (fail?.get) throw new Error(fail.get)
+        return tlState
+      },
+      tlBack: async () => {
+        calls.push("back")
+        if (fail?.back) throw new Error(fail.back)
+      },
+    }
+  }
+
+  it("queues the rewind and returns the state it read, so the caller can poll it", async () => {
+    const c = client(tl({ stepsBack: 2 }))
+    const r = await requestStepBack(c, "z80")
+    expect(r).toEqual({ ok: true, before: tl({ stepsBack: 2 }) })
+    expect(c.calls).toEqual(["get", "back"])
+  })
+
+  it("refuses without issuing the rewind when the timelapse holds another kind", async () => {
+    const c = client(tl({ stepKind: "frame" }))
+    const r = await requestStepBack(c, "z80")
+    expect(r.ok).toBe(false)
+    expect(c.calls).toEqual(["get"])
+  })
+
+  it("reports the transport error as the refusal reason", async () => {
+    const r = await requestStepBack(client(tl({}), { get: "connect ECONNREFUSED" }), "z80")
+    expect(r).toEqual({ ok: false, reason: "connect ECONNREFUSED" })
+    const back = await requestStepBack(client(tl({}), { back: "HTTP 500" }), "z80")
+    expect(back).toEqual({ ok: false, reason: "HTTP 500" })
+  })
+})
+
+describe("stepBackAppliedProbe", () => {
+  it("reports done once the snapshot count behind the position drops", async () => {
+    const states = [tl({ stepsBack: 2 }), tl({ stepsBack: 2 }), tl({ stepsBack: 1 })]
+    let i = 0
+    const probe = stepBackAppliedProbe(
+      { getTimelapse: async () => states[i++] ?? tl({ stepsBack: 1 }) },
+      tl({ stepsBack: 2 }),
+      10,
+    )
+    expect(await probe()).toBe(false)
+    expect(await probe()).toBe(false)
+    expect(await probe()).toBe(true)
+  })
+
+  it("keeps polling through a transient read error, then gives up at the budget", async () => {
+    const probe = stepBackAppliedProbe(
+      {
+        getTimelapse: async () => {
+          throw new Error("transient")
+        },
+      },
+      tl({ stepsBack: 2 }),
+      2,
+    )
+    expect(await probe()).toBe(false)
+    expect(await probe()).toBe(true)
   })
 })

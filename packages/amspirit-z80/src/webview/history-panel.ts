@@ -81,15 +81,12 @@ export class HistoryPanel implements vscode.WebviewViewProvider {
 
   /**
    * Read the instruction history. Returns `{ rows: null }` when the emulator is
-   * unreachable. Gated on reachability (`ok`) like the other views — the ping
-   * pause flag is unreliable, but the history read succeeds whenever reachable.
+   * unreachable — the read itself is the reachability test, so this view needs
+   * no ping. The history is valid whether the emulator runs or is paused.
    */
   private async readPayload(): Promise<HistoryPayload> {
-    const client = this.makeClient()
     try {
-      const { ok } = await client.pingState()
-      if (!ok) return { rows: null }
-      return { rows: buildHistoryRows(await client.getHistory()) }
+      return { rows: buildHistoryRows(await this.makeClient().getHistory()) }
     } catch {
       return { rows: null }
     }

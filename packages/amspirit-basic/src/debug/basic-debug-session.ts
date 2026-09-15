@@ -2,13 +2,12 @@ import { readFileSync } from "node:fs"
 import { basename } from "node:path"
 import {
   type BasicListing,
-  checkStepBack,
   type EmulatorClient,
   EmulatorEvents,
-  errorMessage,
+  requestStepBack,
   StopPoller,
   StopWatcher,
-  stepBackApplied,
+  stepBackAppliedProbe,
   type TimelapseState,
 } from "@amspirit/shared"
 import {
@@ -427,26 +426,13 @@ export class BasicDebugSession extends LoggingDebugSession {
       this.sendResponse(response)
       return
     }
-    let before: TimelapseState
-    try {
-      before = await client.getTimelapse()
-    } catch (e) {
-      this.failRequest(response, errorMessage(e))
-      return
-    }
-    const check = checkStepBack(before, "basic")
-    if (!check.ok) {
-      this.failRequest(response, check.reason)
-      return
-    }
-    try {
-      await client.tlBack()
-    } catch (e) {
-      this.failRequest(response, errorMessage(e))
+    const outcome = await requestStepBack(client, "basic")
+    if (!outcome.ok) {
+      this.failRequest(response, outcome.reason)
       return
     }
     this.sendResponse(response)
-    this.monitorStepBackApplied(client, before)
+    this.monitorStepBackApplied(client, outcome.before)
   }
 
   protected override reverseContinueRequest(response: DebugProtocol.ReverseContinueResponse): void {
@@ -467,16 +453,7 @@ export class BasicDebugSession extends LoggingDebugSession {
    */
   private monitorStepBackApplied(client: EmulatorClient, before: TimelapseState): void {
     this.poller?.cancel()
-    let attempts = 0
-    const poller = new StopPoller(async () => {
-      attempts += 1
-      try {
-        if (stepBackApplied(before, await client.getTimelapse())) return true
-      } catch {
-        // transient read error; keep polling
-      }
-      return attempts >= STEP_BACK_MAX_POLLS
-    })
+    const poller = new StopPoller(stepBackAppliedProbe(client, before, STEP_BACK_MAX_POLLS))
     this.poller = poller
     if (this.disposed) return
     void poller.start().then((result) => {
