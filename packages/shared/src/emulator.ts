@@ -1,5 +1,6 @@
 import * as cp from "node:child_process"
 import * as http from "node:http"
+import type { TimelapseState } from "./step-back.js"
 
 export interface EmulatorClientOptions {
   port?: number
@@ -162,13 +163,26 @@ export interface CrtcState {
 
 /** Emulator status from `/api/state` (`emu`). */
 export interface EmuState {
+  /** Timelapse (rewind) state, `emu.tl_*`. Inactive on builds without it. */
+  timelapse: TimelapseState
   fps: number
-  frame: number
+  /**
+   * Completed emulated frames since startup. The only emulated-time clock over
+   * HTTP: `0` means the emulation loop has not run yet (PC is 0, RAM is the
+   * post-reset fill), so an automation client paces on this, not wall time.
+   */
+  frames: number
   paused: boolean
   /** CPC model: 0=464, 1=664, 2=6128, 4=6128+, 5=464+, 6=GX4000. */
   cpcModel: number
   /** CRTC type (0–4). */
   crtcType: number
+  /**
+   * Bumped once per queued RAM write / PC redirect the main thread applied.
+   * Compare with the `seq` returned by `writeRam` / `execAt` before trusting a
+   * readback.
+   */
+  ramApplySeq: number
 }
 
 /** Full chip snapshot from `GET /api/state`. */
@@ -213,9 +227,44 @@ export interface EmulatorConfig {
   /** CPC model index (0=464, 1=664, 2=6128, …). */
   cpcModel: number
   crtcType: number
-  /** Expansion RAM in KB beyond the base machine (0 on a stock machine). */
+  /** Raw `CORE_EXTENDED_RAM_*` index of the banked half (not a size). */
   extendedRam: number
+  /**
+   * Total RAM in KB, central 64 KB included: 128, 192, 320 or 576. The core
+   * always provides one banked 64 KB bank64, so 128 is the floor.
+   */
+  ramKb: number
   romLang: string
+}
+
+/** One entry of the last-20 executed-instruction history from `/api/history`. */
+export interface Z80HistoryEntry {
+  /** Address of the instruction. */
+  pc: number
+  /** Up to 4 opcode bytes at `pc` (CPU-visible fetch), uppercase hex. */
+  hex: string
+}
+
+/** CSL/Lua scripting engine state from `GET /api/script`. */
+export interface ScriptState {
+  /** `true` while a script is running. */
+  running: boolean
+  /** Error message from the last script, empty when none. */
+  error: string
+}
+
+/** Mutable machine configuration for `POST /api/config` (all fields optional). */
+export interface EmulatorConfigUpdate {
+  /** CPC model index (0=464, 1=664, 2=6128, …); triggers an implicit reset. */
+  cpcModel?: number
+  /** CRTC type (0–4); triggers an implicit reset. */
+  crtcType?: number
+  /** ROM language: `"FR"`, `"EN"`, `"SP"`, `"DA"`. */
+  romLang?: string
+  /** Trigger a soft reset. */
+  softReset?: boolean
+  /** Trigger a hard reset. */
+  hardReset?: boolean
 }
 
 /** Line number `0xFFFF` reported by the emulator when no program is running. */
@@ -390,13 +439,7 @@ export class EmulatorClient {
         rasterline?: number
         vsync?: boolean
       }
-      emu?: {
-        fps?: number
-        frame?: number
-        paused?: boolean
-        cpc_model?: number
-        crtc_type?: number
-      }
+      emu?: RawEmu
     }>("/api/state", this.debugTimeoutMs)
     const ga = raw.ga ?? {}
     const psg = raw.psg ?? {}
@@ -442,12 +485,33 @@ export class EmulatorClient {
       },
       emu: {
         fps: emu.fps ?? 0,
-        frame: emu.frame ?? 0,
+        frames: emu.frames ?? 0,
         paused: emu.paused ?? false,
         cpcModel: emu.cpc_model ?? 0,
         crtcType: emu.crtc_type ?? 0,
+        ramApplySeq: emu.ram_apply_seq ?? 0,
+        timelapse: mapTimelapse(emu),
       },
     }
+  }
+
+  /**
+   * Timelapse state via `GET /api/ping` (`emu.tl_*`): whether a Step Back is
+   * possible and of which kind. Inactive on builds without a timelapse.
+   */
+  async getTimelapse(): Promise<TimelapseState> {
+    const raw = await this.getJson<{ emu?: RawEmu }>("/api/ping", this.pingTimeoutMs)
+    return mapTimelapse(raw.emu ?? {})
+  }
+
+  /**
+   * Rewind one timelapse snapshot via `POST /api/tl_back`. Queued: applied on
+   * the next frame tick, and only when the newest snapshot's kind matches
+   * `TimelapseState.stepKind` (see `checkStepBack`). Poll `getTimelapse()`
+   * with `stepBackApplied` before reading the machine state back.
+   */
+  async tlBack(): Promise<void> {
+    await this.post("/api/tl_back", "", "text/plain", this.debugTimeoutMs)
   }
 
   /**
@@ -491,6 +555,12 @@ export class EmulatorClient {
    * Read `len` bytes from `addr` via `/api/ram`. By default reads raw central
    * RAM; with `cpuView`, reads memory as the Z80 sees it (ROM/RAM mapping
    * applied) — use this to disassemble around PC, which often points into ROM.
+   *
+   * `bank` counts **16 KB banks** (lite ≥ 1.14): 0–3 = central 64 KB, 4+ =
+   * extension (`B04`…). An `addr` above `0x3FFF` carries into the next bank,
+   * so `bank=4, addr=0, len=65536` reads a whole extended bank64. (Before
+   * 1.14 the same parameter counted 64 KB bank64s — nothing on the wire can
+   * tell the two apart, so callers must send the new unit.)
    */
   async readRam(
     addr: number,
@@ -498,8 +568,7 @@ export class EmulatorClient {
     opts: { cpuView?: boolean; bank?: number } = {},
   ): Promise<number[]> {
     const params = [`addr=${addr}`, `len=${len}`]
-    // bank 0 = central RAM, 1..N = extended page N-1; the CPU-visible view (ROM
-    // mapped in) only applies to the central bank.
+    // The CPU-visible view (ROM mapped in) only applies to the central bank.
     if (opts.bank) params.push(`bank=${opts.bank}`)
     if (opts.cpuView) params.push("view=cpu")
     const res = await this.getJson<{ hex?: string; error?: string }>(
@@ -518,12 +587,15 @@ export class EmulatorClient {
       cpc_model?: number
       crtc_type?: number
       extended_ram?: number
+      ram_kb?: number
       rom_lang?: string
     }>("/api/config", this.debugTimeoutMs)
     return {
       cpcModel: raw.cpc_model ?? 0,
       crtcType: raw.crtc_type ?? 0,
       extendedRam: raw.extended_ram ?? 0,
+      // Builds before `ram_kb` all had the 128 KB floor.
+      ramKb: raw.ram_kb ?? 128,
       romLang: raw.rom_lang ?? "",
     }
   }
@@ -532,29 +604,31 @@ export class EmulatorClient {
    * Write `bytes` to CPC RAM at `addr` via `POST /api/ram`. With `exec`, the
    * Z80 jumps to `entry` (default `addr`) after the write — used to load and run
    * an assembled program. Throws if the emulator does not acknowledge.
+   *
+   * The write is queued, not applied in place: resolves with the `seq` that
+   * `EmuState.ramApplySeq` reaches once the main thread has applied it
+   * (`undefined` on builds that issue none). Poll that before reading back.
+   *
+   * `bank` is a 16 KB bank like `readRam`'s (0–3 central, 4+ extended); the
+   * emulator adds `addr >> 14` to it, so the same `(addr, bank)` pair reads and
+   * writes the same byte. Omitted at 0 (the emulator default).
    */
   async writeRam(
     addr: number,
     bytes: readonly number[],
-    opts: { exec?: boolean; entry?: number } = {},
-  ): Promise<void> {
+    opts: { exec?: boolean; entry?: number; bank?: number } = {},
+  ): Promise<number | undefined> {
     const data = bytes.map((b) => (b & 0xff).toString(16).padStart(2, "0")).join("")
-    const body: { addr: number; data: string; exec?: boolean; entry?: number } = { addr, data }
+    const body: { addr: number; data: string; exec?: boolean; entry?: number; bank?: number } = {
+      addr,
+      data,
+    }
     if (opts.exec) body.exec = true
     if (opts.entry !== undefined) body.entry = opts.entry
-    const res = await this.post(
-      "/api/ram",
-      JSON.stringify(body),
-      "application/json",
-      this.debugTimeoutMs,
-    )
-    let parsed: { ok?: boolean }
-    try {
-      parsed = JSON.parse(res) as { ok?: boolean }
-    } catch {
-      parsed = {}
-    }
+    if (opts.bank) body.bank = opts.bank
+    const parsed = parseAck(await this.postJson("/api/ram", body))
     if (!parsed.ok) throw new Error("Emulator rejected RAM write")
+    return parsed.seq
   }
 
   /**
@@ -565,6 +639,84 @@ export class EmulatorClient {
   async getCodemap(): Promise<string> {
     const res = await this.getJson<{ hex?: string }>("/api/codemap", this.debugTimeoutMs)
     return res.hex ?? ""
+  }
+
+  /**
+   * Clear the execution bitmap via `DELETE /api/codemap`. The emulator also
+   * drops the instruction history, so the views start from a clean coverage.
+   */
+  async clearCodemap(): Promise<void> {
+    await this.del("/api/codemap", this.debugTimeoutMs)
+  }
+
+  /** Last 20 executed Z80 instructions (oldest first) via `GET /api/history`. */
+  async getHistory(): Promise<Z80HistoryEntry[]> {
+    const raw = await this.getJson<{ pc?: number; hex?: string }[]>(
+      "/api/history",
+      this.debugTimeoutMs,
+    )
+    return (raw ?? []).map((e) => ({ pc: e.pc ?? 0, hex: e.hex ?? "" }))
+  }
+
+  /**
+   * Redirect the Z80 PC to `addr` (no RAM write) via `POST /api/exec`. Same
+   * queued-apply contract as `writeRam`: resolves with the apply `seq`.
+   */
+  async execAt(addr: number): Promise<number | undefined> {
+    return parseAck(await this.postJson("/api/exec", { addr })).seq
+  }
+
+  /**
+   * Launch a script via `POST /api/script`. Defaults to CSL; pass `lang:"lua"`
+   * for raw Lua 5.4. The source is sent as the request body.
+   */
+  async runScript(source: string, opts: { lang?: "csl" | "lua" } = {}): Promise<void> {
+    const path = opts.lang === "lua" ? "/api/script?lang=lua" : "/api/script"
+    await this.post(path, source, "text/plain; charset=utf-8", this.debugTimeoutMs)
+  }
+
+  /** Current CSL/Lua scripting-engine state via `GET /api/script`. */
+  async getScriptState(): Promise<ScriptState> {
+    const raw = await this.getJson<{ running?: boolean; error?: string }>(
+      "/api/script",
+      this.debugTimeoutMs,
+    )
+    return { running: raw.running === true, error: raw.error ?? "" }
+  }
+
+  /** Interrupt the running script via `DELETE /api/script`. */
+  async abortScript(): Promise<void> {
+    await this.del("/api/script", this.debugTimeoutMs)
+  }
+
+  /**
+   * Change machine configuration via `POST /api/config` — model, CRTC type,
+   * ROM language, and soft/hard reset. Only the provided fields are sent;
+   * changing the model or CRTC triggers an implicit reset in the emulator.
+   */
+  async setConfig(config: EmulatorConfigUpdate): Promise<void> {
+    const body: Record<string, unknown> = {}
+    if (config.cpcModel !== undefined) body.cpc_model = config.cpcModel
+    if (config.crtcType !== undefined) body.crtc_type = config.crtcType
+    if (config.romLang !== undefined) body.rom_lang = config.romLang
+    if (config.softReset) body.do_soft_reset = true
+    if (config.hardReset) body.do_hard_reset = true
+    await this.postJson("/api/config", body)
+  }
+
+  /** Autotype `text` into the emulator via `POST /api/keytype` (use `\r` for Enter). */
+  async keytype(text: string): Promise<void> {
+    await this.postJson("/api/keytype", { text })
+  }
+
+  /** Send a single CPC virtual key code via `POST /api/keypress`. */
+  async keypress(vk: number): Promise<void> {
+    await this.postJson("/api/keypress", { vk })
+  }
+
+  /** `POST` a JSON body on the debug timeout — counterpart of {@link getJson}. */
+  private postJson(path: string, body: unknown): Promise<string> {
+    return this.post(path, JSON.stringify(body), "application/json", this.debugTimeoutMs)
   }
 
   private async getJson<T>(path: string, timeoutMs: number): Promise<T> {
@@ -612,6 +764,20 @@ export class EmulatorClient {
     contentType: string,
     timeoutMs: number,
   ): Promise<string> {
+    return this.send("POST", path, timeoutMs, { body, contentType })
+  }
+
+  /** DELETE with no body (e.g. `DELETE /api/script` to abort a script). */
+  private del(path: string, timeoutMs: number): Promise<string> {
+    return this.send("DELETE", path, timeoutMs)
+  }
+
+  private send(
+    method: string,
+    path: string,
+    timeoutMs: number,
+    payload?: { body: string; contentType: string },
+  ): Promise<string> {
     return new Promise((resolve, reject) => {
       let settled = false
       const settle = (fn: () => void): void => {
@@ -619,26 +785,29 @@ export class EmulatorClient {
         settled = true
         fn()
       }
-      const buf = Buffer.from(body, "utf-8")
+      const headers: http.OutgoingHttpHeaders = {}
+      let buf: Buffer | undefined
+      if (payload) {
+        buf = Buffer.from(payload.body, "utf-8")
+        headers["Content-Type"] = payload.contentType
+        headers["Content-Length"] = buf.length
+      }
       const req = http.request(
-        {
-          hostname: this.host,
-          port: this.port,
-          path,
-          method: "POST",
-          timeout: timeoutMs,
-          headers: {
-            "Content-Type": contentType,
-            "Content-Length": buf.length,
-          },
-        },
+        { hostname: this.host, port: this.port, path, method, timeout: timeoutMs, headers },
         (res) => {
           let data = ""
           res.setEncoding("utf-8")
           res.on("data", (chunk: string) => {
             data += chunk
           })
-          res.on("end", () => settle(() => resolve(data)))
+          res.on("end", () => {
+            const status = res.statusCode ?? 0
+            if (status < 200 || status >= 300) {
+              settle(() => reject(new Error(describeError(status, data))))
+              return
+            }
+            settle(() => resolve(data))
+          })
         },
       )
       req.on("error", (err) => settle(() => reject(err)))
@@ -646,9 +815,61 @@ export class EmulatorClient {
         req.destroy()
         settle(() => reject(new Error("timeout")))
       })
-      req.write(buf)
+      if (buf) req.write(buf)
       req.end()
     })
+  }
+}
+
+/**
+ * The reason behind a non-2xx answer. The emulator rejects a request it cannot
+ * apply with `400 {"error":…,"field":…}` (or `405 {"error":…,"allow":…}`), and
+ * that message is what the user needs to see; fall back to the bare status.
+ */
+function describeError(status: number, body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { error?: unknown }
+    if (typeof parsed.error === "string" && parsed.error !== "") return parsed.error
+  } catch {
+    // not JSON — fall through
+  }
+  return `HTTP ${status}`
+}
+
+/** The `emu` object as the emulator serializes it (`/api/ping`, `/api/state`). */
+interface RawEmu {
+  fps?: number
+  frames?: number
+  paused?: boolean
+  cpc_model?: number
+  crtc_type?: number
+  ram_apply_seq?: number
+  tl_active?: boolean
+  tl_steps_back?: number
+  tl_steps_fwd?: number
+  tl_step_kind?: string
+}
+
+function mapTimelapse(emu: RawEmu): TimelapseState {
+  const kind = emu.tl_step_kind
+  return {
+    active: emu.tl_active ?? false,
+    stepsBack: emu.tl_steps_back ?? 0,
+    stepsFwd: emu.tl_steps_fwd ?? 0,
+    stepKind: kind === "z80" || kind === "basic" ? kind : "frame",
+  }
+}
+
+/** `{ok, seq}` acknowledgement of a queued mutation; tolerant of junk bodies. */
+function parseAck(body: string): { ok: boolean; seq: number | undefined } {
+  try {
+    const parsed = JSON.parse(body) as { ok?: unknown; seq?: unknown }
+    return {
+      ok: parsed.ok === true,
+      seq: typeof parsed.seq === "number" ? parsed.seq : undefined,
+    }
+  } catch {
+    return { ok: false, seq: undefined }
   }
 }
 

@@ -14,6 +14,7 @@ const rows: DisasmRow[] = [
     text: "JR L8003",
     isPc: true,
     executed: true,
+    analyzed: false,
     data: false,
   },
   {
@@ -23,6 +24,7 @@ const rows: DisasmRow[] = [
     text: "DB #00",
     isPc: false,
     executed: false,
+    analyzed: false,
     data: true,
   },
   {
@@ -33,11 +35,31 @@ const rows: DisasmRow[] = [
     label: "L8003",
     isPc: false,
     executed: false,
+    analyzed: true,
     data: false,
   },
 ]
 
 describe("<DisasmList />", () => {
+  it("asks for a zone analysis from the program counter", () => {
+    const onAnalyze = vi.fn()
+    render(<DisasmList rows={rows} onGoto={vi.fn()} onAnalyze={onAnalyze} />)
+    fireEvent.click(screen.getByRole("button", { name: /analyze from pc/i }))
+    expect(onAnalyze).toHaveBeenCalledTimes(1)
+  })
+
+  it("asks to reset the zones", () => {
+    const onResetZones = vi.fn()
+    render(<DisasmList rows={rows} onGoto={vi.fn()} onResetZones={onResetZones} />)
+    fireEvent.click(screen.getByRole("button", { name: /reset zones/i }))
+    expect(onResetZones).toHaveBeenCalledTimes(1)
+  })
+
+  it("marks the statically analysed rows", () => {
+    const { container } = render(<DisasmList rows={rows} onGoto={vi.fn()} />)
+    expect(container.querySelectorAll('[data-analyzed="true"]').length).toBe(1)
+  })
+
   it("renders a row per instruction with address, bytes and mnemonic", () => {
     render(<DisasmList rows={rows} onGoto={vi.fn()} />)
     expect(screen.getByText("8000")).toBeDefined()
@@ -56,6 +78,7 @@ describe("<DisasmList />", () => {
     expect(screen.getByText("▶ PC")).toBeDefined()
     expect(screen.getByText("Executed")).toBeDefined()
     expect(screen.getByText("Data (DB)")).toBeDefined()
+    expect(screen.getByText("Analyzed")).toBeDefined()
   })
 
   it("marks the program-counter row and shades executed instructions", () => {

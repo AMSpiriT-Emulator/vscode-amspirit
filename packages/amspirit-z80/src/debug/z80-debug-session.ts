@@ -1,17 +1,24 @@
 import { existsSync, readFileSync } from "node:fs"
-import { basename, dirname, isAbsolute, resolve } from "node:path"
+import { tmpdir } from "node:os"
+import { basename, dirname, isAbsolute, join, resolve } from "node:path"
 import {
   type DisasmInstruction,
   decodeInstruction,
   type EmulatorClient,
   EmulatorEvents,
+  errorMessage,
+  requestStepBack,
   StopPoller,
   StopWatcher,
+  stepBackAppliedProbe,
+  type TimelapseState,
 } from "@amspirit/shared"
 import {
   ContinuedEvent,
   InitializedEvent,
+  Logger,
   LoggingDebugSession,
+  logger,
   Source,
   StackFrame,
   StoppedEvent,
@@ -22,9 +29,10 @@ import type { DebugProtocol } from "@vscode/debugprotocol"
 import { type ReadMem, reconstructCallStack } from "../call-stack.js"
 import { firmwareLabel } from "../firmware-labels.js"
 import { launchEntryReached, stepSettled } from "../step-landing.js"
-import { planStepOver, returnAddress } from "../step-targets.js"
+import { planStepOut, planStepOver } from "../step-targets.js"
 import { parseSymbolMap } from "../symbol-map/parse-symbol-map.js"
 import type { SymbolMap } from "../symbol-map/symbol-map.js"
+import { BreakpointSet } from "./breakpoint-set.js"
 
 const THREAD_ID = 1
 /**
@@ -59,7 +67,12 @@ interface Z80DebugConfig {
   host?: string
   port?: number
   stopOnEntry?: boolean
+  /** Log every DAP request, response and event to `amspirit-z80-dap.log` (OS temp dir). */
+  trace?: boolean
 }
+
+/** Where a traced session writes its DAP log. */
+const DAP_TRACE_PATH = join(tmpdir(), "amspirit-z80-dap.log")
 
 /** Reads a file's text; injectable for testing the (otherwise pure) modules. */
 export type FileReader = (path: string) => string
@@ -117,7 +130,13 @@ export class Z80DebugSession extends LoggingDebugSession {
   /** One-shot breakpoint at the program entry (stop-on-entry), dropped after. */
   private entryAddr: number | undefined
   /** Last user breakpoint addresses; a temporary bp is merged then dropped. */
-  private userBpAddrs: number[] = []
+  /** User breakpoints per source file; the emulator gets their union. */
+  private readonly userBps = new BreakpointSet()
+  /**
+   * One-shot breakpoint armed by a run-to (step-over / step-out). Tracked so a
+   * manual pause, which cancels the run-to monitor, still disarms it.
+   */
+  private tempBpAddr: number | undefined
   /** Opens on `configurationDone`, gating the launch RUN until breakpoints are set. */
   private readonly configured = new Gate()
 
@@ -153,6 +172,9 @@ export class Z80DebugSession extends LoggingDebugSession {
     response.body.supportsConfigurationDoneRequest = true
     response.body.supportsTerminateRequest = true
     response.body.supportsSteppingGranularity = true
+    // Step Back rides the emulator timelapse; the request itself explains when
+    // the emulator was started without one.
+    response.body.supportsStepBack = true
     this.sendResponse(response)
     this.sendEvent(new InitializedEvent())
   }
@@ -161,6 +183,7 @@ export class Z80DebugSession extends LoggingDebugSession {
     response: DebugProtocol.AttachResponse,
     args: DebugProtocol.AttachRequestArguments & Z80DebugConfig,
   ): Promise<void> {
+    this.setupTrace(args)
     const host = args.host ?? "127.0.0.1"
     const port = args.port ?? 6128
     this.client = this.createClient(host, port)
@@ -188,6 +211,7 @@ export class Z80DebugSession extends LoggingDebugSession {
     response: DebugProtocol.LaunchResponse,
     args: DebugProtocol.LaunchRequestArguments & Z80DebugConfig,
   ): Promise<void> {
+    this.setupTrace(args)
     const host = args.host ?? "127.0.0.1"
     const port = args.port ?? 6128
     const client = this.createClient(host, port)
@@ -198,17 +222,17 @@ export class Z80DebugSession extends LoggingDebugSession {
     this.loadSymbols(args)
 
     const binaryPath = this.resolveBinaryPath(args)
-    let bytes: number[] | undefined
-    if (binaryPath) {
-      try {
-        bytes = this.readBinary(binaryPath)
-      } catch {
-        // No binary to load; fall through and just respond.
-      }
+    if (!binaryPath) {
+      this.failLaunch(response, "Set `program` or `binary` in the launch configuration.")
+      return
     }
-    if (bytes === undefined) {
-      this.configured.open()
-      this.sendResponse(response)
+    let bytes: number[]
+    try {
+      bytes = this.readBinary(binaryPath)
+    } catch (e) {
+      // A silent success here would leave the user debugging whatever the
+      // emulator already runs, with no load, no entry stop and no monitor.
+      this.failLaunch(response, `Cannot read binary ${binaryPath}: ${errorMessage(e)}`)
       return
     }
 
@@ -232,6 +256,25 @@ export class Z80DebugSession extends LoggingDebugSession {
       // best effort; the session stays attached to current memory
     }
     this.sendResponse(response)
+  }
+
+  /**
+   * With `trace`, make the base class's request/response/event logging land in
+   * {@link DAP_TRACE_PATH}: the base never raises the log level by itself.
+   */
+  private setupTrace(args: Z80DebugConfig): void {
+    if (!args.trace) return
+    // `setup` needs the logger `start()` would have created; an inline adapter
+    // (DebugAdapterInlineImplementation) never goes through `start()`.
+    logger.init((e) => this.sendEvent(e), undefined, false)
+    // The file gets every level; only warnings reach the Debug Console.
+    logger.setup(Logger.LogLevel.Warn, DAP_TRACE_PATH)
+  }
+
+  /** Reject the launch with a message VS Code shows to the user. */
+  private failLaunch(response: DebugProtocol.LaunchResponse, message: string): void {
+    this.closeEvents()
+    this.sendErrorResponse(response, 2001, "{message}", { message })
   }
 
   /** Explicit `binary`, else `<program-without-ext>.bin`. */
@@ -296,7 +339,9 @@ export class Z80DebugSession extends LoggingDebugSession {
       addrs.push(...resolved)
       verified.push({ verified: resolved.length > 0, line: bp.line })
     }
-    this.userBpAddrs = dedupe(addrs)
+    // The request names one source file: replace that file's set only, so the
+    // breakpoints of the other files keep the "verified" state VS Code shows.
+    this.userBps.replace(path ?? args.source.name ?? "", addrs)
 
     if (this.client) {
       try {
@@ -310,12 +355,18 @@ export class Z80DebugSession extends LoggingDebugSession {
     this.sendResponse(response)
   }
 
-  /** User breakpoints plus the internal one-shot entry breakpoint (deduped). */
+  /** Every user breakpoint plus the internal one-shot ones (entry, run-to). */
   private bpAddrsToPost(): number[] {
-    if (this.entryAddr === undefined || this.userBpAddrs.includes(this.entryAddr)) {
-      return this.userBpAddrs
-    }
-    return [...this.userBpAddrs, this.entryAddr]
+    const addrs = new Set(this.userBps.all())
+    if (this.entryAddr !== undefined) addrs.add(this.entryAddr)
+    if (this.tempBpAddr !== undefined) addrs.add(this.tempBpAddr)
+    return [...addrs]
+  }
+
+  /** Re-post the current set (best effort; the emulator may be unreachable). */
+  private syncBreakpoints(): void {
+    const client = this.client
+    if (client) void client.setZ80Breakpoints(this.bpAddrsToPost()).catch(() => {})
   }
 
   /**
@@ -326,8 +377,18 @@ export class Z80DebugSession extends LoggingDebugSession {
     if (this.entryAddr === undefined) return
     this.entryAddr = undefined
     this.firstStopReason = "breakpoint"
-    const client = this.client
-    if (client) void client.setZ80Breakpoints(this.userBpAddrs).catch(() => {})
+    this.syncBreakpoints()
+  }
+
+  /**
+   * Disarm the run-to breakpoint, whether the run-to completed or a pause cut
+   * it short. Left armed, it would fire on a later `continue` when the
+   * subroutine returns, as an unexplained stop.
+   */
+  private clearTempBreakpoint(): void {
+    if (this.tempBpAddr === undefined) return
+    this.tempBpAddr = undefined
+    this.syncBreakpoints()
   }
 
   protected override async stackTraceRequest(
@@ -416,6 +477,8 @@ export class Z80DebugSession extends LoggingDebugSession {
         // best effort
       }
     }
+    // Cancelling the monitor above skipped the run-to's own cleanup.
+    this.clearTempBreakpoint()
     this.sendResponse(response)
     this.sendStopped("pause")
   }
@@ -446,13 +509,26 @@ export class Z80DebugSession extends LoggingDebugSession {
 
   protected override async stepOutRequest(response: DebugProtocol.StepOutResponse): Promise<void> {
     const client = this.client
+    const symbols = this.symbols
     if (client) {
       try {
         const sp = (await client.getZ80()).SP
-        const ret = returnAddress(await client.readRam(sp, 2, { cpuView: true }))
-        if (ret !== undefined) {
+        const stack = await client.readRam(sp, 2, { cpuView: true })
+        const plan = planStepOut(
+          stack,
+          symbols ? (addr: number) => symbols.addressToLine(addr) !== undefined : undefined,
+        )
+        if (plan.kind === "runTo") {
           this.sendResponse(response)
-          await this.runToTemp(ret, "step")
+          await this.runToTemp(plan.addr, "step")
+          return
+        }
+        if (plan.kind === "outsideProgram") {
+          const hex = plan.addr.toString(16).toUpperCase().padStart(4, "0")
+          this.failRequest(
+            response,
+            `Step Out: no caller inside the program (the return address &${hex} is outside it).`,
+          )
           return
         }
       } catch {
@@ -460,6 +536,59 @@ export class Z80DebugSession extends LoggingDebugSession {
       }
     }
     await this.stepOne(response)
+  }
+
+  /**
+   * Undo the last Z80 step through the emulator timelapse (`tlBack`). The
+   * emulator saves a snapshot before each step, so this restores the machine
+   * to just before it. Refused, with the reason shown to the user, when the
+   * timelapse is off, holds another kind of snapshot, or has nothing behind.
+   */
+  protected override async stepBackRequest(
+    response: DebugProtocol.StepBackResponse,
+  ): Promise<void> {
+    const client = this.client
+    if (!client) {
+      this.sendResponse(response)
+      return
+    }
+    const outcome = await requestStepBack(client, "z80")
+    if (!outcome.ok) {
+      this.failRequest(response, outcome.reason)
+      return
+    }
+    this.atLaunchEntry = false
+    this.sendResponse(response)
+    this.monitorStepBackApplied(client, outcome.before)
+  }
+
+  protected override reverseContinueRequest(response: DebugProtocol.ReverseContinueResponse): void {
+    // The emulator has no "rewind until" endpoint; a silent success here would
+    // leave VS Code waiting for a stop that never comes.
+    this.failRequest(response, "Reverse Continue is not available. Use Step Back to undo one step.")
+  }
+
+  /** Reject a request with a message VS Code shows to the user. */
+  private failRequest(response: DebugProtocol.Response, message: string): void {
+    this.sendErrorResponse(response, 2002, "{message}", { message })
+  }
+
+  /**
+   * Poll the timelapse until the queued `tl_back` is applied ({@link
+   * stepBackApplied}), then report one stop. Bounded like a step, so a rewind
+   * the emulator refused at apply time still resolves.
+   */
+  private monitorStepBackApplied(client: EmulatorClient, before: TimelapseState): void {
+    this.poller?.cancel()
+    this.monitorRun += 1
+    const poller = new StopPoller(stepBackAppliedProbe(client, before, STEP_SETTLE_MAX_POLLS))
+    this.poller = poller
+    if (this.disposed) return
+    void poller.start().then((result) => {
+      if (result === "stopped" && this.poller === poller && !this.disposed) {
+        this.sendStopped("step")
+      }
+    })
   }
 
   /**
@@ -594,19 +723,15 @@ export class Z80DebugSession extends LoggingDebugSession {
   private async runToTemp(addr: number, reason: string): Promise<void> {
     const client = this.client
     if (!client) return
-    const withTemp = this.userBpAddrs.includes(addr)
-      ? this.userBpAddrs
-      : [...this.userBpAddrs, addr]
+    this.tempBpAddr = addr
     try {
-      await client.setZ80Breakpoints(withTemp)
+      await client.setZ80Breakpoints(this.bpAddrsToPost())
       await client.setPaused(false)
       this.sendEvent(new ContinuedEvent(THREAD_ID))
     } catch {
       // best effort
     }
-    this.monitorStop(reason, STOP_SETTLE_MS, () => {
-      void client.setZ80Breakpoints(this.userBpAddrs).catch(() => {})
-    })
+    this.monitorStop(reason, STOP_SETTLE_MS, () => this.clearTempBreakpoint())
   }
 
   /** Read + decode the instruction at the current PC (for step-over). */
@@ -701,9 +826,4 @@ function decodeOne(bytes: number[], address: number): DisasmInstruction | undefi
   } catch {
     return undefined
   }
-}
-
-/** Drop duplicate addresses while preserving order. */
-function dedupe(addrs: number[]): number[] {
-  return [...new Set(addrs)]
 }

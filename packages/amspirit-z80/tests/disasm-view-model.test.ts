@@ -33,6 +33,7 @@ describe("buildDisasmRows", () => {
         text: "LD A,#00",
         isPc: false,
         executed: false,
+        analyzed: false,
         data: false,
       },
       {
@@ -42,6 +43,7 @@ describe("buildDisasmRows", () => {
         text: "INC A",
         isPc: false,
         executed: false,
+        analyzed: false,
         data: false,
       },
       {
@@ -51,6 +53,7 @@ describe("buildDisasmRows", () => {
         text: "RET",
         isPc: false,
         executed: false,
+        analyzed: false,
         data: false,
       },
     ])
@@ -151,6 +154,7 @@ describe("buildDisasmRows", () => {
       text: "...",
       isPc: false,
       executed: false,
+      analyzed: false,
       data: false,
     })
   })
@@ -174,6 +178,37 @@ describe("buildDisasmRows", () => {
     expect(rows[0]?.text).toBe("LD A,#00")
     expect(rows[1]?.text).toBe("DB #3C")
     expect(rows[2]?.text).toBe("RET")
+  })
+
+  it("marks a statically analysed row as code, and the rest as data", () => {
+    // No runtime coverage at all: the static zones alone classify the window.
+    const rows = buildDisasmRows({
+      read: PROGRAM,
+      base: 0x8000,
+      instructionOffset: 0,
+      instructionCount: 3,
+      zones: new Set([0x8000, 0x8003]),
+    })
+    expect(rows.map((r) => r.analyzed)).toEqual([true, false, true])
+    expect(rows.map((r) => r.data)).toEqual([false, true, false])
+    expect(rows[1]?.text).toBe("DB #3C")
+  })
+
+  it("unions the static zones with the runtime coverage", () => {
+    // Coverage knows 0x8003 only; the analysis adds 0x8002. Nothing is data.
+    const bits = new Uint8Array(8192)
+    bits[0x8003 >> 3] = 1 << (0x8003 & 7)
+    const codemapHex = [...bits].map((b) => b.toString(16).padStart(2, "0")).join("")
+    const rows = buildDisasmRows({
+      read: PROGRAM,
+      base: 0x8000,
+      instructionOffset: 0,
+      instructionCount: 3,
+      pc: 0x8000,
+      codemapHex,
+      zones: new Set([0x8002]),
+    })
+    expect(rows.map((r) => r.data)).toEqual([false, false, false])
   })
 
   it("never marks data without coverage (can't tell code from data)", () => {

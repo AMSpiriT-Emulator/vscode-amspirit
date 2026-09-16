@@ -15,6 +15,7 @@ import { buildPsgViewModel } from "./hardware/psg-view-model.js"
 import { Z80StatusBar } from "./status-bar/z80-status-bar.js"
 import { DisasmPanel } from "./webview/disasm-panel.js"
 import { HardwarePanel } from "./webview/hardware-panel.js"
+import { HistoryPanel } from "./webview/history-panel.js"
 import { MemoryPanel } from "./webview/memory-panel.js"
 import { RegistersPanel } from "./webview/registers-panel.js"
 
@@ -135,6 +136,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const memoryPanel = new MemoryPanel(context.extensionUri, debugAwareClient, hub)
   const disasmPanel = new DisasmPanel(context.extensionUri, debugAwareClient, hub)
+  const historyPanel = new HistoryPanel(context.extensionUri, debugAwareClient, hub)
   const registersPanel = new RegistersPanel(
     context.extensionUri,
     debugAwareClient,
@@ -183,6 +185,9 @@ export function activate(context: vscode.ExtensionContext): void {
       webviewOptions: { retainContextWhenHidden: true },
     }),
     vscode.window.registerWebviewViewProvider(DisasmPanel.viewId, disasmPanel, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
+    vscode.window.registerWebviewViewProvider(HistoryPanel.viewId, historyPanel, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
     ...hardwarePanels.map((panel) =>

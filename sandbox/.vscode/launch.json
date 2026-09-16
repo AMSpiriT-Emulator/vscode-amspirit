@@ -35,6 +35,7 @@
       "mapFile": "${workspaceFolder}/hello-rasm.map",
       "stopOnEntry": true,
       "port": 6128,
+      "trace": true,
       "preLaunchTask": "rasm: assemble hello-rasm"
     },
     {

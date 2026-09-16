@@ -4,7 +4,7 @@ import { SseParser } from "./sse-parse.js"
 /**
  * Server-Sent-Events client for the emulator's `GET /api/events` push channel.
  * Replaces polling: the emulator emits `pause` / `z80_bp` / `basic_bp` the moment
- * execution stops, and `frame` per video frame. Transport-agnostic by design —
+ * execution stops, and `frame` every 10 video frames (~5 Hz). Transport-agnostic by design —
  * the HTTP call is injected (mirroring `PingService`/`StopPoller`), so the parse,
  * dispatch and reconnect logic test without sockets.
  *
@@ -94,7 +94,7 @@ export type SseTransport = (
 export interface EmulatorEventsOptions {
   host?: string
   port?: number
-  /** Server-side `?topics=` filter; omit for all events (includes 50 Hz `frame`). */
+  /** Server-side `?topics=` filter; omit for all events (includes the ~5 Hz `frame`). */
   topics?: readonly EmulatorEventType[]
   /** Reconnect after the stream drops (default true). */
   reconnect?: boolean

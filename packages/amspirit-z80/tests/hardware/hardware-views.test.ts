@@ -169,7 +169,15 @@ describe("buildFdcScopes", () => {
 })
 
 describe("buildCrtcScopes", () => {
-  const emu: EmuState = { fps: 50, frame: 1234, paused: false, cpcModel: 2, crtcType: 1 }
+  const emu: EmuState = {
+    fps: 50,
+    frames: 1234,
+    paused: false,
+    cpcModel: 2,
+    crtcType: 1,
+    ramApplySeq: 0,
+    timelapse: { active: false, stepsBack: 0, stepsFwd: 0, stepKind: "frame" },
+  }
   const crtc: CrtcState = {
     regs: [63, 40, 46, 142, 38, 0, 25, 30, 0, 7, 0, 0, 48, 0],
     selectedReg: 6,

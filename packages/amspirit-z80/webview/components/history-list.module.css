@@ -1,0 +1,45 @@
+/* Instruction-history view — co-located CSS Module (Vite scopes the names). */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+}
+
+.table td {
+  padding: 1px 6px 1px 0;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.addr {
+  color: var(--vscode-descriptionForeground);
+}
+
+.bytes {
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.75;
+}
+
+.text {
+  width: 100%;
+  color: var(--vscode-foreground);
+}
+
+/* The most recent instruction (row 0) = the current PC. */
+.current {
+  background: var(--vscode-editor-selectionBackground, rgba(128, 128, 128, 0.25));
+}
+
+.current .addr,
+.current .text {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+
+.placeholder {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}

@@ -1,3 +1,5 @@
+import type { MemmapState } from "@amspirit/shared"
+
 /** Options controlling how a flat byte buffer is laid out into rows. */
 export interface MemoryRowsOptions {
   /** 16-bit address of the first byte. */
@@ -38,26 +40,38 @@ export interface BankOption {
   id: string
   /** Human label shown in the dropdown. */
   label: string
-  /** `/api/ram` bank: 0 = central RAM, 1..N = extended page N-1. */
+  /**
+   * `/api/ram` bank in **16 KB units**: 0 = central RAM (the whole 64 KB, the
+   * address carries across banks 0-3), 4·n = first bank of extended bank64 n.
+   */
   bank: number
   /** Read the CPU-visible mapping (ROM mapped in) rather than the raw bank. */
   cpuView: boolean
 }
 
+const hex2 = (n: number): string => n.toString(16).toUpperCase().padStart(2, "0")
+
 /**
- * The memory views selectable for a machine with `extendedRamKb` of expansion
- * RAM: always the CPU-visible view and the raw main 64 KB, plus one extended
- * bank per 64 KB of expansion. Pure; the panel derives `extendedRamKb` from
- * `/api/config` so the bank count matches the actual machine.
+ * The memory views selectable for a machine with `ramKb` of total RAM (central
+ * 64 KB included, as `/api/config` reports it): always the CPU-visible view and
+ * the raw main 64 KB, plus one entry per extended bank64. Each entry addresses
+ * its bank64 by its first 16 KB bank (`B04`, `B08`, …), the unit `/api/ram`
+ * takes; a 64 KB read from there carries through the four banks. Pure.
  */
-export function memoryBanks(extendedRamKb: number): BankOption[] {
+export function memoryBanks(ramKb: number): BankOption[] {
   const banks: BankOption[] = [
     { id: "cpu", label: "CPU view", bank: 0, cpuView: true },
     { id: "ram", label: "Main RAM", bank: 0, cpuView: false },
   ]
-  const pages = Math.max(0, Math.floor(extendedRamKb / 64))
+  const pages = Math.max(0, Math.floor((ramKb - 64) / 64))
   for (let p = 1; p <= pages; p += 1) {
-    banks.push({ id: `bank${p}`, label: `Bank ${p}`, bank: p, cpuView: false })
+    const first = 4 * p
+    banks.push({
+      id: `bank${p}`,
+      label: `Bank ${p} (B${hex2(first)}-B${hex2(first + 3)})`,
+      bank: first,
+      cpuView: false,
+    })
   }
   return banks
 }
@@ -191,4 +205,30 @@ export function buildMemoryRows(bytes: readonly number[], opts: MemoryRowsOption
     })
   }
   return rows
+}
+
+/** Where a byte edit must go, or why it cannot go anywhere. */
+export type WriteTarget = { bank: number; addr: number } | { error: string }
+
+/**
+ * Resolve the `(addr, bank)` pair a `writeRam` must use so the edited byte is
+ * the one the view shows. A raw bank view reads and writes the same pair. The
+ * CPU view reads through the live mapping, so the write must follow it too:
+ * the 16 KB region at `addr` names the physical bank the Z80 sees there (an
+ * extended bank when one is paged in). A region under ROM is refused — the
+ * byte shown is ROM, and the RAM below it is not what the user is editing.
+ * Pure.
+ */
+export function writeTarget(
+  view: BankOption,
+  addr: number,
+  memmap: MemmapState | undefined,
+): WriteTarget {
+  if (!view.cpuView) return { bank: view.bank, addr }
+  const base = addr & 0xc000
+  const region = memmap?.regions.find((r) => r.base === base)
+  if (!region) return { error: "memory mapping unknown" }
+  if (region.rom) return { error: "ROM is mapped at this address" }
+  if (region.ramBank === undefined) return { error: "memory mapping unknown" }
+  return { bank: region.ramBank, addr: addr & 0x3fff }
 }

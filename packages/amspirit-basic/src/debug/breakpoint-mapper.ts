@@ -58,6 +58,46 @@ export function resolveBreakpoints(
   })
 }
 
+/**
+ * Whether `listing` is the decode of `documentLines`: the same BASIC line
+ * numbers, in the same order. `injectBasic` only queues the text; the emulator
+ * tokenizes it a frame or two later, and until then `/api/basic_listing` is
+ * empty or still describes the previous program. A source with no numbered
+ * line never matches, so a caller cannot mistake "nothing to load" for "done".
+ */
+export function listingMatchesSource(
+  listing: BasicListing,
+  documentLines: readonly string[],
+): boolean {
+  const expected: number[] = []
+  for (const text of documentLines) {
+    const num = parseBasicLineNumber(text)
+    if (num !== undefined) expected.push(num)
+  }
+  if (expected.length === 0 || listing.lines.length !== expected.length) return false
+  return listing.lines.every((line, i) => line.num === expected[i])
+}
+
+/**
+ * Whether two listings decode the same program bytes: same lines, same
+ * statement addresses and texts. Line numbers alone do not tell an old program
+ * from a re-injected edit of it (a line that grew without renumbering keeps
+ * every number but moves every later statement), so a caller that waits for
+ * an injection compares the listing with the one read before injecting.
+ */
+export function listingEquals(a: BasicListing, b: BasicListing): boolean {
+  if (a.lines.length !== b.lines.length) return false
+  return a.lines.every((la, i) => {
+    const lb = b.lines[i]
+    if (!lb || la.num !== lb.num || la.addr !== lb.addr) return false
+    if (la.stmts.length !== lb.stmts.length) return false
+    return la.stmts.every((sa, j) => {
+      const sb = lb.stmts[j]
+      return sb !== undefined && sa.addr === sb.addr && sa.end === sb.end && sa.text === sb.text
+    })
+  })
+}
+
 /** Statement addresses of the verified breakpoints, ready for `/api/basic_bp`. */
 export function breakpointAddresses(resolved: readonly ResolvedBreakpoint[]): number[] {
   const addrs: number[] = []

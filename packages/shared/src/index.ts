@@ -16,6 +16,7 @@ export type {
   MemmapState,
   PingState,
   PsgState,
+  Z80HistoryEntry,
   Z80Registers,
 } from "./emulator.js"
 export { DIRECT_MODE_LINE, EmulatorClient, spawnEmulator } from "./emulator.js"
@@ -58,6 +59,18 @@ export type {
 export { readSettings, readSettingsWithWarnings } from "./settings.js"
 export type { SseEvent } from "./sse-parse.js"
 export { SseParser } from "./sse-parse.js"
+export type {
+  StepBackCheck,
+  StepBackOutcome,
+  TimelapseState,
+  TimelapseStepKind,
+} from "./step-back.js"
+export {
+  checkStepBack,
+  requestStepBack,
+  stepBackApplied,
+  stepBackAppliedProbe,
+} from "./step-back.js"
 export type { PausedProbe, StopPollerOptions, StopReason } from "./stop-poller.js"
 export { StopPoller } from "./stop-poller.js"
 export type { StopWatcherEventSource, StopWatcherOptions } from "./stop-watcher.js"

@@ -1,6 +1,6 @@
 import { decodeInstruction } from "@amspirit/shared"
 import { describe, expect, it } from "vitest"
-import { planStepOver, returnAddress } from "../src/step-targets.js"
+import { planStepOut, planStepOver, returnAddress } from "../src/step-targets.js"
 
 const at = (bytes: number[], pc = 0x8000) => decodeInstruction(bytes, pc)
 
@@ -41,5 +41,28 @@ describe("returnAddress", () => {
   it("returns undefined when the stack read is too short", () => {
     expect(returnAddress([0x34])).toBeUndefined()
     expect(returnAddress([])).toBeUndefined()
+  })
+})
+
+describe("planStepOut", () => {
+  // Program spans &8000-&800F; only those addresses are "inside".
+  const inside = (addr: number) => addr >= 0x8000 && addr <= 0x800f
+
+  it("runs to the return address when the caller is inside the program", () => {
+    expect(planStepOut([0x06, 0x80], inside)).toEqual({ kind: "runTo", addr: 0x8006 })
+  })
+
+  it("refuses when the return address leads outside the program (firmware caller)", () => {
+    // At the program's top level the stack still holds the firmware's return
+    // address: running there would run the whole program to its final RET.
+    expect(planStepOut([0xcc, 0x1b], inside)).toEqual({ kind: "outsideProgram", addr: 0x1bcc })
+  })
+
+  it("refuses when the stack bytes are unavailable", () => {
+    expect(planStepOut([0x06], inside)).toEqual({ kind: "noStack" })
+  })
+
+  it("runs to the return address when no symbol map bounds the program", () => {
+    expect(planStepOut([0xcc, 0x1b])).toEqual({ kind: "runTo", addr: 0x1bcc })
   })
 })

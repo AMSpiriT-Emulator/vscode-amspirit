@@ -1,6 +1,15 @@
 import { readFileSync } from "node:fs"
 import { basename } from "node:path"
-import { type EmulatorClient, EmulatorEvents, StopWatcher } from "@amspirit/shared"
+import {
+  type BasicListing,
+  type EmulatorClient,
+  EmulatorEvents,
+  requestStepBack,
+  StopPoller,
+  StopWatcher,
+  stepBackAppliedProbe,
+  type TimelapseState,
+} from "@amspirit/shared"
 import {
   ContinuedEvent,
   InitializedEvent,
@@ -14,7 +23,12 @@ import {
 } from "@vscode/debugadapter"
 import type { DebugProtocol } from "@vscode/debugprotocol"
 import { readResolvedBasicVars } from "./basic-vars-reader.js"
-import { breakpointAddresses, resolveBreakpoints } from "./breakpoint-mapper.js"
+import {
+  breakpointAddresses,
+  listingEquals,
+  listingMatchesSource,
+  resolveBreakpoints,
+} from "./breakpoint-mapper.js"
 import {
   buildStackFrame,
   buildStateVariables,
@@ -31,6 +45,8 @@ const STATE_REF = 2
  * actions on its frame thread, ~1-2 frames later).
  */
 const STOP_SETTLE_MS = 150
+/** Polls (100 ms apart) before a step back is reported anyway. */
+const STEP_BACK_MAX_POLLS = 30
 
 /**
  * A one-shot promise gate. `wait()` blocks until someone calls `open()`; once
@@ -72,7 +88,7 @@ export class BasicDebugSession extends LoggingDebugSession {
   /** SSE push channel; stop events let the watcher react without polling. */
   private events: EmulatorEvents | undefined
   private programPath: string | undefined
-  private poller: StopWatcher | undefined
+  private poller: StopPoller | StopWatcher | undefined
   private disposed = false
   private stopOnEntry = false
   /** True once the program is running and a stop is expected (arms the monitor). */
@@ -121,6 +137,9 @@ export class BasicDebugSession extends LoggingDebugSession {
     response.body = response.body ?? {}
     response.body.supportsConfigurationDoneRequest = true
     response.body.supportsTerminateRequest = true
+    // Step Back rides the emulator timelapse; the request itself explains when
+    // the emulator was started without one.
+    response.body.supportsStepBack = true
     this.sendResponse(response)
     this.sendEvent(new InitializedEvent())
   }
@@ -159,14 +178,23 @@ export class BasicDebugSession extends LoggingDebugSession {
       return
     }
     this.programPath = args.program
-    const source = this.readLines(args.program).join("\n")
+    const sourceLines = this.readLines(args.program)
+    const source = sourceLines.join("\n")
     try {
+      // What is in memory now; the injection is applied only once the listing
+      // differs from it (an edit that keeps every line number still moves the
+      // statements, which line numbers alone would not reveal).
+      const before = await client.getBasicListing().catch(() => undefined)
       // Tokenize WITHOUT running so `getBasicListing` can resolve addresses and
       // every breakpoint is armed before the program starts — otherwise line 1
       // executes before the breakpoints are set and we sail past them.
       await client.injectBasic(source, false, false)
+      // The ack only means "queued": hold the breakpoint gate until the listing
+      // is this program's, or a breakpoint set meanwhile reads an empty (or the
+      // previous program's) listing and stays unverified for good.
+      const listing = await this.waitForListing(client, sourceLines, before)
       if (this.stopOnEntry) {
-        this.entryAddr = await this.resolveEntryAddr(client)
+        this.entryAddr = listing?.lines[0]?.stmts[0]?.addr
         this.firstStopReason = "entry"
       }
     } catch {
@@ -191,21 +219,31 @@ export class BasicDebugSession extends LoggingDebugSession {
   }
 
   /**
-   * Address of the first statement, retried because injection is async — the
-   * listing is empty until the emulator finishes tokenizing (a frame or two).
+   * The listing once it decodes `sourceLines` ({@link listingMatchesSource})
+   * and differs from `before`, the listing read prior to injecting: the
+   * emulator applies the injection a frame later, and until then it still
+   * serves the previous program. Polled with a bound; on timeout returns the
+   * last read (`undefined` if none), which covers a re-launch of an unchanged
+   * program (the listing never changes, and is right) and a program the
+   * emulator cannot tokenize.
    */
-  private async resolveEntryAddr(client: EmulatorClient): Promise<number | undefined> {
+  private async waitForListing(
+    client: EmulatorClient,
+    sourceLines: readonly string[],
+    before: BasicListing | undefined,
+  ): Promise<BasicListing | undefined> {
+    let last: BasicListing | undefined
     for (let attempt = 0; attempt < 10; attempt++) {
       try {
-        const listing = await client.getBasicListing()
-        const addr = listing.lines[0]?.stmts[0]?.addr
-        if (addr !== undefined) return addr
+        last = await client.getBasicListing()
+        const applied = before === undefined || !listingEquals(before, last)
+        if (applied && listingMatchesSource(last, sourceLines)) return last
       } catch {
         // retry
       }
       await new Promise((resolve) => setTimeout(resolve, 60))
     }
-    return undefined
+    return last
   }
 
   private connect(args: BasicDebugConfig): void {
@@ -372,6 +410,57 @@ export class BasicDebugSession extends LoggingDebugSession {
 
   protected override async stepOutRequest(response: DebugProtocol.StepOutResponse): Promise<void> {
     await this.step(response, "stepOut")
+  }
+
+  /**
+   * Undo the last BASIC step through the emulator timelapse (`tlBack`). The
+   * emulator saves a snapshot before each step, so this restores the machine
+   * to just before it. Refused, with the reason shown to the user, when the
+   * timelapse is off, holds another kind of snapshot, or has nothing behind.
+   */
+  protected override async stepBackRequest(
+    response: DebugProtocol.StepBackResponse,
+  ): Promise<void> {
+    const client = this.client
+    if (!client) {
+      this.sendResponse(response)
+      return
+    }
+    const outcome = await requestStepBack(client, "basic")
+    if (!outcome.ok) {
+      this.failRequest(response, outcome.reason)
+      return
+    }
+    this.sendResponse(response)
+    this.monitorStepBackApplied(client, outcome.before)
+  }
+
+  protected override reverseContinueRequest(response: DebugProtocol.ReverseContinueResponse): void {
+    // The emulator has no "rewind until" endpoint; a silent success here would
+    // leave VS Code waiting for a stop that never comes.
+    this.failRequest(response, "Reverse Continue is not available. Use Step Back to undo one step.")
+  }
+
+  /** Reject a request with a message VS Code shows to the user. */
+  private failRequest(response: DebugProtocol.Response, message: string): void {
+    this.sendErrorResponse(response, 2002, "{message}", { message })
+  }
+
+  /**
+   * Poll the timelapse until the queued `tl_back` is applied ({@link
+   * stepBackApplied}), then report one stop. Bounded, so a rewind the emulator
+   * refused at apply time still resolves.
+   */
+  private monitorStepBackApplied(client: EmulatorClient, before: TimelapseState): void {
+    this.poller?.cancel()
+    const poller = new StopPoller(stepBackAppliedProbe(client, before, STEP_BACK_MAX_POLLS))
+    this.poller = poller
+    if (this.disposed) return
+    void poller.start().then((result) => {
+      if (result === "stopped" && this.poller === poller && !this.disposed) {
+        this.sendStopped("step")
+      }
+    })
   }
 
   protected override async disconnectRequest(

@@ -22,3 +22,7 @@ export type DisasmWebviewToExt =
   /** Export to an `.asm` listing: the selected `[start, end]` range, else the
    * visible window when no range is given. */
   | { type: "exportAsm"; start?: number; end?: number }
+  /** Trace the reachable code from the program counter and mark the zones. */
+  | { type: "analyze" }
+  /** Drop the zones: the static analysis and the emulator's runtime coverage. */
+  | { type: "resetZones" }

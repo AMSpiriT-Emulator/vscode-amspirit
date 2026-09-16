@@ -33,6 +33,8 @@ export function DisasmApp() {
         onFollowPcChange={changeFollowPc}
         onGoto={(address) => post({ type: "goto", address })}
         onPage={(delta) => post({ type: "page", delta })}
+        onAnalyze={() => post({ type: "analyze" })}
+        onResetZones={() => post({ type: "resetZones" })}
         onExportAsm={(start, end) =>
           post(
             start !== undefined && end !== undefined

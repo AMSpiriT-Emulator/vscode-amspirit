@@ -83,6 +83,11 @@
         },
         {
           "type": "webview",
+          "id": "amspirit.z80.history",
+          "name": "History"
+        },
+        {
+          "type": "webview",
           "id": "amspirit.z80.gateArray",
           "name": "Gate Array"
         },
@@ -136,6 +141,11 @@
                 "type": "boolean",
                 "description": "Pause the emulator as soon as the debugger attaches.",
                 "default": false
+              },
+              "trace": {
+                "type": "boolean",
+                "description": "Write the full DAP exchange to amspirit-z80-dap.log in the OS temp directory.",
+                "default": false
               }
             }
           },
@@ -174,6 +184,11 @@
                 "type": "boolean",
                 "description": "Break at the program entry as soon as it is loaded.",
                 "default": true
+              },
+              "trace": {
+                "type": "boolean",
+                "description": "Write the full DAP exchange to amspirit-z80-dap.log in the OS temp directory.",
+                "default": false
               }
             }
           }

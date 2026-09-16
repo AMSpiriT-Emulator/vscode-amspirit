@@ -10,7 +10,10 @@ assembly straight from VS Code.
 - **Source-level breakpoints** — set them in the margin of your `.asm`; they are
   resolved to PC addresses through the assembler's symbol map.
 - **Execution control** — continue, pause, step-into, step-over (runs over
-  `CALL`/`RST`) and step-out.
+  `CALL`/`RST`), step-out (refused at the program's top level, where the only
+  caller is the firmware) and **step-back** (undo the last step through the
+  emulator timelapse: start the emulator with `--enable-timelapse`, see
+  `amspirit-z80.emulatorArgs`).
 - **A dedicated tool suite** — open the **AMSpiriT Z80** view container in the
   Activity Bar to dock three purpose-built panels side by side, rather than
   scattered across VS Code's generic debug UI:
@@ -21,11 +24,13 @@ assembly straight from VS Code.
     selector, pointer-register highlight, code-coverage shading, inline byte
     editing and range-select → label-aware disassembly.
   - **Disassembly** — a live, label-aware listing (firmware + symbol-map labels,
-    code-vs-data) with Follow PC, paging and range-export to `.asm`.
+    code-vs-data) with Follow PC, paging, zone analysis from the PC and
+    range-export to `.asm`.
 
 ## Requirements
 
 - An AMSpiriT Lite build that exposes the web-debug server (`--web-server`).
+  Add `--enable-timelapse` for Step Back.
 - A symbol map produced by your assembler. Supported:
   - **sjasmplus** — SLD (`sjasmplus --sld=out.sld`), a `.sld` file.
   - **rasm** — the `-map` listing (`rasm src.asm -ob src.bin -map > src.map`), a
