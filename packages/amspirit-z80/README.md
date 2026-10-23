@@ -12,7 +12,7 @@ assembly straight from VS Code.
 - **Execution control** — continue, pause, step-into, step-over (runs over
   `CALL`/`RST`), step-out (refused at the program's top level, where the only
   caller is the firmware) and **step-back** (undo the last step through the
-  emulator timelapse: start the emulator with `--enable-timelapse`, see
+  emulator rewind: start the emulator with `--enable-rewind`, see
   `amspirit-z80.emulatorArgs`).
 - **A dedicated tool suite** — open the **AMSpiriT Z80** view container in the
   Activity Bar to dock three purpose-built panels side by side, rather than
@@ -29,8 +29,8 @@ assembly straight from VS Code.
 
 ## Requirements
 
-- An AMSpiriT Lite build that exposes the web-debug server (`--web-server`).
-  Add `--enable-timelapse` for Step Back.
+- An AMSpiriT Lite 1.17 or later build that exposes the web-debug server
+  (`--web-server`). Add `--enable-rewind` for Step Back.
 - A symbol map produced by your assembler. Supported:
   - **sjasmplus** — SLD (`sjasmplus --sld=out.sld`), a `.sld` file.
   - **rasm** — the `-map` listing (`rasm src.asm -ob src.bin -map > src.map`), a

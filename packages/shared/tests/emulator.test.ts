@@ -148,15 +148,19 @@ describe("EmulatorClient", () => {
       expect(fake.recorded.at(0)?.url).toBe("/api/basic?reset=1&run=1")
     })
 
-    it("throws when the emulator returns a non-ok payload", async () => {
+    it("accepts the lite >= 1.17 command ack, which carries no ok field", async () => {
+      fake.responder = jsonResponder({ cmd_seq: 1 })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.injectBasic("10 END", false, false)).resolves.toBeUndefined()
+    })
+
+    it("surfaces the emulator's reason on a 400", async () => {
       fake.responder = (_req, res) => {
-        res.writeHead(200, { "Content-Type": "application/json" })
-        res.end('{"ok":false,"error":"boom"}')
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end('{"error":"no numbered line","field":"body"}')
       }
       const client = new EmulatorClient({ port: fake.port })
-      await expect(client.injectBasic("10 END", false, false)).rejects.toThrow(
-        /Emulator rejected BASIC injection/,
-      )
+      await expect(client.injectBasic("PRINT 1", false, false)).rejects.toThrow(/no numbered line/)
     })
 
     it("throws when the response is not valid JSON", async () => {
@@ -328,23 +332,23 @@ describe("EmulatorClient", () => {
       })
     })
 
-    it("throws when the emulator rejects the write", async () => {
+    it("resolves with the apply seq the emulator issued for the queued write", async () => {
+      fake.responder = jsonResponder({ seq: 2, cmd_seq: 2 })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.writeRam(0x4000, [0x00])).resolves.toBe(2)
+    })
+
+    it.each(["null", "[]", "42"])("throws when the ack body is %s, not an object", async (body) => {
       fake.responder = (_req, res) => {
         res.writeHead(200, { "Content-Type": "application/json" })
-        res.end('{"ok":false}')
+        res.end(body)
       }
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.writeRam(0, [0])).rejects.toThrow(/rejected RAM write/)
     })
 
-    it("resolves with the apply seq the emulator issued for the queued write", async () => {
-      fake.responder = jsonResponder({ ok: true, seq: 7 })
-      const client = new EmulatorClient({ port: fake.port })
-      await expect(client.writeRam(0x8000, [0x3e])).resolves.toBe(7)
-    })
-
-    it("resolves undefined when the emulator issues no seq (older builds)", async () => {
-      fake.responder = jsonResponder({ ok: true })
+    it("resolves undefined when the ack carries no seq", async () => {
+      fake.responder = jsonResponder({ cmd_seq: 3 })
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.writeRam(0x8000, [0x3e])).resolves.toBeUndefined()
     })
@@ -452,16 +456,16 @@ describe("EmulatorClient", () => {
   describe("getConfig", () => {
     it("GETs /api/config and maps the machine configuration", async () => {
       fake.responder = jsonResponder({
-        cpc_model: 2,
-        crtc_type: 1,
+        cpc_model: "6128+",
+        crtc_type: 3,
         extended_ram: 3,
         ram_kb: 320,
         rom_lang: "EN",
       })
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.getConfig()).resolves.toEqual({
-        cpcModel: 2,
-        crtcType: 1,
+        cpcModel: "6128+",
+        crtcType: 3,
         extendedRam: 3,
         ramKb: 320,
         romLang: "EN",
@@ -470,9 +474,15 @@ describe("EmulatorClient", () => {
     })
 
     it("falls back to the 128 KB floor when ram_kb is absent (older builds)", async () => {
-      fake.responder = jsonResponder({ cpc_model: 2 })
+      fake.responder = jsonResponder({ cpc_model: "6128" })
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.getConfig()).resolves.toMatchObject({ ramKb: 128 })
+    })
+
+    it("falls back to the emulator's default 6128 when cpc_model is absent", async () => {
+      fake.responder = jsonResponder({})
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.getConfig()).resolves.toMatchObject({ cpcModel: "6128" })
     })
   })
 
@@ -555,7 +565,7 @@ describe("EmulatorClient", () => {
           env_period: 0x1234,
           env_shape: 8,
         },
-        fdc: { msr: 128, sr0: 1, sr1: 2, sr2: 3, motor: true, drive: 1 },
+        fdc: { msr: 128, sr0: 1, sr1: 2, sr2: 3, motor: true, drive: "B" },
         crtc: {
           regs: [63, 40, 46, 142, 38, 0, 25, 30, 0, 7, 0, 0, 48, 0],
           selected_reg: 6,
@@ -566,13 +576,13 @@ describe("EmulatorClient", () => {
           fps: 50,
           frames: 99,
           paused: true,
-          cpc_model: 2,
+          cpc_model: "6128",
           crtc_type: 1,
           ram_apply_seq: 7,
-          tl_active: true,
-          tl_steps_back: 3,
-          tl_steps_fwd: 0,
-          tl_step_kind: "z80",
+          rw_active: true,
+          rw_steps_back: 3,
+          rw_steps_fwd: 0,
+          rw_step_kind: "z80",
         },
       })
       const client = new EmulatorClient({ port: fake.port })
@@ -600,7 +610,7 @@ describe("EmulatorClient", () => {
         envPeriod: 0x1234,
         envShape: 8,
       })
-      expect(s.fdc).toEqual({ msr: 128, sr0: 1, sr1: 2, sr2: 3, motor: true, drive: 1 })
+      expect(s.fdc).toEqual({ msr: 128, sr0: 1, sr1: 2, sr2: 3, motor: true, drive: "B" })
       expect(s.crtc).toEqual({
         regs: [63, 40, 46, 142, 38, 0, 25, 30, 0, 7, 0, 0, 48, 0],
         selectedReg: 6,
@@ -611,7 +621,7 @@ describe("EmulatorClient", () => {
         fps: 50,
         frames: 99,
         paused: true,
-        cpcModel: 2,
+        cpcModel: "6128",
         crtcType: 1,
         ramApplySeq: 7,
         timelapse: { active: true, stepsBack: 3, stepsFwd: 0, stepKind: "z80" },
@@ -626,8 +636,10 @@ describe("EmulatorClient", () => {
       expect(s.ga.mode).toBe(0)
       expect(s.psg.mixer).toBe(0)
       expect(s.fdc.motor).toBe(false)
+      expect(s.fdc.drive).toBe("A")
       expect(s.crtc).toEqual({ regs: [], selectedReg: 0, rasterline: 0, vsync: false })
       expect(s.emu.crtcType).toBe(0)
+      expect(s.emu.cpcModel).toBe("6128")
       expect(s.emu.timelapse).toEqual({
         active: false,
         stepsBack: 0,
@@ -734,22 +746,22 @@ describe("EmulatorClient", () => {
     })
 
     it("resolves with the apply seq so callers can wait for the redirect", async () => {
-      fake.responder = jsonResponder({ ok: true, seq: 12 })
+      fake.responder = jsonResponder({ seq: 12, cmd_seq: 12 })
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.execAt(0x8000)).resolves.toBe(12)
     })
   })
 
   describe("getTimelapse", () => {
-    it("GETs /api/ping and maps the emu.tl_* fields", async () => {
+    it("GETs /api/ping and maps the emu.rw_* fields", async () => {
       fake.responder = jsonResponder({
         ok: true,
         emu: {
           paused: true,
-          tl_active: true,
-          tl_steps_back: 2,
-          tl_steps_fwd: 1,
-          tl_step_kind: "basic",
+          rw_active: true,
+          rw_steps_back: 2,
+          rw_steps_fwd: 1,
+          rw_step_kind: "basic",
         },
       })
       const client = new EmulatorClient({ port: fake.port })
@@ -774,20 +786,20 @@ describe("EmulatorClient", () => {
       })
     })
 
-    it("maps an unknown tl_step_kind to frame", async () => {
-      fake.responder = jsonResponder({ ok: true, emu: { tl_step_kind: "later" } })
+    it("maps an unknown rw_step_kind to frame", async () => {
+      fake.responder = jsonResponder({ ok: true, emu: { rw_step_kind: "later" } })
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.getTimelapse()).resolves.toMatchObject({ stepKind: "frame" })
     })
   })
 
   describe("tlBack", () => {
-    it("POSTs to /api/tl_back with an empty body", async () => {
+    it("POSTs to /api/rewind/back with an empty body (one destructive step)", async () => {
       const client = new EmulatorClient({ port: fake.port })
       await client.tlBack()
       const rec = fake.recorded.at(0)
       expect(rec?.method).toBe("POST")
-      expect(rec?.url).toBe("/api/tl_back")
+      expect(rec?.url).toBe("/api/rewind/back")
       expect(rec?.body).toBe("")
     })
 
@@ -848,13 +860,13 @@ describe("EmulatorClient", () => {
   describe("setConfig", () => {
     it("POSTs snake_cased model/CRTC fields to /api/config", async () => {
       const client = new EmulatorClient({ port: fake.port })
-      await client.setConfig({ cpcModel: 2, crtcType: 1, romLang: "EN" })
+      await client.setConfig({ cpcModel: "6128", crtcType: 1, romLang: "EN" })
       const rec = fake.recorded.at(0)
       expect(rec?.method).toBe("POST")
       expect(rec?.url).toBe("/api/config")
       expect(rec?.headers["content-type"]).toMatch(/application\/json/)
       expect(JSON.parse(rec?.body ?? "{}")).toEqual({
-        cpc_model: 2,
+        cpc_model: "6128",
         crtc_type: 1,
         rom_lang: "EN",
       })
@@ -870,8 +882,8 @@ describe("EmulatorClient", () => {
 
     it("omits fields that were not provided", async () => {
       const client = new EmulatorClient({ port: fake.port })
-      await client.setConfig({ cpcModel: 0 })
-      expect(JSON.parse(fake.recorded.at(0)?.body ?? "{}")).toEqual({ cpc_model: 0 })
+      await client.setConfig({ cpcModel: "464" })
+      expect(JSON.parse(fake.recorded.at(0)?.body ?? "{}")).toEqual({ cpc_model: "464" })
     })
   })
 

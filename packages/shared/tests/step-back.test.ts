@@ -21,10 +21,10 @@ describe("checkStepBack", () => {
     expect(checkStepBack(tl({ stepKind: "basic", stepsBack: 3 }), "basic")).toEqual({ ok: true })
   })
 
-  it("explains how to enable the timelapse when it is inactive", () => {
+  it("explains how to enable the rewind (lite >= 1.17 flag) when it is inactive", () => {
     const r = checkStepBack(tl({ active: false, stepsBack: 0 }), "z80")
     expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.reason).toMatch(/--enable-timelapse/)
+    if (!r.ok) expect(r.reason).toMatch(/--enable-rewind/)
   })
 
   it("refuses to undo a snapshot of another kind (a frame after continue, a BASIC step)", () => {
@@ -49,7 +49,7 @@ describe("stepBackApplied", () => {
     expect(stepBackApplied(tl({ stepsBack: 1 }), tl({ stepsBack: 0, active: false }))).toBe(true)
   })
 
-  it("is false while the queued tl_back is still pending", () => {
+  it("is false while the queued rewind step is still pending", () => {
     expect(stepBackApplied(tl({ stepsBack: 3 }), tl({ stepsBack: 3 }))).toBe(false)
     expect(stepBackApplied(tl({ stepsBack: 3 }), tl({ stepsBack: 4 }))).toBe(false)
   })

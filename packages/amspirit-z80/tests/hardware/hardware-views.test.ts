@@ -132,7 +132,7 @@ const fdc: FdcState = {
   sr1: 0x00,
   sr2: 0x01,
   motor: true,
-  drive: 1,
+  drive: "B",
 }
 
 describe("buildFdcScopes", () => {
@@ -163,7 +163,7 @@ describe("buildFdcScopes", () => {
   it("shows the motor and the active drive as a letter", () => {
     expect(value(scopes, "Drive", "Motor")).toBe("ON")
     expect(value(scopes, "Drive", "Active")).toBe("B")
-    expect(value(buildFdcScopes({ ...fdc, drive: 0, motor: false }), "Drive", "Active")).toBe("A")
+    expect(value(buildFdcScopes({ ...fdc, drive: "A", motor: false }), "Drive", "Active")).toBe("A")
     expect(value(buildFdcScopes({ ...fdc, motor: false }), "Drive", "Motor")).toBe("OFF")
   })
 })
@@ -173,7 +173,7 @@ describe("buildCrtcScopes", () => {
     fps: 50,
     frames: 1234,
     paused: false,
-    cpcModel: 2,
+    cpcModel: "6128",
     crtcType: 1,
     ramApplySeq: 0,
     timelapse: { active: false, stepsBack: 0, stepsFwd: 0, stepKind: "frame" },
