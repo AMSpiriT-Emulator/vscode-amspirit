@@ -138,7 +138,7 @@ export interface PsgState {
 }
 
 /** CPC model, by the name the emulator uses (`emu.cpc_model`, `/api/config`). */
-type CpcModel = "464" | "664" | "6128" | "6128+" | "464+" | "GX4000"
+export type CpcModel = "464" | "664" | "6128" | "6128+" | "464+" | "GX4000"
 
 /** FDC (PD765) state from `/api/state` (`fdc`). */
 export interface FdcState {
@@ -166,7 +166,7 @@ export interface CrtcState {
 
 /** Emulator status from `/api/state` (`emu`). */
 export interface EmuState {
-  /** Timelapse (rewind) state, `emu.rw_*`. Inactive on builds without it. */
+  /** Timelapse (rewind) state, `emu.rw_*`. Inactive without `--enable-rewind`. */
   timelapse: TimelapseState
   fps: number
   /**
@@ -426,7 +426,7 @@ export class EmulatorClient {
         sr1?: number
         sr2?: number
         motor?: boolean
-        drive?: "A" | "B"
+        drive?: FdcState["drive"]
       }
       crtc?: {
         regs?: number[]
@@ -492,7 +492,7 @@ export class EmulatorClient {
 
   /**
    * Timelapse state via `GET /api/ping` (`emu.rw_*`): whether a Step Back is
-   * possible and of which kind. Inactive on builds without a timelapse.
+   * possible and of which kind. Inactive without `--enable-rewind`.
    */
   async getTimelapse(): Promise<TimelapseState> {
     const raw = await this.getJson<{ emu?: RawEmu }>("/api/ping", this.pingTimeoutMs)
@@ -862,16 +862,16 @@ function mapTimelapse(emu: RawEmu): TimelapseState {
 /**
  * Acknowledgement of a queued mutation (`{cmd_seq}`, plus `seq` for RAM/exec);
  * tolerant of junk bodies. The emulator refuses with a 400, which `send`
- * rejects, so a 2xx object is an ack unless it says `ok:false`.
+ * rejects, so any 2xx JSON object is an ack.
  */
 function parseAck(body: string): { ok: boolean; seq: number | undefined } {
   try {
-    const parsed = JSON.parse(body) as { ok?: unknown; seq?: unknown } | null
+    const parsed = JSON.parse(body) as { seq?: unknown } | null
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       return { ok: false, seq: undefined }
     }
     return {
-      ok: parsed.ok !== false,
+      ok: true,
       seq: typeof parsed.seq === "number" ? parsed.seq : undefined,
     }
   } catch {

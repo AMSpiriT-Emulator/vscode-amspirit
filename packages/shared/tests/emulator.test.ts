@@ -163,17 +163,6 @@ describe("EmulatorClient", () => {
       await expect(client.injectBasic("PRINT 1", false, false)).rejects.toThrow(/no numbered line/)
     })
 
-    it("throws when the emulator returns a non-ok payload", async () => {
-      fake.responder = (_req, res) => {
-        res.writeHead(200, { "Content-Type": "application/json" })
-        res.end('{"ok":false,"error":"boom"}')
-      }
-      const client = new EmulatorClient({ port: fake.port })
-      await expect(client.injectBasic("10 END", false, false)).rejects.toThrow(
-        /Emulator rejected BASIC injection/,
-      )
-    })
-
     it("throws when the response is not valid JSON", async () => {
       fake.responder = (_req, res) => {
         res.writeHead(200, { "Content-Type": "text/plain" })
@@ -343,22 +332,7 @@ describe("EmulatorClient", () => {
       })
     })
 
-    it("throws when the emulator rejects the write", async () => {
-      fake.responder = (_req, res) => {
-        res.writeHead(200, { "Content-Type": "application/json" })
-        res.end('{"ok":false}')
-      }
-      const client = new EmulatorClient({ port: fake.port })
-      await expect(client.writeRam(0, [0])).rejects.toThrow(/rejected RAM write/)
-    })
-
     it("resolves with the apply seq the emulator issued for the queued write", async () => {
-      fake.responder = jsonResponder({ ok: true, seq: 7 })
-      const client = new EmulatorClient({ port: fake.port })
-      await expect(client.writeRam(0x8000, [0x3e])).resolves.toBe(7)
-    })
-
-    it("accepts the lite >= 1.17 ack {seq, cmd_seq}, which carries no ok field", async () => {
       fake.responder = jsonResponder({ seq: 2, cmd_seq: 2 })
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.writeRam(0x4000, [0x00])).resolves.toBe(2)
@@ -373,8 +347,8 @@ describe("EmulatorClient", () => {
       await expect(client.writeRam(0, [0])).rejects.toThrow(/rejected RAM write/)
     })
 
-    it("resolves undefined when the emulator issues no seq (older builds)", async () => {
-      fake.responder = jsonResponder({ ok: true })
+    it("resolves undefined when the ack carries no seq", async () => {
+      fake.responder = jsonResponder({ cmd_seq: 3 })
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.writeRam(0x8000, [0x3e])).resolves.toBeUndefined()
     })
@@ -772,7 +746,7 @@ describe("EmulatorClient", () => {
     })
 
     it("resolves with the apply seq so callers can wait for the redirect", async () => {
-      fake.responder = jsonResponder({ ok: true, seq: 12 })
+      fake.responder = jsonResponder({ seq: 12, cmd_seq: 12 })
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.execAt(0x8000)).resolves.toBe(12)
     })
