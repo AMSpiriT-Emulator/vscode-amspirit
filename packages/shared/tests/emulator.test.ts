@@ -364,6 +364,15 @@ describe("EmulatorClient", () => {
       await expect(client.writeRam(0x4000, [0x00])).resolves.toBe(2)
     })
 
+    it.each(["null", "[]", "42"])("throws when the ack body is %s, not an object", async (body) => {
+      fake.responder = (_req, res) => {
+        res.writeHead(200, { "Content-Type": "application/json" })
+        res.end(body)
+      }
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.writeRam(0, [0])).rejects.toThrow(/rejected RAM write/)
+    })
+
     it("resolves undefined when the emulator issues no seq (older builds)", async () => {
       fake.responder = jsonResponder({ ok: true })
       const client = new EmulatorClient({ port: fake.port })
@@ -473,16 +482,16 @@ describe("EmulatorClient", () => {
   describe("getConfig", () => {
     it("GETs /api/config and maps the machine configuration", async () => {
       fake.responder = jsonResponder({
-        cpc_model: 2,
-        crtc_type: 1,
+        cpc_model: "6128+",
+        crtc_type: 3,
         extended_ram: 3,
         ram_kb: 320,
         rom_lang: "EN",
       })
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.getConfig()).resolves.toEqual({
-        cpcModel: 2,
-        crtcType: 1,
+        cpcModel: "6128+",
+        crtcType: 3,
         extendedRam: 3,
         ramKb: 320,
         romLang: "EN",
@@ -491,9 +500,15 @@ describe("EmulatorClient", () => {
     })
 
     it("falls back to the 128 KB floor when ram_kb is absent (older builds)", async () => {
-      fake.responder = jsonResponder({ cpc_model: 2 })
+      fake.responder = jsonResponder({ cpc_model: "6128" })
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.getConfig()).resolves.toMatchObject({ ramKb: 128 })
+    })
+
+    it("falls back to the emulator's default 6128 when cpc_model is absent", async () => {
+      fake.responder = jsonResponder({})
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.getConfig()).resolves.toMatchObject({ cpcModel: "6128" })
     })
   })
 
@@ -587,7 +602,7 @@ describe("EmulatorClient", () => {
           fps: 50,
           frames: 99,
           paused: true,
-          cpc_model: 2,
+          cpc_model: "6128",
           crtc_type: 1,
           ram_apply_seq: 7,
           rw_active: true,
@@ -632,7 +647,7 @@ describe("EmulatorClient", () => {
         fps: 50,
         frames: 99,
         paused: true,
-        cpcModel: 2,
+        cpcModel: "6128",
         crtcType: 1,
         ramApplySeq: 7,
         timelapse: { active: true, stepsBack: 3, stepsFwd: 0, stepKind: "z80" },
@@ -650,6 +665,7 @@ describe("EmulatorClient", () => {
       expect(s.fdc.drive).toBe("A")
       expect(s.crtc).toEqual({ regs: [], selectedReg: 0, rasterline: 0, vsync: false })
       expect(s.emu.crtcType).toBe(0)
+      expect(s.emu.cpcModel).toBe("6128")
       expect(s.emu.timelapse).toEqual({
         active: false,
         stepsBack: 0,
@@ -870,13 +886,13 @@ describe("EmulatorClient", () => {
   describe("setConfig", () => {
     it("POSTs snake_cased model/CRTC fields to /api/config", async () => {
       const client = new EmulatorClient({ port: fake.port })
-      await client.setConfig({ cpcModel: 2, crtcType: 1, romLang: "EN" })
+      await client.setConfig({ cpcModel: "6128", crtcType: 1, romLang: "EN" })
       const rec = fake.recorded.at(0)
       expect(rec?.method).toBe("POST")
       expect(rec?.url).toBe("/api/config")
       expect(rec?.headers["content-type"]).toMatch(/application\/json/)
       expect(JSON.parse(rec?.body ?? "{}")).toEqual({
-        cpc_model: 2,
+        cpc_model: "6128",
         crtc_type: 1,
         rom_lang: "EN",
       })
@@ -892,8 +908,8 @@ describe("EmulatorClient", () => {
 
     it("omits fields that were not provided", async () => {
       const client = new EmulatorClient({ port: fake.port })
-      await client.setConfig({ cpcModel: 0 })
-      expect(JSON.parse(fake.recorded.at(0)?.body ?? "{}")).toEqual({ cpc_model: 0 })
+      await client.setConfig({ cpcModel: "464" })
+      expect(JSON.parse(fake.recorded.at(0)?.body ?? "{}")).toEqual({ cpc_model: "464" })
     })
   })
 

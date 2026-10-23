@@ -137,6 +137,9 @@ export interface PsgState {
   envShape: number
 }
 
+/** CPC model, by the name the emulator uses (`emu.cpc_model`, `/api/config`). */
+type CpcModel = "464" | "664" | "6128" | "6128+" | "464+" | "GX4000"
+
 /** FDC (PD765) state from `/api/state` (`fdc`). */
 export interface FdcState {
   /** Main Status Register. */
@@ -145,7 +148,7 @@ export interface FdcState {
   sr1: number
   sr2: number
   motor: boolean
-  /** Active drive (lite >= 1.17 names it; it sent 0 or 1 before). */
+  /** Active drive. */
   drive: "A" | "B"
 }
 
@@ -173,8 +176,7 @@ export interface EmuState {
    */
   frames: number
   paused: boolean
-  /** CPC model: 0=464, 1=664, 2=6128, 4=6128+, 5=464+, 6=GX4000. */
-  cpcModel: number
+  cpcModel: CpcModel
   /** CRTC type (0–4). */
   crtcType: number
   /**
@@ -224,8 +226,7 @@ export interface MemmapState {
 
 /** Machine configuration reported by `/api/config`. */
 export interface EmulatorConfig {
-  /** CPC model index (0=464, 1=664, 2=6128, …). */
-  cpcModel: number
+  cpcModel: CpcModel
   crtcType: number
   /** Raw `CORE_EXTENDED_RAM_*` index of the banked half (not a size). */
   extendedRam: number
@@ -255,8 +256,8 @@ export interface ScriptState {
 
 /** Mutable machine configuration for `POST /api/config` (all fields optional). */
 export interface EmulatorConfigUpdate {
-  /** CPC model index (0=464, 1=664, 2=6128, …); triggers an implicit reset. */
-  cpcModel?: number
+  /** Triggers an implicit reset. */
+  cpcModel?: CpcModel
   /** CRTC type (0–4); triggers an implicit reset. */
   crtcType?: number
   /** ROM language: `"FR"`, `"EN"`, `"SP"`, `"DA"`. */
@@ -481,7 +482,7 @@ export class EmulatorClient {
         fps: emu.fps ?? 0,
         frames: emu.frames ?? 0,
         paused: emu.paused ?? false,
-        cpcModel: emu.cpc_model ?? 0,
+        cpcModel: emu.cpc_model ?? DEFAULT_CPC_MODEL,
         crtcType: emu.crtc_type ?? 0,
         ramApplySeq: emu.ram_apply_seq ?? 0,
         timelapse: mapTimelapse(emu),
@@ -499,8 +500,8 @@ export class EmulatorClient {
   }
 
   /**
-   * Rewind one timelapse snapshot via `POST /api/rewind/back` (lite >= 1.17;
-   * no query = one step, `mode=drop`, like the old `tl_back`). Queued: applied on
+   * Rewind one timelapse snapshot via `POST /api/rewind/back` (no query: one
+   * step, `mode=drop`, so the future is discarded). Queued: applied on
    * the next frame tick, and only when the newest snapshot's kind matches
    * `TimelapseState.stepKind` (see `checkStepBack`). Poll `getTimelapse()`
    * with `stepBackApplied` before reading the machine state back.
@@ -579,14 +580,14 @@ export class EmulatorClient {
   /** Machine configuration via `GET /api/config` (model, CRTC, expansion RAM). */
   async getConfig(): Promise<EmulatorConfig> {
     const raw = await this.getJson<{
-      cpc_model?: number
+      cpc_model?: CpcModel
       crtc_type?: number
       extended_ram?: number
       ram_kb?: number
       rom_lang?: string
     }>("/api/config", this.debugTimeoutMs)
     return {
-      cpcModel: raw.cpc_model ?? 0,
+      cpcModel: raw.cpc_model ?? DEFAULT_CPC_MODEL,
       crtcType: raw.crtc_type ?? 0,
       extendedRam: raw.extended_ram ?? 0,
       // Builds before `ram_kb` all had the 128 KB floor.
@@ -831,12 +832,15 @@ function describeError(status: number, body: string): string {
   return `HTTP ${status}`
 }
 
+/** The model the emulator starts on without a config (`--reset`). */
+const DEFAULT_CPC_MODEL: CpcModel = "6128"
+
 /** The `emu` object as the emulator serializes it (`/api/ping`, `/api/state`). */
 interface RawEmu {
   fps?: number
   frames?: number
   paused?: boolean
-  cpc_model?: number
+  cpc_model?: CpcModel
   crtc_type?: number
   ram_apply_seq?: number
   rw_active?: boolean
@@ -856,14 +860,16 @@ function mapTimelapse(emu: RawEmu): TimelapseState {
 }
 
 /**
- * Acknowledgement of a queued mutation; tolerant of junk bodies. lite >= 1.17
- * dropped `ok` (`{cmd_seq}`, plus `seq` for RAM/exec) and refuses with a 400,
- * so only an explicit `ok:false` (older builds) or a non-object body is a no.
+ * Acknowledgement of a queued mutation (`{cmd_seq}`, plus `seq` for RAM/exec);
+ * tolerant of junk bodies. The emulator refuses with a 400, which `send`
+ * rejects, so a 2xx object is an ack unless it says `ok:false`.
  */
 function parseAck(body: string): { ok: boolean; seq: number | undefined } {
   try {
     const parsed = JSON.parse(body) as { ok?: unknown; seq?: unknown } | null
-    if (typeof parsed !== "object" || parsed === null) return { ok: false, seq: undefined }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return { ok: false, seq: undefined }
+    }
     return {
       ok: parsed.ok !== false,
       seq: typeof parsed.seq === "number" ? parsed.seq : undefined,

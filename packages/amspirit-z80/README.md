@@ -30,8 +30,7 @@ assembly straight from VS Code.
 ## Requirements
 
 - An AMSpiriT Lite 1.17 or later build that exposes the web-debug server
-  (`--web-server`).
-  Add `--enable-rewind` for Step Back.
+  (`--web-server`). Add `--enable-rewind` for Step Back.
 - A symbol map produced by your assembler. Supported:
   - **sjasmplus** — SLD (`sjasmplus --sld=out.sld`), a `.sld` file.
   - **rasm** — the `-map` listing (`rasm src.asm -ob src.bin -map > src.map`), a

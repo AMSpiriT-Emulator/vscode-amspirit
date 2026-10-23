@@ -1,8 +1,8 @@
 /**
  * Step Back over the emulator timelapse.
  *
- * With `--enable-rewind` (`--enable-timelapse` before lite 1.17), the emulator
- * saves a snapshot before each debugger step, tagged with the step's kind (`z80` or `basic`), and one per
+ * With `--enable-rewind`, the emulator saves a snapshot before each debugger
+ * step, tagged with the step's kind (`z80` or `basic`), and one per
  * N frames while running (`frame`). `POST /api/rewind/back` restores the newest
  * snapshot, but only when its kind matches the current context
  * (`emu.rw_step_kind`); otherwise it does nothing, silently. These helpers

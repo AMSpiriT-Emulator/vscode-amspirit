@@ -49,7 +49,7 @@ describe("stepBackApplied", () => {
     expect(stepBackApplied(tl({ stepsBack: 1 }), tl({ stepsBack: 0, active: false }))).toBe(true)
   })
 
-  it("is false while the queued tl_back is still pending", () => {
+  it("is false while the queued rewind step is still pending", () => {
     expect(stepBackApplied(tl({ stepsBack: 3 }), tl({ stepsBack: 3 }))).toBe(false)
     expect(stepBackApplied(tl({ stepsBack: 3 }), tl({ stepsBack: 4 }))).toBe(false)
   })
