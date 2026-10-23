@@ -574,7 +574,7 @@ export class Z80DebugSession extends LoggingDebugSession {
   }
 
   /**
-   * Poll the timelapse until the queued `tl_back` is applied ({@link
+   * Poll the timelapse until the queued `rewind/back` is applied ({@link
    * stepBackApplied}), then report one stop. Bounded like a step, so a rewind
    * the emulator refused at apply time still resolves.
    */

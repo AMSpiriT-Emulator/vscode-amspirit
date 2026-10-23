@@ -1,11 +1,11 @@
 /**
  * Step Back over the emulator timelapse.
  *
- * With `--enable-timelapse`, the emulator saves a snapshot before each
- * debugger step, tagged with the step's kind (`z80` or `basic`), and one per
- * N frames while running (`frame`). `POST /api/tl_back` restores the newest
+ * With `--enable-rewind` (`--enable-timelapse` before lite 1.17), the emulator
+ * saves a snapshot before each debugger step, tagged with the step's kind (`z80` or `basic`), and one per
+ * N frames while running (`frame`). `POST /api/rewind/back` restores the newest
  * snapshot, but only when its kind matches the current context
- * (`emu.tl_step_kind`); otherwise it does nothing, silently. These helpers
+ * (`emu.rw_step_kind`); otherwise it does nothing, silently. These helpers
  * make that contract explicit for a DAP `stepBack`. Pure.
  */
 
@@ -14,7 +14,7 @@ import { errorMessage } from "./errors.js"
 /** Kind of the snapshots the timelapse currently navigates. */
 export type TimelapseStepKind = "frame" | "basic" | "z80"
 
-/** Timelapse state from `emu.tl_*` (`/api/ping`, `/api/state`). */
+/** Timelapse state from `emu.rw_*` (`/api/ping`, `/api/state`). */
 export interface TimelapseState {
   /** `true` when the timelapse is enabled and holds at least one snapshot. */
   active: boolean
@@ -37,7 +37,7 @@ export function checkStepBack(tl: TimelapseState, kind: "z80" | "basic"): StepBa
     return {
       ok: false,
       reason:
-        "Step Back needs the emulator timelapse. Start the emulator with --enable-timelapse " +
+        "Step Back needs the emulator rewind. Start the emulator with --enable-rewind " +
         "(emulatorArgs setting), then step once.",
     }
   }
@@ -54,7 +54,7 @@ export function checkStepBack(tl: TimelapseState, kind: "z80" | "basic"): StepBa
 }
 
 /**
- * Whether the queued `tl_back` has been applied: the emulator consumed one
+ * Whether the queued `rewind/back` has been applied: the emulator consumed one
  * snapshot, so the count behind the position dropped. Polled after `tlBack()`
  * because the request only queues the rewind for the next frame tick.
  */

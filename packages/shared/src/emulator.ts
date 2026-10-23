@@ -145,8 +145,8 @@ export interface FdcState {
   sr1: number
   sr2: number
   motor: boolean
-  /** Active drive (0 or 1). */
-  drive: number
+  /** Active drive (lite >= 1.17 names it; it sent 0 or 1 before). */
+  drive: "A" | "B"
 }
 
 /** CRTC (6845) snapshot from `/api/state` (`crtc`) and `GET /api/crtc`. */
@@ -163,7 +163,7 @@ export interface CrtcState {
 
 /** Emulator status from `/api/state` (`emu`). */
 export interface EmuState {
-  /** Timelapse (rewind) state, `emu.tl_*`. Inactive on builds without it. */
+  /** Timelapse (rewind) state, `emu.rw_*`. Inactive on builds without it. */
   timelapse: TimelapseState
   fps: number
   /**
@@ -300,13 +300,7 @@ export class EmulatorClient {
     const qs = [resetFirst && "reset=1", runAfter && "run=1"].filter(Boolean).join("&")
     const path = `/api/basic${qs ? `?${qs}` : ""}`
     const body = await this.post(path, source, "text/plain; charset=utf-8", this.injectTimeoutMs)
-    let parsed: { ok?: boolean }
-    try {
-      parsed = JSON.parse(body) as { ok?: boolean }
-    } catch {
-      parsed = {}
-    }
-    if (!parsed.ok) {
+    if (!parseAck(body).ok) {
       throw new Error("Emulator rejected BASIC injection")
     }
   }
@@ -431,7 +425,7 @@ export class EmulatorClient {
         sr1?: number
         sr2?: number
         motor?: boolean
-        drive?: number
+        drive?: "A" | "B"
       }
       crtc?: {
         regs?: number[]
@@ -475,7 +469,7 @@ export class EmulatorClient {
         sr1: fdc.sr1 ?? 0,
         sr2: fdc.sr2 ?? 0,
         motor: fdc.motor ?? false,
-        drive: fdc.drive ?? 0,
+        drive: fdc.drive ?? "A",
       },
       crtc: {
         regs: crtc.regs ?? [],
@@ -496,7 +490,7 @@ export class EmulatorClient {
   }
 
   /**
-   * Timelapse state via `GET /api/ping` (`emu.tl_*`): whether a Step Back is
+   * Timelapse state via `GET /api/ping` (`emu.rw_*`): whether a Step Back is
    * possible and of which kind. Inactive on builds without a timelapse.
    */
   async getTimelapse(): Promise<TimelapseState> {
@@ -505,13 +499,14 @@ export class EmulatorClient {
   }
 
   /**
-   * Rewind one timelapse snapshot via `POST /api/tl_back`. Queued: applied on
+   * Rewind one timelapse snapshot via `POST /api/rewind/back` (lite >= 1.17;
+   * no query = one step, `mode=drop`, like the old `tl_back`). Queued: applied on
    * the next frame tick, and only when the newest snapshot's kind matches
    * `TimelapseState.stepKind` (see `checkStepBack`). Poll `getTimelapse()`
    * with `stepBackApplied` before reading the machine state back.
    */
   async tlBack(): Promise<void> {
-    await this.post("/api/tl_back", "", "text/plain", this.debugTimeoutMs)
+    await this.post("/api/rewind/back", "", "text/plain", this.debugTimeoutMs)
   }
 
   /**
@@ -844,28 +839,33 @@ interface RawEmu {
   cpc_model?: number
   crtc_type?: number
   ram_apply_seq?: number
-  tl_active?: boolean
-  tl_steps_back?: number
-  tl_steps_fwd?: number
-  tl_step_kind?: string
+  rw_active?: boolean
+  rw_steps_back?: number
+  rw_steps_fwd?: number
+  rw_step_kind?: string
 }
 
 function mapTimelapse(emu: RawEmu): TimelapseState {
-  const kind = emu.tl_step_kind
+  const kind = emu.rw_step_kind
   return {
-    active: emu.tl_active ?? false,
-    stepsBack: emu.tl_steps_back ?? 0,
-    stepsFwd: emu.tl_steps_fwd ?? 0,
+    active: emu.rw_active ?? false,
+    stepsBack: emu.rw_steps_back ?? 0,
+    stepsFwd: emu.rw_steps_fwd ?? 0,
     stepKind: kind === "z80" || kind === "basic" ? kind : "frame",
   }
 }
 
-/** `{ok, seq}` acknowledgement of a queued mutation; tolerant of junk bodies. */
+/**
+ * Acknowledgement of a queued mutation; tolerant of junk bodies. lite >= 1.17
+ * dropped `ok` (`{cmd_seq}`, plus `seq` for RAM/exec) and refuses with a 400,
+ * so only an explicit `ok:false` (older builds) or a non-object body is a no.
+ */
 function parseAck(body: string): { ok: boolean; seq: number | undefined } {
   try {
-    const parsed = JSON.parse(body) as { ok?: unknown; seq?: unknown }
+    const parsed = JSON.parse(body) as { ok?: unknown; seq?: unknown } | null
+    if (typeof parsed !== "object" || parsed === null) return { ok: false, seq: undefined }
     return {
-      ok: parsed.ok === true,
+      ok: parsed.ok !== false,
       seq: typeof parsed.seq === "number" ? parsed.seq : undefined,
     }
   } catch {

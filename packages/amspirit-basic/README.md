@@ -22,8 +22,8 @@ the emulator's memory.
 
 ## Requirements
 
-The [AMSpiriT Lite](https://amspirit.fr) emulator, started with its web debug
-server enabled. The extension talks to the emulator purely over HTTP, so **any
+The [AMSpiriT Lite](https://amspirit.fr) emulator, **1.17 or later**, started
+with its web debug server enabled. The extension talks to the emulator purely over HTTP, so **any
 build that exposes the web debug server works** — currently the **SDL**
 (`amspirit-lite-sdl`) and **Qt** (`amspirit-lite-qt`) desktop builds:
 
@@ -60,7 +60,7 @@ What you get:
 - **Breakpoints** in the `.bas` gutter — set on the line number.
 - **Continue / Pause**, **Step Over** (advance one line), **Step Into** (advance
   one statement), **Step Back** (undo the last step; needs the emulator started
-  with `--enable-timelapse`, see `amspirit.emulatorArgs`), and **Run to
+  with `--enable-rewind`, see `amspirit.emulatorArgs`), and **Run to
   Cursor**.
 - The **current line** is highlighted as execution advances.
 - The **Variables** view decodes the live Locomotive BASIC variables — integers,

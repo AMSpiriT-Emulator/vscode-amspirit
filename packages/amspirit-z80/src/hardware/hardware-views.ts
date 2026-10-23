@@ -133,7 +133,7 @@ export function buildFdcScopes(fdc: FdcState): RegisterScope[] {
       name: "Drive",
       variables: [
         { name: "Motor", value: fdc.motor ? "ON" : "OFF" },
-        { name: "Active", value: fdc.drive === 0 ? "A" : "B" },
+        { name: "Active", value: fdc.drive },
         { name: "IC", value: `${(fdc.sr0 >> 6) & 3}`, hint: "Interrupt code (SR0 bits 7-6)" },
       ],
     },

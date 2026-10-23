@@ -148,6 +148,21 @@ describe("EmulatorClient", () => {
       expect(fake.recorded.at(0)?.url).toBe("/api/basic?reset=1&run=1")
     })
 
+    it("accepts the lite >= 1.17 command ack, which carries no ok field", async () => {
+      fake.responder = jsonResponder({ cmd_seq: 1 })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.injectBasic("10 END", false, false)).resolves.toBeUndefined()
+    })
+
+    it("surfaces the emulator's reason on a 400", async () => {
+      fake.responder = (_req, res) => {
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end('{"error":"no numbered line","field":"body"}')
+      }
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.injectBasic("PRINT 1", false, false)).rejects.toThrow(/no numbered line/)
+    })
+
     it("throws when the emulator returns a non-ok payload", async () => {
       fake.responder = (_req, res) => {
         res.writeHead(200, { "Content-Type": "application/json" })
@@ -341,6 +356,12 @@ describe("EmulatorClient", () => {
       fake.responder = jsonResponder({ ok: true, seq: 7 })
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.writeRam(0x8000, [0x3e])).resolves.toBe(7)
+    })
+
+    it("accepts the lite >= 1.17 ack {seq, cmd_seq}, which carries no ok field", async () => {
+      fake.responder = jsonResponder({ seq: 2, cmd_seq: 2 })
+      const client = new EmulatorClient({ port: fake.port })
+      await expect(client.writeRam(0x4000, [0x00])).resolves.toBe(2)
     })
 
     it("resolves undefined when the emulator issues no seq (older builds)", async () => {
@@ -555,7 +576,7 @@ describe("EmulatorClient", () => {
           env_period: 0x1234,
           env_shape: 8,
         },
-        fdc: { msr: 128, sr0: 1, sr1: 2, sr2: 3, motor: true, drive: 1 },
+        fdc: { msr: 128, sr0: 1, sr1: 2, sr2: 3, motor: true, drive: "B" },
         crtc: {
           regs: [63, 40, 46, 142, 38, 0, 25, 30, 0, 7, 0, 0, 48, 0],
           selected_reg: 6,
@@ -569,10 +590,10 @@ describe("EmulatorClient", () => {
           cpc_model: 2,
           crtc_type: 1,
           ram_apply_seq: 7,
-          tl_active: true,
-          tl_steps_back: 3,
-          tl_steps_fwd: 0,
-          tl_step_kind: "z80",
+          rw_active: true,
+          rw_steps_back: 3,
+          rw_steps_fwd: 0,
+          rw_step_kind: "z80",
         },
       })
       const client = new EmulatorClient({ port: fake.port })
@@ -600,7 +621,7 @@ describe("EmulatorClient", () => {
         envPeriod: 0x1234,
         envShape: 8,
       })
-      expect(s.fdc).toEqual({ msr: 128, sr0: 1, sr1: 2, sr2: 3, motor: true, drive: 1 })
+      expect(s.fdc).toEqual({ msr: 128, sr0: 1, sr1: 2, sr2: 3, motor: true, drive: "B" })
       expect(s.crtc).toEqual({
         regs: [63, 40, 46, 142, 38, 0, 25, 30, 0, 7, 0, 0, 48, 0],
         selectedReg: 6,
@@ -626,6 +647,7 @@ describe("EmulatorClient", () => {
       expect(s.ga.mode).toBe(0)
       expect(s.psg.mixer).toBe(0)
       expect(s.fdc.motor).toBe(false)
+      expect(s.fdc.drive).toBe("A")
       expect(s.crtc).toEqual({ regs: [], selectedReg: 0, rasterline: 0, vsync: false })
       expect(s.emu.crtcType).toBe(0)
       expect(s.emu.timelapse).toEqual({
@@ -741,15 +763,15 @@ describe("EmulatorClient", () => {
   })
 
   describe("getTimelapse", () => {
-    it("GETs /api/ping and maps the emu.tl_* fields", async () => {
+    it("GETs /api/ping and maps the emu.rw_* fields", async () => {
       fake.responder = jsonResponder({
         ok: true,
         emu: {
           paused: true,
-          tl_active: true,
-          tl_steps_back: 2,
-          tl_steps_fwd: 1,
-          tl_step_kind: "basic",
+          rw_active: true,
+          rw_steps_back: 2,
+          rw_steps_fwd: 1,
+          rw_step_kind: "basic",
         },
       })
       const client = new EmulatorClient({ port: fake.port })
@@ -774,20 +796,20 @@ describe("EmulatorClient", () => {
       })
     })
 
-    it("maps an unknown tl_step_kind to frame", async () => {
-      fake.responder = jsonResponder({ ok: true, emu: { tl_step_kind: "later" } })
+    it("maps an unknown rw_step_kind to frame", async () => {
+      fake.responder = jsonResponder({ ok: true, emu: { rw_step_kind: "later" } })
       const client = new EmulatorClient({ port: fake.port })
       await expect(client.getTimelapse()).resolves.toMatchObject({ stepKind: "frame" })
     })
   })
 
   describe("tlBack", () => {
-    it("POSTs to /api/tl_back with an empty body", async () => {
+    it("POSTs to /api/rewind/back with an empty body (one destructive step)", async () => {
       const client = new EmulatorClient({ port: fake.port })
       await client.tlBack()
       const rec = fake.recorded.at(0)
       expect(rec?.method).toBe("POST")
-      expect(rec?.url).toBe("/api/tl_back")
+      expect(rec?.url).toBe("/api/rewind/back")
       expect(rec?.body).toBe("")
     })
 
