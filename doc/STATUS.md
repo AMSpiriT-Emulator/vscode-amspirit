@@ -6,7 +6,22 @@
 
 ## Where we are
 
-- **Latest (2026-09-16, branch `docs/lite-parity-plan`, commits `2fe7aec`
+- **Latest (2026-10-23, delivered by PR #15): API catch-up with amspirit-lite
+  1.17.** The extensions now require lite 1.17 or later. Hard breaks fixed in
+  `EmulatorClient` (TDD): command acks carry no `ok` (a 2xx JSON object is an
+  ack, a refusal is the 400); `POST /api/tl_back` → `POST /api/rewind/back` and
+  `emu.tl_*` → `emu.rw_*` (renamed in lite 1.16); `--enable-timelapse` →
+  `--enable-rewind` (lite 1.16+ exits 1 on the old flag); `fdc.drive` is
+  `"A"`/`"B"`; `cpc_model` is a `CpcModel` name. Live-checked against a 1.17
+  headless (inject, RAM write, FDC drive, Step Back). Left: the deprecated calls
+  lite 1.17 still accepts (`vk`, `seq`, `paused`, `/api/step`, `/api/z80_bp`),
+  the rewind rename of `tlBack`/`TimelapseState`, and the invalid `--scale`
+  example in `amspirit-basic/package.json`. Unit tests use `FakeEmulator`, so a
+  lite API break passes the gate: after a lite release, read its
+  `src/doc/migration-*.md` and replay against a real headless. See
+  `doc/sessions/2026-10-23-api-catchup-lite-1-17.md`. **Next: fix the
+  `--scale` example in `packages/amspirit-basic/package.json`.**
+- **Earlier (2026-09-16, branch `docs/lite-parity-plan`, commits `2fe7aec`
   → `783b679`): lite parity Phase 1.2 — disassembler zone analysis (TDD), then
   a cleanup pass.** New pure `zone-analysis.ts` (`analyzeZones`, 10 tests): a
   flow trace from the PC that follows both paths of a conditional branch and the
